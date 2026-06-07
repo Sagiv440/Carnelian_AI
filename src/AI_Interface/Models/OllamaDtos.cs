@@ -101,6 +101,22 @@ public sealed class OllamaFunctionCall
     public JsonElement Arguments { get; set; }
 }
 
+/// <summary>A single NDJSON progress chunk streamed back from <c>POST /api/pull</c>.</summary>
+public sealed class OllamaPullChunk
+{
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    [JsonPropertyName("completed")]
+    public long? Completed { get; set; }
+
+    [JsonPropertyName("total")]
+    public long? Total { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
 /// <summary>A single NDJSON chunk streamed back from <c>POST /api/chat</c>.</summary>
 public sealed class OllamaChatChunk
 {

@@ -1,0 +1,169 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AI_Interface.ViewModels"
+        xmlns:models="using:AI_Interface.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="680" d:DesignHeight="660"
+        x:Class="AI_Interface.Views.ModelConfigWindow"
+        x:DataType="vm:ModelConfigViewModel"
+        Width="680" Height="670"
+        MinWidth="580" MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        Title="Model Config">
+
+    <Design.DataContext>
+        <vm:ModelConfigViewModel/>
+    </Design.DataContext>
+
+    <Window.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style Selector="TextBlock.colhead">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <!-- Compact action buttons inside a row -->
+        <Style Selector="Button.rowaction">
+            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="MinWidth" Value="96"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+        </Style>
+        <!-- Make list rows blend into the card -->
+        <Style Selector="ListBox.models">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.models ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+    </Window.Styles>
+
+    <Border Classes="card" CornerRadius="16" Margin="14" Padding="18">
+        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" RowSpacing="10">
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0">
+                <TextBlock Classes="brand" Text="Model Config"/>
+                <TextBlock Classes="muted" TextWrapping="Wrap"
+                           Text="Scan your machine, then pick what you need — the list ranks Ollama models from the best match for your hardware to the worst. Select a model to download or remove it."/>
+            </StackPanel>
+
+            <!-- Scan + hardware summary -->
+            <Border Grid.Row="1" Classes="card" CornerRadius="12" Padding="14,12">
+                <Grid ColumnDefinitions="Auto,*">
+                    <Button Grid.Column="0" Classes="cta" Content="🔍  Scan hardware" MinWidth="150"
+                            VerticalAlignment="Top"
+                            IsEnabled="{Binding !IsScanning}"
+                            Command="{Binding ScanCommand}"/>
+                    <TextBlock Grid.Column="1" Margin="14,0,0,0" TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource AppTextPrimary}"
+                               Text="{Binding HardwareSummary}"/>
+                </Grid>
+            </Border>
+
+            <!-- Preferences: category + quant + context -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="22">
+                <StackPanel>
+                    <TextBlock Classes="label" Text="Use case"/>
+                    <ComboBox Width="160" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:CategoryOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Classes="label" Text="Quant"/>
+                    <ComboBox Width="130" ItemsSource="{Binding Quants}" SelectedItem="{Binding SelectedQuant}"/>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Classes="label" Text="Context"/>
+                    <ComboBox Width="130" ItemsSource="{Binding Contexts}" SelectedItem="{Binding SelectedContext}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:ContextOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Ranked model list -->
+            <Border Grid.Row="3" Classes="card" CornerRadius="12" Padding="0" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*">
+                    <!-- column header -->
+                    <Grid Grid.Row="0" ColumnDefinitions="42,*,82,78,120" Margin="14,10,14,8">
+                        <TextBlock Grid.Column="0" Classes="colhead" Text="Fit"/>
+                        <TextBlock Grid.Column="1" Classes="colhead" Text="Model"/>
+                        <TextBlock Grid.Column="2" Classes="colhead" Text="Size"/>
+                        <TextBlock Grid.Column="3" Classes="colhead" Text="Quant"/>
+                        <TextBlock Grid.Column="4" Classes="colhead" Text=""/>
+                    </Grid>
+                    <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom"
+                            Background="{DynamicResource AppSurfaceBorderBrush}"/>
+
+                    <ListBox Grid.Row="1" Classes="models" ItemsSource="{Binding Models}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:ModelRecommendation" x:CompileBindings="False">
+                                <Border Padding="14,7" ToolTip.Tip="{Binding FitNote}">
+                                    <Grid ColumnDefinitions="42,*,82,78,120" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" Text="{Binding Symbol}" FontSize="16"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                   Foreground="{DynamicResource AppTextPrimary}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}" Classes="muted"
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding Quant}" Classes="muted"
+                                                   VerticalAlignment="Center"/>
+
+                                        <!-- Action: appears on the selected row; Download or Remove by install state -->
+                                        <Panel Grid.Column="4"
+                                               IsVisible="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}">
+                                            <Button Classes="cta rowaction" Content="Download"
+                                                    IsVisible="{Binding !IsInstalled}"
+                                                    Command="{Binding DataContext.DownloadModelCommand,
+                                                               RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Classes="ghost rowaction" Content="Remove"
+                                                    IsVisible="{Binding IsInstalled}"
+                                                    Command="{Binding DataContext.RemoveModelCommand,
+                                                               RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Panel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Empty hint (e.g. "Downloaded" with nothing installed) -->
+                    <TextBlock Grid.Row="1" Classes="muted" IsVisible="{Binding IsEmpty}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Text="No models to show."/>
+                </Grid>
+            </Border>
+
+            <!-- Status line (download / remove progress) -->
+            <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10"
+                        IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                             IsVisible="{Binding IsBusy}"/>
+                <TextBlock Text="{Binding StatusMessage}" Classes="muted" VerticalAlignment="Center"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <Button Grid.Row="5" Classes="cta" Content="Close" Click="OnClose"
+                    HorizontalAlignment="Right" MinWidth="100"/>
+        </Grid>
+    </Border>
+
+</Window>

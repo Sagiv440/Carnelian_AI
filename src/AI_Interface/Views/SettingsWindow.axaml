@@ -45,6 +45,60 @@
     <Grid RowDefinitions="*,Auto">
         <TabControl Grid.Row="0" Margin="6">
 
+            <!-- AI MODEL TAB -->
+            <TabItem Header="AI Model">
+                <TabControl Margin="0,6">
+
+                    <!-- LOCAL AI -->
+                    <TabItem Header="Local AI">
+                        <ScrollViewer>
+                            <StackPanel Margin="14,6" Spacing="2">
+                                <TextBlock Classes="section" Text="Ollama"/>
+                                <TextBlock Classes="label" Text="Server URL"/>
+                                <Grid ColumnDefinitions="*,Auto" Width="360" HorizontalAlignment="Left">
+                                    <TextBox Grid.Column="0" Text="{Binding OllamaBaseUrl}"
+                                             PlaceholderText="http://localhost:11434"/>
+                                    <Button Grid.Column="1" Classes="ghost" Content="Quick setup" Margin="8,0,0,0"
+                                            Command="{Binding QuickSetupCommand}"
+                                            ToolTip.Tip="Scan localhost:11434 and fill this in if Ollama is running"/>
+                                </Grid>
+                                <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
+                                           Text="Quick setup scans localhost:11434 for a running Ollama server and fills in the URL."/>
+
+                                <!-- Model Config: enabled only when Ollama is connected -->
+                                <Button Classes="ghost" Content="Model_Config" Margin="0,14,0,0"
+                                        HorizontalAlignment="Left" MinWidth="150"
+                                        Command="{Binding ModelConfigCommand}"
+                                        ToolTip.Tip="Recommend models for your hardware (requires a connected Ollama)"/>
+
+                                <!-- Test connection sits at the bottom-most field -->
+                                <Button Classes="cta" Content="Test connection" MinWidth="150"
+                                        HorizontalAlignment="Left" Margin="0,18,0,8"
+                                        IsEnabled="{Binding !IsTestingConnection}"
+                                        Command="{Binding TestConnectionCommand}"/>
+                                <TextBlock Text="{Binding ConnectionTestMessage}" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
+                                           IsVisible="{Binding ConnectionTestMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Foreground="{Binding ConnectionTestColor, Converter={StaticResource StringToBrush}}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <!-- WEB MODELS -->
+                    <TabItem Header="Web Models">
+                        <Panel>
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                                <TextBlock Classes="brand" Text="Coming Soon!" FontSize="24"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Classes="muted" HorizontalAlignment="Center"
+                                           Text="Cloud and web-hosted models will be configurable here."/>
+                            </StackPanel>
+                        </Panel>
+                    </TabItem>
+
+                </TabControl>
+            </TabItem>
+
             <!-- THEME TAB -->
             <TabItem Header="Theme">
                 <ScrollViewer>
@@ -138,11 +192,6 @@
             <TabItem Header="General">
                 <ScrollViewer>
                     <StackPanel Margin="14,6" Spacing="2">
-                        <TextBlock Classes="section" Text="Ollama"/>
-                        <TextBlock Classes="label" Text="Server URL"/>
-                        <TextBox Text="{Binding OllamaBaseUrl}" Width="320" HorizontalAlignment="Left"
-                                 PlaceholderText="http://localhost:11434"/>
-
                         <TextBlock Classes="section" Text="Research depth"/>
                         <TextBlock Classes="label" Text="Search results per query"/>
                         <NumericUpDown Value="{Binding ResultsPerQuery}" Minimum="1" Maximum="10" Increment="1"

@@ -16,6 +16,13 @@ internal sealed class DesignOllamaClient : IOllamaClient
 {
     public Task<bool> IsAvailableAsync(CancellationToken ct = default) => Task.FromResult(true);
 
+    public Task<bool> PingAsync(string baseUrl, CancellationToken ct = default) => Task.FromResult(true);
+
+    public Task PullModelAsync(string name, IProgress<string>? progress, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
+    public Task DeleteModelAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
+
     public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<string>>(new[] { "llama3:latest", "mistral:latest" });
 
@@ -80,6 +87,15 @@ internal sealed class DesignChatHistoryService : IChatHistoryService
 {
     public IReadOnlyList<ChatSession> Load() => Array.Empty<ChatSession>();
     public void Save(IReadOnlyList<ChatSession> sessions) { }
+}
+
+internal sealed class DesignHardwareService : IHardwareService
+{
+    public Task<HardwareInfo> ScanAsync(CancellationToken ct = default) =>
+        Task.FromResult(new HardwareInfo
+        {
+            CpuName = "Design CPU", CpuCores = 8, TotalRamGb = 16, GpuName = "Design GPU", VramGb = 8
+        });
 }
 
 internal sealed class DesignProjectAgentService : IProjectAgentService

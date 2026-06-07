@@ -65,10 +65,12 @@ public partial class App : Application
         services.AddSingleton<IAttachmentService, AttachmentService>();
         services.AddSingleton<IChatHistoryService, ChatHistoryService>();
         services.AddSingleton<IProjectAgentService, ProjectAgentService>();
+        services.AddSingleton<IHardwareService, HardwareService>();
 
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<ProjectViewModel>();
+        services.AddTransient<ModelConfigViewModel>();
 
         return services.BuildServiceProvider();
     }

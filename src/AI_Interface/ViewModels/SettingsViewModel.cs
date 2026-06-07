@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using AI_Interface.Models;
 using AI_Interface.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -14,7 +16,33 @@ public sealed partial class SettingsViewModel : ViewModelBase
 {
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
+    private readonly IOllamaClient _ollama;
     private readonly bool _loading;
+
+    private const string OkColor = "#00CEA8";   // status OK (teal)
+    private const string ErrColor = "#E0573A";  // status error (red)
+    private const string BusyColor = "#9AA0A6"; // neutral grey while a probe runs
+
+    // --- AI model: connection probe (Local AI) ---
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TestConnectionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(QuickSetupCommand))]
+    private bool _isTestingConnection;
+
+    /// <summary>Result of the last Quick setup / Test connection probe (empty = none yet).</summary>
+    [ObservableProperty] private string _connectionTestMessage = "";
+
+    /// <summary>Hex color for <see cref="ConnectionTestMessage"/> (green ok / red error / grey busy).</summary>
+    [ObservableProperty] private string _connectionTestColor = OkColor;
+
+    /// <summary>True when the configured Ollama server has answered a probe — gates Model Config.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ModelConfigCommand))]
+    private bool _isOllamaConnected;
+
+    /// <summary>Raised when the view should open the Model Config window.</summary>
+    public event System.EventHandler? ModelConfigRequested;
 
     /// <summary>Preset color swatches (from the sagiv-reuben site palette).</summary>
     public IReadOnlyList<string> Palette { get; } = ThemeDefaults.Palette;
@@ -117,10 +145,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _googleApiKey;
     [ObservableProperty] private string _googleSearchEngineId;
 
-    public SettingsViewModel(ISettingsService settings, IThemeService theme)
+    public SettingsViewModel(ISettingsService settings, IThemeService theme, IOllamaClient ollama)
     {
         _settings = settings;
         _theme = theme;
+        _ollama = ollama;
 
         _loading = true;
         var s = settings.Current;
@@ -144,7 +173,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     }
 
     // Design-time constructor for the XAML previewer.
-    public SettingsViewModel() : this(new DesignSettingsService(), new ThemeService())
+    public SettingsViewModel() : this(new DesignSettingsService(), new ThemeService(), new DesignOllamaClient())
     {
     }
 
@@ -211,6 +240,89 @@ public sealed partial class SettingsViewModel : ViewModelBase
         UserBubbleColor = ThemeDefaults.UserBubble;
         AssistantBubbleColor = ThemeDefaults.AssistantBubble;
     }
+
+    /// <summary>Scan localhost:11434 and, if Ollama answers, fill in the server URL.</summary>
+    [RelayCommand(CanExecute = nameof(CanProbe))]
+    private async Task QuickSetup()
+    {
+        const string local = "http://localhost:11434";
+        IsTestingConnection = true;
+        ConnectionTestColor = BusyColor;
+        ConnectionTestMessage = "Scanning localhost:11434…";
+        try
+        {
+            if (await _ollama.PingAsync(local))
+            {
+                OllamaBaseUrl = local; // populate the field (persists via OnOllamaBaseUrlChanged)
+                IsOllamaConnected = true;
+                ConnectionTestColor = OkColor;
+                ConnectionTestMessage = "Connected — found Ollama at localhost:11434";
+            }
+            else
+            {
+                ConnectionTestColor = ErrColor;
+                ConnectionTestMessage = "Error: no Ollama server found at localhost:11434";
+            }
+        }
+        catch (Exception ex)
+        {
+            ConnectionTestColor = ErrColor;
+            ConnectionTestMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsTestingConnection = false;
+        }
+    }
+
+    /// <summary>Probe the configured server URL and report success (green) or failure (red).</summary>
+    [RelayCommand(CanExecute = nameof(CanProbe))]
+    private async Task TestConnection()
+    {
+        var url = string.IsNullOrWhiteSpace(OllamaBaseUrl) ? "http://localhost:11434" : OllamaBaseUrl.Trim();
+        IsTestingConnection = true;
+        ConnectionTestColor = BusyColor;
+        ConnectionTestMessage = "Testing…";
+        try
+        {
+            var ok = await _ollama.PingAsync(url);
+            IsOllamaConnected = ok;
+            if (ok)
+            {
+                ConnectionTestColor = OkColor;
+                ConnectionTestMessage = "Connected";
+            }
+            else
+            {
+                ConnectionTestColor = ErrColor;
+                ConnectionTestMessage = $"Error: could not reach Ollama at {url}";
+            }
+        }
+        catch (Exception ex)
+        {
+            IsOllamaConnected = false;
+            ConnectionTestColor = ErrColor;
+            ConnectionTestMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsTestingConnection = false;
+        }
+    }
+
+    private bool CanProbe => !IsTestingConnection;
+
+    /// <summary>Silent connectivity check (no status message) so Model Config reflects reality on open.</summary>
+    public async Task RefreshConnectionAsync()
+    {
+        var url = string.IsNullOrWhiteSpace(OllamaBaseUrl) ? "http://localhost:11434" : OllamaBaseUrl.Trim();
+        try { IsOllamaConnected = await _ollama.PingAsync(url); }
+        catch { IsOllamaConnected = false; }
+    }
+
+    /// <summary>Open the hardware-aware Model Config tool (enabled only when Ollama is connected).</summary>
+    [RelayCommand(CanExecute = nameof(IsOllamaConnected))]
+    private void ModelConfig() => ModelConfigRequested?.Invoke(this, System.EventArgs.Empty);
 
     private void ApplyTheme()
     {

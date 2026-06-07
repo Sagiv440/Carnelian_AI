@@ -37,11 +37,22 @@ public sealed class OllamaClient : IOllamaClient
 
     private string BaseUrl => _settings.Current.OllamaBaseUrl.TrimEnd('/');
 
-    public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
+    public Task<bool> IsAvailableAsync(CancellationToken ct = default) => PingAsync(BaseUrl, ct);
+
+    public async Task<bool> PingAsync(string baseUrl, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            return false;
+
+        // The shared HttpClient has a 10-min timeout (for generation); a reachability probe must fail
+        // fast, so bound it to a few seconds via a linked token.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+
         try
         {
-            using var resp = await _http.GetAsync($"{BaseUrl}/api/tags", ct).ConfigureAwait(false);
+            using var resp = await _http.GetAsync($"{baseUrl.TrimEnd('/')}/api/tags", timeoutCts.Token)
+                .ConfigureAwait(false);
             return resp.IsSuccessStatusCode;
         }
         catch
@@ -59,6 +70,83 @@ public sealed class OllamaClient : IOllamaClient
             .ConfigureAwait(false);
         return tags?.Models.Select(m => m.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
                ?? new List<string>();
+    }
+
+    public async Task PullModelAsync(string name, IProgress<string>? progress, CancellationToken ct = default)
+    {
+        var request = new { name, stream = true };
+        using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/pull")
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        // ResponseHeadersRead so the 10-min client timeout only bounds time-to-first-byte, not the
+        // whole (potentially multi-GB) download.
+        using var resp = await _http
+            .SendAsync(httpReq, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new InvalidOperationException(BuildErrorMessage((int)resp.StatusCode, body));
+        }
+
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var reader = new StreamReader(stream);
+
+        while (!reader.EndOfStream)
+        {
+            ct.ThrowIfCancellationRequested();
+            var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            OllamaPullChunk? chunk;
+            try
+            {
+                chunk = JsonSerializer.Deserialize<OllamaPullChunk>(line, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (chunk is null)
+                continue;
+            if (!string.IsNullOrEmpty(chunk.Error))
+                throw new InvalidOperationException($"Ollama error: {chunk.Error}");
+
+            progress?.Report(FormatPullProgress(chunk));
+        }
+    }
+
+    private static string FormatPullProgress(OllamaPullChunk chunk)
+    {
+        var status = string.IsNullOrEmpty(chunk.Status) ? "downloading" : chunk.Status;
+        if (chunk.Total is > 0 && chunk.Completed is >= 0)
+        {
+            var pct = (int)(100.0 * chunk.Completed.Value / chunk.Total.Value);
+            return $"{status} {pct}%";
+        }
+        return status;
+    }
+
+    public async Task DeleteModelAsync(string name, CancellationToken ct = default)
+    {
+        using var httpReq = new HttpRequestMessage(HttpMethod.Delete, $"{BaseUrl}/api/delete")
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(new { name }, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        using var resp = await _http.SendAsync(httpReq, ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new InvalidOperationException(BuildErrorMessage((int)resp.StatusCode, body));
+        }
     }
 
     public async IAsyncEnumerable<string> ChatStreamAsync(
