@@ -16,18 +16,17 @@ namespace AI_Interface.Services;
 /// </summary>
 public sealed class DeepResearchService : IDeepResearchService
 {
-    private readonly IOllamaClient _ollama;
     private readonly IWebSearchService _search;
     private readonly ISettingsService _settings;
 
-    public DeepResearchService(IOllamaClient ollama, IWebSearchService search, ISettingsService settings)
+    public DeepResearchService(IWebSearchService search, ISettingsService settings)
     {
-        _ollama = ollama;
         _search = search;
         _settings = settings;
     }
 
     public async Task<IReadOnlyList<SearchResult>> RunAsync(
+        IChatClient client,
         string question,
         string model,
         IProgress<string> status,
@@ -38,7 +37,7 @@ public sealed class DeepResearchService : IDeepResearchService
 
         // 1. Plan: let the model decompose the question into focused search queries.
         status.Report("Planning search queries…");
-        var queries = await PlanQueriesAsync(question, model, cfg.ResearchQueryCount, ct).ConfigureAwait(false);
+        var queries = await PlanQueriesAsync(client, question, model, cfg.ResearchQueryCount, ct).ConfigureAwait(false);
         status.Report($"Planned {queries.Count} queries: {string.Join(" | ", queries)}");
 
         // 2. Search each query, collecting unique results across all of them.
@@ -73,14 +72,14 @@ public sealed class DeepResearchService : IDeepResearchService
         // 4. Synthesize a cited answer, streamed back to the caller.
         status.Report("Synthesizing answer…");
         var messages = BuildSynthesisPrompt(question, toRead);
-        await foreach (var delta in _ollama.ChatStreamAsync(model, messages, think: false, ct).ConfigureAwait(false))
+        await foreach (var delta in client.ChatStreamAsync(model, messages, think: false, ct).ConfigureAwait(false))
             onAnswerDelta(delta);
 
         return toRead;
     }
 
     private async Task<List<string>> PlanQueriesAsync(
-        string question, string model, int count, CancellationToken ct)
+        IChatClient client, string question, string model, int count, CancellationToken ct)
     {
         var messages = new[]
         {
@@ -93,7 +92,7 @@ public sealed class DeepResearchService : IDeepResearchService
 
         try
         {
-            var raw = await _ollama.CompleteAsync(model, messages, ct).ConfigureAwait(false);
+            var raw = await client.CompleteAsync(model, messages, ct).ConfigureAwait(false);
             var parsed = ParseJsonStringArray(raw, count);
             if (parsed.Count > 0)
                 return parsed;

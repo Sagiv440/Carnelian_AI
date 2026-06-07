@@ -16,8 +16,11 @@ Add a value to the `AppMode` enum with an XML-doc comment describing the behavio
 In the constructor's `Modes` array, add `new ModeOption(AppMode.Yours, "Label", "Tooltip description")`.
 
 ## 3. Handle it — `MainWindowViewModel.SendAsync`
-Add a `case AppMode.Yours:` to the `switch`, calling a private `RunYourModeAsync(...)` modelled on
-`RunChatAsync` / `RunWebSearchAsync` / `RunDeepResearchAsync` / `RunProjectAgentAsync`.
+`SendAsync` first resolves the selected `ChatModel` to its backend — `client = _router.For(SelectedModel.Provider)`
+and `model = SelectedModel.Id` — then `switch`es on the mode. Add a `case AppMode.Yours:` calling a private
+`RunYourModeAsync(client, model, …)` modelled on `RunChatAsync` / `RunWebSearchAsync` /
+`RunDeepResearchAsync` / `RunProjectAgentAsync`. Take the `IChatClient client` so your mode works with
+whatever provider (local Ollama or a cloud model) is selected — never reach for `IOllamaClient` directly.
 
 ## 4. (If it needs new I/O) add a service — `Services/`
 Create `IYourService` + `YourService`, then register it in `App.ConfigureServices()`:
@@ -26,22 +29,42 @@ Create `IYourService` + `YourService`, then register it in `App.ConfigureService
 Inject it into `MainWindowViewModel`'s constructor **and** add a matching stub in
 `ViewModels/DesignTimeServices.cs` (the parameterless ctor / XAML previewer depends on it, or the build breaks).
 
+## AI backends are provider-agnostic (`IChatClient`)
+Chat no longer talks to Ollama directly. `Services/IChatClient.cs` is the common surface
+(`ChatStreamAsync`, `CompleteAsync`, `ChatWithToolsAsync`, `ListModelsAsync`,
+`IsConfiguredAndReachableAsync`, plus a `Provider` tag from `Models/AiProvider.cs`). `OllamaClient`
+implements it (via `IOllamaClient : IChatClient`), as do `OpenAiClient` / `GeminiClient` /
+`AnthropicClient`. `IModelRouter` (`ChatRouter`) aggregates every configured/reachable provider's models
+into the top-bar picker (each a `ChatModel` = provider + id) and resolves a provider to its client via
+`For(provider)`. Modes and the agent receive the resolved `IChatClient`, so they work with any provider.
+
+**To add a provider:** add an `AiProvider` value, implement `IChatClient` in `Services/` (read its
+key/URL from `ISettingsService` on every call), register it in `App.ConfigureServices()` (`AddHttpClient`)
+and add it to `ChatRouter`'s constructor list, then add any API key to `AppSettings` + a field in the
+Settings → AI Model → **Web Models** tab. Ollama-only ops (`PingAsync(baseUrl)`, `PullModelAsync`,
+`DeleteModelAsync`) stay on `IOllamaClient` for Model Config.
+
 ## The two mode shapes
 
 ### Streaming shape (Chat / WebSearch / DeepResearch)
 Build a message list (system prompt + conversation turns) and stream tokens from
-`IOllamaClient.ChatStreamAsync` — or from a service that streams via an `Action<string>` callback — into
-the pending assistant `MessageViewModel.Append`.
+`client.ChatStreamAsync(model, messages, think, ct)` (the resolved `IChatClient`) — or from a service that
+streams via an `Action<string>` callback. Feed deltas into the pending assistant `MessageViewModel`:
+visible answer text goes to `.Text`, and any `<think>…</think>` reasoning is split into `.Work` (see
+`Models/ReasoningSplit.cs` and `ApplyStreamDelta`), which the transcript shows in a collapsible block.
 
 ### Agent / tool-calling shape (Project)
-When the mode needs the model to *act* (call tools, take steps), follow `ProjectAgentService`:
-- `IOllamaClient.ChatWithToolsAsync` runs one **non-streaming** turn with `tools` and returns an
+When the mode needs the model to *act* (call tools, take steps), follow `ProjectAgentService` (which is
+handed the resolved `IChatClient`):
+- `client.ChatWithToolsAsync` runs one **non-streaming** turn with `tools` and returns an
   `AgentTurn` (content + requested `AgentToolCall`s). Wire DTOs live in `Models/OllamaDtos.cs`; the
-  domain abstractions (`AgentTool`, `AgentToolCall`, `AgentTurn`) in `Models/AgentModels.cs`.
+  domain abstractions (`AgentTool`, `AgentToolCall`, `AgentTurn`) in `Models/AgentModels.cs`. Each cloud
+  client translates this tool shape into its own format (OpenAI/Anthropic/Gemini differ).
 - The loop — advertise tools → run the tools the model asked for → feed each result back as a
   `ChatRole.Tool` message → repeat until the model replies in plain text (capped by `MaxSteps`) — lives
-  in `Services/ProjectAgentService.cs`. Tools are defined there with JSON-schema parameters; results are
-  truncated and echoed into the transcript via `onDelta`.
+  in `Services/ProjectAgentService.cs`. Tools are defined there with JSON-schema parameters; the action
+  log (tool calls + truncated results) is echoed via `onActivity` into the collapsible "work" block, while
+  the model's final plain-text reply goes to `onAnswer` (the answer).
 - **User gating:** each call is gated by `AgentApprovalMode` (Settings → Project). The service awaits an
   `approve` callback; the VM raises `ToolApprovalRequested`, the code-behind shows `ToolApprovalWindow`,
   and the decision returns through a `TaskCompletionSource<bool>`.

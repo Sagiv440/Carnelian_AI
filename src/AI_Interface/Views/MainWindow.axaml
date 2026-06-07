@@ -19,6 +19,7 @@
 
     <Window.Resources>
         <conv:PathToBitmapConverter x:Key="PathToBitmap"/>
+        <conv:ProviderTagConverter x:Key="ProviderTag"/>
     </Window.Resources>
 
     <Window.Styles>
@@ -332,11 +333,24 @@
                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,6">
                 <Ellipse Classes="status" Classes.online="{Binding IsConnected}" VerticalAlignment="Center"
                          ToolTip.Tip="{Binding ConnectionStatus}"/>
-                <ComboBox MinWidth="180" MaxDropDownHeight="320" VerticalAlignment="Center"
+                <ComboBox MinWidth="200" MaxDropDownHeight="320" VerticalAlignment="Center"
                           ItemsSource="{Binding Models}"
                           SelectedItem="{Binding SelectedModel}"
                           PlaceholderText="Select model"
-                          ToolTip.Tip="{Binding ConnectionStatus}"/>
+                          ToolTip.Tip="{Binding ConnectionStatus}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="models:ChatModel">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding Id}" VerticalAlignment="Center"/>
+                                <Border Background="#33808080" CornerRadius="3" Padding="5,1"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Provider, Converter={StaticResource ProviderTag}}"
+                                               FontSize="10" Foreground="{DynamicResource AppTextSecondary}"/>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                 <Button Classes="ghost" Content="⚙" FontSize="15" VerticalAlignment="Center"
                         Command="{Binding OpenSettingsCommand}" ToolTip.Tip="Settings"/>
             </StackPanel>

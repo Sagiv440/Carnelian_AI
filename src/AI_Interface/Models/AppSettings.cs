@@ -8,6 +8,17 @@ public sealed class AppSettings
     /// <summary>Base URL of the local Ollama server.</summary>
     public string OllamaBaseUrl { get; set; } = "http://localhost:11434";
 
+    // --- Cloud AI providers (Settings → AI Model → Web Models) ---
+
+    /// <summary>OpenAI (ChatGPT) API key. Blank = provider disabled. Plaintext (matches the search keys).</summary>
+    public string OpenAiApiKey { get; set; } = "";
+
+    /// <summary>Google Gemini API key. Blank = provider disabled.</summary>
+    public string GeminiApiKey { get; set; } = "";
+
+    /// <summary>Anthropic (Claude) API key. Blank = provider disabled.</summary>
+    public string AnthropicApiKey { get; set; } = "";
+
     // --- Theme ---
 
     /// <summary>Light / dark / follow-system appearance. Defaults to Dark — the site's native look.</summary>

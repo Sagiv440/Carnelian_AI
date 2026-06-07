@@ -17,6 +17,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
     private readonly IOllamaClient _ollama;
+    private readonly IOpenAiClient _openAi;
+    private readonly IGeminiClient _gemini;
+    private readonly IAnthropicClient _anthropic;
     private readonly bool _loading;
 
     private const string OkColor = "#3FB950";   // status OK (green)
@@ -174,11 +177,36 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _googleApiKey;
     [ObservableProperty] private string _googleSearchEngineId;
 
-    public SettingsViewModel(ISettingsService settings, IThemeService theme, IOllamaClient ollama)
+    // --- Cloud AI providers (Web Models) ---
+
+    [ObservableProperty] private string _openAiApiKey;
+    [ObservableProperty] private string _geminiApiKey;
+    [ObservableProperty] private string _anthropicApiKey;
+
+    // Per-provider connect status (mirrors the Local AI ConnectionTestMessage/Color pattern).
+    [ObservableProperty] private string _openAiStatus = "";
+    [ObservableProperty] private string _openAiStatusColor = OkColor;
+    [ObservableProperty] private string _geminiStatus = "";
+    [ObservableProperty] private string _geminiStatusColor = OkColor;
+    [ObservableProperty] private string _anthropicStatus = "";
+    [ObservableProperty] private string _anthropicStatusColor = OkColor;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectOpenAiCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConnectGeminiCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConnectAnthropicCommand))]
+    private bool _isTestingCloud;
+
+    public SettingsViewModel(
+        ISettingsService settings, IThemeService theme, IOllamaClient ollama,
+        IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic)
     {
         _settings = settings;
         _theme = theme;
         _ollama = ollama;
+        _openAi = openAi;
+        _gemini = gemini;
+        _anthropic = anthropic;
 
         _loading = true;
         var s = settings.Current;
@@ -201,11 +229,17 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _tavilyApiKey = s.TavilyApiKey;
         _googleApiKey = s.GoogleApiKey;
         _googleSearchEngineId = s.GoogleSearchEngineId;
+        _openAiApiKey = s.OpenAiApiKey;
+        _geminiApiKey = s.GeminiApiKey;
+        _anthropicApiKey = s.AnthropicApiKey;
         _loading = false;
     }
 
     // Design-time constructor for the XAML previewer.
-    public SettingsViewModel() : this(new DesignSettingsService(), new ThemeService(), new DesignOllamaClient())
+    public SettingsViewModel() : this(
+        new DesignSettingsService(), new ThemeService(), new DesignOllamaClient(),
+        new DesignCloudClient(AiProvider.OpenAI), new DesignCloudClient(AiProvider.Gemini),
+        new DesignCloudClient(AiProvider.Anthropic))
     {
     }
 
@@ -270,6 +304,81 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnTavilyApiKeyChanged(string value) => SaveWebSearch();
     partial void OnGoogleApiKeyChanged(string value) => SaveWebSearch();
     partial void OnGoogleSearchEngineIdChanged(string value) => SaveWebSearch();
+
+    partial void OnOpenAiApiKeyChanged(string value) => SaveCloudKeys();
+    partial void OnGeminiApiKeyChanged(string value) => SaveCloudKeys();
+    partial void OnAnthropicApiKeyChanged(string value) => SaveCloudKeys();
+
+    /// <summary>Persist the cloud API keys (called as each field changes, like the web-search keys).</summary>
+    private void SaveCloudKeys()
+    {
+        if (_loading)
+            return;
+        var s = _settings.Current;
+        s.OpenAiApiKey = OpenAiApiKey.Trim();
+        s.GeminiApiKey = GeminiApiKey.Trim();
+        s.AnthropicApiKey = AnthropicApiKey.Trim();
+        _settings.Save();
+    }
+
+    private bool CanConnectCloud => !IsTestingCloud;
+
+    /// <summary>Save the OpenAI key, probe it, and (on the main window) reload the model dropdown.</summary>
+    [RelayCommand(CanExecute = nameof(CanConnectCloud))]
+    private async Task ConnectOpenAi() =>
+        await ConnectCloudAsync(_openAi,
+            v => OpenAiStatus = v, v => OpenAiStatusColor = v, "ChatGPT");
+
+    /// <summary>Save the Gemini key, probe it, and reload the model dropdown.</summary>
+    [RelayCommand(CanExecute = nameof(CanConnectCloud))]
+    private async Task ConnectGemini() =>
+        await ConnectCloudAsync(_gemini,
+            v => GeminiStatus = v, v => GeminiStatusColor = v, "Gemini");
+
+    /// <summary>Save the Claude key, probe it, and reload the model dropdown.</summary>
+    [RelayCommand(CanExecute = nameof(CanConnectCloud))]
+    private async Task ConnectAnthropic() =>
+        await ConnectCloudAsync(_anthropic,
+            v => AnthropicStatus = v, v => AnthropicStatusColor = v, "Claude");
+
+    /// <summary>
+    /// Shared connect flow for a cloud provider: persist the entered keys, probe the provider, surface
+    /// a green/red status, and ask the main window to reload its model list so the provider's models
+    /// appear in (or drop from) the dropdown.
+    /// </summary>
+    private async Task ConnectCloudAsync(
+        IChatClient client, Action<string> setStatus, Action<string> setColor, string label)
+    {
+        SaveCloudKeys(); // make sure the freshly-typed key is in settings before we probe
+        IsTestingCloud = true;
+        setColor(BusyColor);
+        setStatus($"Connecting to {label}…");
+        try
+        {
+            var ok = await client.IsConfiguredAndReachableAsync();
+            if (ok)
+            {
+                setColor(OkColor);
+                setStatus($"Connected to {label}.");
+                // Reload the main window's dropdown so the new models appear.
+                ConnectRequested?.Invoke(this, System.EventArgs.Empty);
+            }
+            else
+            {
+                setColor(ErrColor);
+                setStatus($"Could not connect to {label}. Check the API key.");
+            }
+        }
+        catch (Exception ex)
+        {
+            setColor(ErrColor);
+            setStatus($"Error: {ex.Message}");
+        }
+        finally
+        {
+            IsTestingCloud = false;
+        }
+    }
 
     [RelayCommand] private void SetAccent(string? hex) { if (hex is not null) AccentColor = hex; }
     [RelayCommand] private void SetUserColor(string? hex) { if (hex is not null) UserBubbleColor = hex; }

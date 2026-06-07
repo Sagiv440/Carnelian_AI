@@ -14,7 +14,11 @@ namespace AI_Interface.ViewModels;
 
 internal sealed class DesignOllamaClient : IOllamaClient
 {
+    public AiProvider Provider => AiProvider.Ollama;
+
     public Task<bool> IsAvailableAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+    public Task<bool> IsConfiguredAndReachableAsync(CancellationToken ct = default) => Task.FromResult(true);
 
     public Task<bool> PingAsync(string baseUrl, CancellationToken ct = default) => Task.FromResult(true);
 
@@ -44,6 +48,53 @@ internal sealed class DesignOllamaClient : IOllamaClient
         Task.FromResult(new AgentTurn("design-time", Array.Empty<AgentToolCall>()));
 }
 
+/// <summary>Design-time cloud chat client: reports "not configured" so it contributes no models.</summary>
+internal sealed class DesignCloudClient : IOpenAiClient, IGeminiClient, IAnthropicClient
+{
+    private readonly AiProvider _provider;
+    public DesignCloudClient(AiProvider provider) => _provider = provider;
+
+    public AiProvider Provider => _provider;
+
+    public Task<bool> IsConfiguredAndReachableAsync(CancellationToken ct = default) => Task.FromResult(false);
+
+    public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+
+    public async IAsyncEnumerable<string> ChatStreamAsync(
+        string model, IEnumerable<ChatMessage> messages, bool think,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.CompletedTask;
+        yield return "design-time";
+    }
+
+    public Task<string> CompleteAsync(
+        string model, IEnumerable<ChatMessage> messages, CancellationToken ct = default) =>
+        Task.FromResult("design-time");
+
+    public Task<AgentTurn> ChatWithToolsAsync(
+        string model, IEnumerable<ChatMessage> messages,
+        IReadOnlyList<AgentTool> tools, CancellationToken ct = default) =>
+        Task.FromResult(new AgentTurn("design-time", Array.Empty<AgentToolCall>()));
+}
+
+internal sealed class DesignModelRouter : IModelRouter
+{
+    private readonly DesignOllamaClient _ollama = new();
+
+    public Task<IReadOnlyList<ChatModel>> ListAllModelsAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<ChatModel>>(new[]
+        {
+            new ChatModel(AiProvider.Ollama, "llama3:latest"),
+            new ChatModel(AiProvider.Ollama, "mistral:latest")
+        });
+
+    public IChatClient For(AiProvider provider) => provider == AiProvider.Ollama
+        ? _ollama
+        : new DesignCloudClient(provider);
+}
+
 internal sealed class DesignWebSearchService : IWebSearchService
 {
     public Task<IReadOnlyList<SearchResult>> SearchAsync(
@@ -60,7 +111,7 @@ internal sealed class DesignWebSearchService : IWebSearchService
 internal sealed class DesignDeepResearchService : IDeepResearchService
 {
     public Task<IReadOnlyList<SearchResult>> RunAsync(
-        string question, string model, IProgress<string> status,
+        IChatClient client, string question, string model, IProgress<string> status,
         Action<string> onAnswerDelta, CancellationToken ct = default)
     {
         onAnswerDelta("Design-time research answer.");
@@ -108,7 +159,7 @@ internal sealed class DesignHardwareService : IHardwareService
 internal sealed class DesignProjectAgentService : IProjectAgentService
 {
     public Task RunAsync(
-        Project project, string model, IReadOnlyList<ChatMessage> conversation,
+        IChatClient client, Project project, string model, IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode, string thinkingDirective, string projectSkills,
         SoftwareInstallPermission installPermission, IProgress<string> status,
         Action<string> onActivity, Action<string> onAnswer,

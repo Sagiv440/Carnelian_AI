@@ -18,7 +18,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private const string ChatSystemPrompt =
         "You are a helpful AI assistant running locally via Ollama. Be accurate and concise.";
 
-    private readonly IOllamaClient _ollama;
+    private readonly IModelRouter _router;
     private readonly IWebSearchService _search;
     private readonly IDeepResearchService _research;
     private readonly ISettingsService _settings;
@@ -51,7 +51,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public event EventHandler<ToolApprovalEventArgs>? ToolApprovalRequested;
 
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
-    public ObservableCollection<string> Models { get; } = new();
+
+    /// <summary>Models offered in the top-bar picker, across every configured provider.</summary>
+    public ObservableCollection<ChatModel> Models { get; } = new();
     public IReadOnlyList<ModeOption> Modes { get; }
 
     /// <summary>Saved conversations, newest first (the sidebar "Chat Log").</summary>
@@ -78,7 +80,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
-    private string? _selectedModel;
+    private ChatModel? _selectedModel;
 
     [ObservableProperty]
     private ModeOption _selectedMode;
@@ -133,7 +135,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<FileNode> FileTree { get; } = new();
 
     public MainWindowViewModel(
-        IOllamaClient ollama,
+        IModelRouter router,
         IWebSearchService search,
         IDeepResearchService research,
         ISettingsService settings,
@@ -142,7 +144,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IProjectAgentService agent,
         IProjectSkillService skills)
     {
-        _ollama = ollama;
+        _router = router;
         _search = search;
         _research = research;
         _settings = settings;
@@ -160,7 +162,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         };
         _selectedMode = Modes[0];
         _ollamaBaseUrl = settings.Current.OllamaBaseUrl;
-        _selectedModel = settings.Current.DefaultModel;
+        // The saved selection is restored after the model list loads (see RefreshAsync).
 
         foreach (var session in _history.Load())
             ChatLog.Add(session);
@@ -168,7 +170,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     // Design-time / fallback constructor so the XAML previewer can instantiate the window.
     public MainWindowViewModel()
-        : this(new DesignOllamaClient(), new DesignWebSearchService(),
+        : this(new DesignModelRouter(), new DesignWebSearchService(),
                new DesignDeepResearchService(), new DesignSettingsService(),
                new DesignAttachmentService(), new DesignChatHistoryService(),
                new DesignProjectAgentService(), new DesignProjectSkillService())
@@ -181,10 +183,29 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _settings.Current.OllamaBaseUrl = value.Trim();
     }
 
-    partial void OnSelectedModelChanged(string? value)
+    partial void OnSelectedModelChanged(ChatModel? value)
     {
-        _settings.Current.DefaultModel = value;
+        // Persist as "{provider}:{id}" so a cloud model round-trips by provider, not just by id.
+        _settings.Current.DefaultModel = value is null ? null : $"{value.Provider}:{value.Id}";
         _settings.Save();
+    }
+
+    /// <summary>Parses a persisted "{provider}:{id}" selection back into a <see cref="ChatModel"/>.</summary>
+    private static ChatModel? ParseSavedModel(string? saved)
+    {
+        if (string.IsNullOrWhiteSpace(saved))
+            return null;
+
+        var sep = saved.IndexOf(':');
+        if (sep > 0 && Enum.TryParse<AiProvider>(saved[..sep], out var provider))
+        {
+            var id = saved[(sep + 1)..];
+            if (!string.IsNullOrEmpty(id))
+                return new ChatModel(provider, id);
+        }
+
+        // Legacy value (a bare Ollama model name with no provider prefix) — treat as Ollama.
+        return new ChatModel(AiProvider.Ollama, saved);
     }
 
     /// <summary>Deep Research sidebar tab: on = deep-research mode, off = plain chat.</summary>
@@ -217,44 +238,57 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _settings.Save();
 
         ConnectionStatus = "Connecting…";
-        IsConnected = await _ollama.IsAvailableAsync().ConfigureAwait(true);
 
-        if (!IsConnected)
+        IReadOnlyList<ChatModel> models;
+        try
         {
-            ConnectionStatus = $"Offline — is Ollama running at {OllamaBaseUrl}?";
+            // The router queries every configured provider best-effort and aggregates the results.
+            models = await _router.ListAllModelsAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            IsConnected = false;
+            ConnectionStatus = $"Error listing models: {ex.Message}";
             Models.Clear();
             return;
         }
 
-        try
-        {
-            var models = await _ollama.ListModelsAsync().ConfigureAwait(true);
-            Models.Clear();
-            foreach (var m in models)
-                Models.Add(m);
+        Models.Clear();
+        foreach (var m in models)
+            Models.Add(m);
 
-            ConnectionStatus = Models.Count > 0
-                ? $"Connected — {Models.Count} model(s)"
-                : "Connected — no models installed (try: ollama pull llama3)";
-
-            // Restore the saved model if still present, otherwise pick the first.
-            if (SelectedModel is null || !Models.Contains(SelectedModel))
-                SelectedModel = Models.FirstOrDefault();
-        }
-        catch (Exception ex)
+        // Connected if ANY provider returned at least one model.
+        IsConnected = Models.Count > 0;
+        if (!IsConnected)
         {
-            ConnectionStatus = $"Error listing models: {ex.Message}";
+            ConnectionStatus =
+                $"Offline — is Ollama running at {OllamaBaseUrl}, or add a cloud API key in Settings → AI Model?";
+            SelectedModel = null;
+            return;
         }
+
+        var providerCount = Models.Select(m => m.Provider).Distinct().Count();
+        ConnectionStatus = providerCount == 1
+            ? $"Connected — {Models.Count} model(s)"
+            : $"Connected — {Models.Count} model(s) across {providerCount} provider(s)";
+
+        // Restore the saved selection if still present, otherwise pick the first model.
+        var saved = ParseSavedModel(_settings.Current.DefaultModel);
+        SelectedModel = saved is not null && Models.Contains(saved)
+            ? saved
+            : Models.FirstOrDefault();
     }
 
     private bool CanSend =>
-        !IsBusy && (!string.IsNullOrWhiteSpace(InputText) || HasAttachments) && !string.IsNullOrEmpty(SelectedModel);
+        !IsBusy && (!string.IsNullOrWhiteSpace(InputText) || HasAttachments) && SelectedModel is not null;
 
     [RelayCommand(CanExecute = nameof(CanSend))]
     private async Task SendAsync()
     {
         var prompt = InputText.Trim();
-        var model = SelectedModel!;
+        var selected = SelectedModel!;
+        var client = _router.For(selected.Provider);
+        var model = selected.Id;
         InputText = "";
 
         // Snapshot and clear the staged attachments.
@@ -289,16 +323,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             switch (mode)
             {
                 case AppMode.Chat:
-                    await RunChatAsync(model, assistant, ct);
+                    await RunChatAsync(client, model, assistant, ct);
                     break;
                 case AppMode.WebSearch:
-                    await RunWebSearchAsync(model, prompt, user, assistant, ct);
+                    await RunWebSearchAsync(client, model, prompt, user, assistant, ct);
                     break;
                 case AppMode.DeepResearch:
-                    await RunDeepResearchAsync(model, prompt, user, assistant, ct);
+                    await RunDeepResearchAsync(client, model, prompt, user, assistant, ct);
                     break;
                 case AppMode.Project:
-                    await RunProjectAgentAsync(model, assistant, ct);
+                    await RunProjectAgentAsync(client, model, assistant, ct);
                     break;
             }
 
@@ -361,12 +395,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         user.AttachedContext = docs.ToString().Trim();
     }
 
-    private async Task RunChatAsync(string model, MessageViewModel assistant, CancellationToken ct)
+    private async Task RunChatAsync(IChatClient client, string model, MessageViewModel assistant, CancellationToken ct)
     {
         var history = BuildChatHistory(assistant);
         var raw = new StringBuilder();
         // No ConfigureAwait(false): stream deltas must apply on the UI thread.
-        await foreach (var delta in _ollama.ChatStreamAsync(model, history, ThinkingEnabled, ct))
+        await foreach (var delta in client.ChatStreamAsync(model, history, ThinkingEnabled, ct))
         {
             ApplyStreamDelta(assistant, raw, delta);
             RequestScroll();
@@ -386,7 +420,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private async Task RunWebSearchAsync(
-        string model, string prompt, MessageViewModel user, MessageViewModel assistant, CancellationToken ct)
+        IChatClient client, string model, string prompt, MessageViewModel user,
+        MessageViewModel assistant, CancellationToken ct)
     {
         StatusText = "Searching the web…";
         var results = await _search.SearchAsync(prompt, _settings.Current.SearchResultsPerQuery, ct);
@@ -401,7 +436,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var messages = BuildWebSearchMessages(
             WithAttachedContext(prompt, user), results, user.Images, ThinkingDirective());
         var raw = new StringBuilder();
-        await foreach (var delta in _ollama.ChatStreamAsync(model, messages, ThinkingEnabled, ct))
+        await foreach (var delta in client.ChatStreamAsync(model, messages, ThinkingEnabled, ct))
         {
             ApplyStreamDelta(assistant, raw, delta);
             RequestScroll();
@@ -410,13 +445,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private async Task RunDeepResearchAsync(
-        string model, string prompt, MessageViewModel user, MessageViewModel assistant, CancellationToken ct)
+        IChatClient client, string model, string prompt, MessageViewModel user,
+        MessageViewModel assistant, CancellationToken ct)
     {
         // Progress is constructed on the UI thread, so its callbacks marshal back automatically.
         var progress = new Progress<string>(s => StatusText = s);
         var raw = new StringBuilder();
 
         var sources = await _research.RunAsync(
+            client,
             WithAttachedContext(prompt, user),
             model,
             progress,
@@ -431,7 +468,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         assistant.SetSources(sources);
     }
 
-    private async Task RunProjectAgentAsync(string model, MessageViewModel assistant, CancellationToken ct)
+    private async Task RunProjectAgentAsync(
+        IChatClient client, string model, MessageViewModel assistant, CancellationToken ct)
     {
         if (ActiveProject is null)
         {
@@ -446,7 +484,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // The agent runs on background threads; marshal its callbacks back to the UI.
         // Activity (the 🔧 action log) goes to the collapsible "work" block; the final reply to the answer.
         await _agent.RunAsync(
-            ActiveProject, model, conversation, _settings.Current.AgentApproval,
+            client, ActiveProject, model, conversation, _settings.Current.AgentApproval,
             ThinkingDirective(), ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
             activity => Dispatcher.UIThread.Post(() =>
             {

@@ -51,6 +51,28 @@ public partial class App : Application
             client.Timeout = TimeSpan.FromMinutes(10);
         });
 
+        // Cloud AI providers. Each gets its own typed HttpClient with the provider's base address and
+        // a long timeout (matching Ollama) so streamed replies aren't cut off. Auth/version headers are
+        // per-request (the API key is read from settings on each call), so they're not set here.
+        services.AddHttpClient<IOpenAiClient, OpenAiClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.openai.com/");
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
+        services.AddHttpClient<IGeminiClient, GeminiClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
+        services.AddHttpClient<IAnthropicClient, AnthropicClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.anthropic.com/");
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
+
+        // Routes a chosen ChatModel to the right provider client and aggregates the model list.
+        services.AddSingleton<IModelRouter, ChatRouter>();
+
         // Typed HttpClient for web search/page fetching with a desktop User-Agent.
         services.AddHttpClient<IWebSearchService, WebSearchService>(client =>
         {

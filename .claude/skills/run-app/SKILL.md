@@ -32,8 +32,12 @@ dotnet run --project src/AI_Interface
 ```
 
 Run it in the background (it blocks while the window is open). On first launch the app auto-connects,
-loads the installed models into the sidebar picker, and is ready for Chat / Web Search / Deep Research /
-Project. The Project agent needs a tool-calling-capable model (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`).
+loads the installed models into the **top-right model picker**, and is ready for Chat / Web Search / Deep
+Research / Project. The Project agent needs a tool-calling-capable model (e.g. `llama3.1`, `qwen2.5`,
+`mistral-nemo`).
+
+Cloud models (ChatGPT / Gemini / Claude) also appear in the picker once you add the provider's API key in
+**Settings → AI Model → Web Models** and click *Connect* — they need no local Ollama and work in every mode.
 
 ## Notes
 

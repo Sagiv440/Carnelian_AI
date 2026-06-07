@@ -37,7 +37,12 @@ public sealed class OllamaClient : IOllamaClient
 
     private string BaseUrl => _settings.Current.OllamaBaseUrl.TrimEnd('/');
 
+    public AiProvider Provider => AiProvider.Ollama;
+
     public Task<bool> IsAvailableAsync(CancellationToken ct = default) => PingAsync(BaseUrl, ct);
+
+    /// <summary>Reachability for the router (Ollama needs no key — delegates to <see cref="IsAvailableAsync"/>).</summary>
+    public Task<bool> IsConfiguredAndReachableAsync(CancellationToken ct = default) => IsAvailableAsync(ct);
 
     public async Task<bool> PingAsync(string baseUrl, CancellationToken ct = default)
     {

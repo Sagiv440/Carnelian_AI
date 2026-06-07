@@ -27,11 +27,8 @@ public sealed class ProjectAgentService : IProjectAgentService
     /// <summary>Wall-clock limit for a single terminal command.</summary>
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(2);
 
-    private readonly IOllamaClient _ollama;
-
-    public ProjectAgentService(IOllamaClient ollama) => _ollama = ollama;
-
     public async Task RunAsync(
+        IChatClient client,
         Project project,
         string model,
         IReadOnlyList<ChatMessage> conversation,
@@ -58,7 +55,7 @@ public sealed class ProjectAgentService : IProjectAgentService
             ct.ThrowIfCancellationRequested();
             status.Report(step == 0 ? "Thinking…" : "Working…");
 
-            var turn = await _ollama.ChatWithToolsAsync(model, messages, tools, ct).ConfigureAwait(false);
+            var turn = await client.ChatWithToolsAsync(model, messages, tools, ct).ConfigureAwait(false);
 
             // No tool calls → the model gave its final answer.
             if (turn.ToolCalls.Count == 0)

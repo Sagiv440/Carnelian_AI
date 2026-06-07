@@ -15,8 +15,9 @@ public interface IProjectAgentService
     /// <summary>
     /// Drives the agent to completion for one user turn.
     /// </summary>
+    /// <param name="client">The chat client serving the chosen model (resolved by the model router; must support tool calling).</param>
     /// <param name="project">The active project (name + sandbox directory).</param>
-    /// <param name="model">Ollama model to use (must support tool calling).</param>
+    /// <param name="model">Model id to use (must support tool calling).</param>
     /// <param name="conversation">Prior user/assistant turns; the agent prepends its own system prompt.</param>
     /// <param name="approvalMode">Whether/when to ask the user before a tool runs.</param>
     /// <param name="thinkingDirective">Extra planning instruction appended to the system prompt (empty = off).</param>
@@ -27,6 +28,7 @@ public interface IProjectAgentService
     /// <param name="onAnswer">Receives the final plain-text answer. Must marshal to the UI thread.</param>
     /// <param name="approve">Asked to approve a single tool call; returns false to skip it.</param>
     Task RunAsync(
+        IChatClient client,
         Project project,
         string model,
         IReadOnlyList<ChatMessage> conversation,

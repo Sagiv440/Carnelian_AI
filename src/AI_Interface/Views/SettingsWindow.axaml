@@ -140,14 +140,64 @@
 
                     <!-- WEB MODELS -->
                     <TabItem Header="Web Models">
-                        <Panel>
-                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
-                                <TextBlock Classes="brand" Text="Coming Soon!" FontSize="24"
-                                           HorizontalAlignment="Center"/>
-                                <TextBlock Classes="muted" HorizontalAlignment="Center"
-                                           Text="Cloud and web-hosted models will be configurable here."/>
+                        <ScrollViewer>
+                            <StackPanel Margin="14,6" Spacing="2">
+                                <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="420"
+                                           HorizontalAlignment="Left" Margin="0,0,0,4"
+                                           Text="Enter an API key and click Connect. The provider's models are fetched live and appear in the top-right model picker alongside your local Ollama models."/>
+
+                                <!-- ChatGPT (OpenAI) -->
+                                <TextBlock Classes="section" Text="ChatGPT (OpenAI)"/>
+                                <TextBlock Classes="label" Text="API key"/>
+                                <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
+                                    <TextBox Grid.Column="0" PasswordChar="•"
+                                             Text="{Binding OpenAiApiKey}"
+                                             PlaceholderText="sk-…"/>
+                                    <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
+                                            MinWidth="100"
+                                            IsEnabled="{Binding !IsTestingCloud}"
+                                            Command="{Binding ConnectOpenAiCommand}"/>
+                                </Grid>
+                                <TextBlock Text="{Binding OpenAiStatus}" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
+                                           IsVisible="{Binding OpenAiStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Foreground="{Binding OpenAiStatusColor, Converter={StaticResource StringToBrush}}"/>
+
+                                <!-- Gemini (Google) -->
+                                <TextBlock Classes="section" Text="Gemini (Google)"/>
+                                <TextBlock Classes="label" Text="API key"/>
+                                <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
+                                    <TextBox Grid.Column="0" PasswordChar="•"
+                                             Text="{Binding GeminiApiKey}"
+                                             PlaceholderText="AIza…"/>
+                                    <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
+                                            MinWidth="100"
+                                            IsEnabled="{Binding !IsTestingCloud}"
+                                            Command="{Binding ConnectGeminiCommand}"/>
+                                </Grid>
+                                <TextBlock Text="{Binding GeminiStatus}" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
+                                           IsVisible="{Binding GeminiStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Foreground="{Binding GeminiStatusColor, Converter={StaticResource StringToBrush}}"/>
+
+                                <!-- Claude (Anthropic) -->
+                                <TextBlock Classes="section" Text="Claude (Anthropic)"/>
+                                <TextBlock Classes="label" Text="API key"/>
+                                <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
+                                    <TextBox Grid.Column="0" PasswordChar="•"
+                                             Text="{Binding AnthropicApiKey}"
+                                             PlaceholderText="sk-ant-…"/>
+                                    <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
+                                            MinWidth="100"
+                                            IsEnabled="{Binding !IsTestingCloud}"
+                                            Command="{Binding ConnectAnthropicCommand}"/>
+                                </Grid>
+                                <TextBlock Text="{Binding AnthropicStatus}" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
+                                           IsVisible="{Binding AnthropicStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Foreground="{Binding AnthropicStatusColor, Converter={StaticResource StringToBrush}}"/>
                             </StackPanel>
-                        </Panel>
+                        </ScrollViewer>
                     </TabItem>
 
                 </TabControl>

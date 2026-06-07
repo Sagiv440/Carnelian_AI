@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A cross-platform (Windows + Linux) Avalonia desktop app that runs AI locally through a local
-[Ollama](https://ollama.com) server. .NET 9, MVVM via CommunityToolkit.Mvvm.
+[Ollama](https://ollama.com) server, and optionally through cloud providers (OpenAI/ChatGPT,
+Google Gemini, Anthropic/Claude). .NET 9, MVVM via CommunityToolkit.Mvvm.
 
 Four operating modes (`AppMode`), chosen from the sidebar / composer rather than a single picker:
 - **Chat** — talk to the model directly.
@@ -51,14 +52,38 @@ Services are registered in `App.ConfigureServices()` and constructor-injected; v
 from the container are `MainWindowViewModel` (the window's `DataContext`), `SettingsViewModel`,
 `ProjectViewModel`, and `ModelConfigViewModel`.
 
-**The modes** all live in `MainWindowViewModel.SendAsync`, which switches on `AppMode`:
-- *Chat* streams `IOllamaClient.ChatStreamAsync` directly, with conversation history rebuilt from `Messages`.
+**The modes** all live in `MainWindowViewModel.SendAsync`, which switches on `AppMode`. Every mode is
+provider-agnostic: the VM resolves the chosen model's client via `_router.For(SelectedModel.Provider)`
+and routes through the `IChatClient` surface (see **Providers & routing**).
+- *Chat* streams `IChatClient.ChatStreamAsync` directly, with conversation history rebuilt from `Messages`.
 - *Web Search* does one `IWebSearchService.SearchAsync`, injects snippets as context, then streams.
 - *Deep Research* delegates to `IDeepResearchService.RunAsync` (plans → searches → reads → synthesizes),
-  reporting progress via `IProgress<string>` and streaming via an `Action<string>` callback.
-- *Project* delegates to `IProjectAgentService.RunAsync` — a tool-calling loop (see **Project mode**).
+  passing the resolved `IChatClient`; reports progress via `IProgress<string>` and streams via `Action<string>`.
+- *Project* delegates to `IProjectAgentService.RunAsync` (also passed the `IChatClient`) — a tool-calling
+  loop (see **Project mode**).
 
-**Ollama integration** (`OllamaClient`). The base URL is read from `ISettingsService` on **every** call.
+**Providers & routing.** `IChatClient` (`Services/IChatClient.cs`) is the provider-agnostic chat surface
+(`Provider`, `ChatStreamAsync`, `CompleteAsync`, `ChatWithToolsAsync`, `ListModelsAsync`,
+`IsConfiguredAndReachableAsync`). Four implementations: `OllamaClient` (local; `IOllamaClient : IChatClient`)
+and the cloud clients `OpenAiClient`/`GeminiClient`/`AnthropicClient` (each behind a marker interface
+`IOpenAiClient`/`IGeminiClient`/`IAnthropicClient` so DI gives each its own typed `HttpClient`). Each cloud
+client reads its API key from `ISettingsService` on every call (blank key ⇒ empty model list + unreachable),
+builds the provider's request/response in that one file, and surfaces HTTP errors via an
+`InvalidOperationException` (mirrors `OllamaClient.BuildErrorMessage`). `IModelRouter`/`ChatRouter` holds all
+four clients: `ListAllModelsAsync` queries every configured+reachable provider in parallel (best-effort —
+a failing provider contributes nothing) and aggregates `ChatModel`s (Ollama first, then cloud);
+`For(provider)` resolves the client. The picker is `ObservableCollection<ChatModel>` (`Models`) with
+`SelectedModel : ChatModel?`; the saved selection is persisted as `"{provider}:{id}"` in
+`AppSettings.DefaultModel` and parsed back on load (a bare legacy value is treated as Ollama). Cloud API
+keys live in `AppSettings.OpenAiApiKey`/`GeminiApiKey`/`AnthropicApiKey`. Tool-call id threading: the app's
+`ChatMessage` carries only tool *names*, so OpenAI/Anthropic clients synthesise deterministic ids
+(`call_{n}` / `toolu_{n}`) per assistant tool call and pair each tool result to the next pending call of the
+same name when re-serialising the running conversation. Gemini has no system role (extracted into
+`systemInstruction`) and uses `user`/`model` roles. `think` is honored only by Ollama; cloud clients ignore it.
+
+**Ollama integration** (`OllamaClient`). Implements `IChatClient` plus Ollama-only model management
+(`PingAsync`/`PullModelAsync`/`DeleteModelAsync`, used by Model Config). The base URL is read from
+`ISettingsService` on **every** call.
 - *Streaming chat* — `ChatStreamAsync` reads NDJSON from `POST /api/chat` with
   `HttpCompletionOption.ResponseHeadersRead`, so the 10-min `HttpClient.Timeout` (set in DI) only bounds
   time-to-first-byte. No `ConfigureAwait(false)` in the VM loop (continuations must hit the UI thread).
@@ -114,8 +139,9 @@ prompt as `[Attached documents]`. The composer's 📎 menu offers *Photos* and *
 
 **Settings** (`SettingsService`): JSON under the per-user app-data folder; all reads/writes best-effort.
 `SettingsWindow` tabs:
-- **AI Model** — Local AI (Ollama URL, *Quick setup*, *Test connection*, *Model_Config*) and Web Models
-  ("Coming Soon").
+- **AI Model** — Local AI (Ollama URL, *Quick setup*, *Test connection*, *Model_Config*) and **Web Models**
+  (per-provider API-key field + Connect for ChatGPT / Gemini / Claude). Connect persists the key, probes the
+  provider, shows a green/red status, and raises `ConnectRequested` so the main window reloads the dropdown.
 - **Theme** — appearance (light/dark/system), accent + bubble colors, and **Typography** (font family +
   base size).
 - **Project** — agent approval mode + *Software installation* (No permission / Ask every time / Allow).
