@@ -23,6 +23,12 @@ public sealed class AppSettings
     /// <summary>Assistant message bubble color (hex, may include alpha).</summary>
     public string AssistantBubbleColor { get; set; } = ThemeDefaults.AssistantBubble;
 
+    /// <summary>Font family for the app. "Poppins" maps to the embedded font; others use the system font.</summary>
+    public string FontFamily { get; set; } = ThemeDefaults.FontFamily;
+
+    /// <summary>Base font size for the app.</summary>
+    public double FontSize { get; set; } = ThemeDefaults.FontSize;
+
     /// <summary>Model selected last time, restored on startup if still installed.</summary>
     public string? DefaultModel { get; set; }
 

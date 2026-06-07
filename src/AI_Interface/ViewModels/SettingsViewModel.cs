@@ -83,6 +83,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _accentColor;
     [ObservableProperty] private string _userBubbleColor;
     [ObservableProperty] private string _assistantBubbleColor;
+    [ObservableProperty] private string _fontFamily;
+    [ObservableProperty] private double _fontSize;
+
+    /// <summary>Selectable font families for the Theme tab.</summary>
+    public IReadOnlyList<string> Fonts { get; } = ThemeDefaults.Fonts;
 
     // --- General ---
 
@@ -158,6 +163,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _accentColor = s.AccentColor;
         _userBubbleColor = s.UserBubbleColor;
         _assistantBubbleColor = s.AssistantBubbleColor;
+        _fontFamily = s.FontFamily;
+        _fontSize = s.FontSize;
         _ollamaBaseUrl = s.OllamaBaseUrl;
         _resultsPerQuery = s.SearchResultsPerQuery;
         _maxPagesToRead = s.MaxPagesToRead;
@@ -190,6 +197,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnAccentColorChanged(string value) => ApplyTheme();
     partial void OnUserBubbleColorChanged(string value) => ApplyTheme();
     partial void OnAssistantBubbleColorChanged(string value) => ApplyTheme();
+    partial void OnFontFamilyChanged(string value) => ApplyTheme();
+    partial void OnFontSizeChanged(double value) => ApplyTheme();
 
     partial void OnOllamaBaseUrlChanged(string value) => SaveGeneral();
     partial void OnResultsPerQueryChanged(decimal value) => SaveGeneral();
@@ -244,6 +253,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         AccentColor = ThemeDefaults.Accent;
         UserBubbleColor = ThemeDefaults.UserBubble;
         AssistantBubbleColor = ThemeDefaults.AssistantBubble;
+        FontFamily = ThemeDefaults.FontFamily;
+        FontSize = ThemeDefaults.FontSize;
     }
 
     /// <summary>Scan localhost:11434 and, if Ollama answers, fill in the server URL.</summary>
@@ -339,6 +350,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.AccentColor = AccentColor;
         s.UserBubbleColor = UserBubbleColor;
         s.AssistantBubbleColor = AssistantBubbleColor;
+        s.FontFamily = FontFamily;
+        s.FontSize = FontSize;
 
         _theme.Apply(s);
         _settings.Save();

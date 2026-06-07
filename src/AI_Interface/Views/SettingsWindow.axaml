@@ -182,6 +182,20 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
+                        <TextBlock Classes="section" Text="Typography"/>
+
+                        <TextBlock Classes="label" Text="Font"/>
+                        <ComboBox Width="220" HorizontalAlignment="Left"
+                                  ItemsSource="{Binding Fonts}" SelectedItem="{Binding FontFamily}"/>
+
+                        <TextBlock Classes="label" Text="Font size"/>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Slider Width="220" Minimum="10" Maximum="22" TickFrequency="1"
+                                    IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                    Value="{Binding FontSize}"/>
+                            <TextBlock Text="{Binding FontSize}" Classes="muted" VerticalAlignment="Center"/>
+                        </StackPanel>
+
                         <Button Classes="ghost" Content="Reset to defaults"
                                 Command="{Binding ResetThemeCommand}" Margin="0,16,0,0"/>
                     </StackPanel>

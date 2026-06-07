@@ -15,6 +15,11 @@ public sealed class ThemeService : IThemeService
     public const string AccentBrushKey = "AppAccentBrush";
     public const string UserBubbleBrushKey = "UserBubbleBrush";
     public const string AssistantBubbleBrushKey = "AssistantBubbleBrush";
+    public const string FontKey = "AppFont";
+    public const string FontSizeKey = "AppFontSize";
+
+    /// <summary>avares URI of the embedded Poppins font (the app default).</summary>
+    private const string PoppinsUri = "avares://AI_Interface/Assets/Fonts#Poppins";
 
     public void Apply(AppSettings settings)
     {
@@ -32,7 +37,16 @@ public sealed class ThemeService : IThemeService
         SetBrush(app, AccentBrushKey, settings.AccentColor);
         SetBrush(app, UserBubbleBrushKey, settings.UserBubbleColor);
         SetBrush(app, AssistantBubbleBrushKey, settings.AssistantBubbleColor);
+
+        app.Resources[FontKey] = ResolveFont(settings.FontFamily);
+        app.Resources[FontSizeKey] = settings.FontSize >= 8 ? settings.FontSize : ThemeDefaults.FontSize;
     }
+
+    /// <summary>The default choice maps to the embedded Poppins; anything else is a system family.</summary>
+    private static FontFamily ResolveFont(string? family) =>
+        string.IsNullOrWhiteSpace(family) || family == ThemeDefaults.FontFamily
+            ? new FontFamily(PoppinsUri)
+            : new FontFamily(family);
 
     private static void SetBrush(Application app, string key, string? hex)
     {

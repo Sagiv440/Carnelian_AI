@@ -10,8 +10,8 @@ window and the process stays in the foreground, so run it in the background when
 
 ## 1. Make sure Ollama is up
 
-The app talks to Ollama at `http://localhost:11434` by default (configurable in the app's top bar,
-persisted in `settings.json`). Check it responds:
+The app talks to Ollama at `http://localhost:11434` by default (configurable in Settings → AI Model →
+Local AI, with *Quick setup* / *Test connection* helpers; persisted in `settings.json`). Check it responds:
 
 ```bash
 curl -s http://localhost:11434/api/tags
@@ -32,10 +32,13 @@ dotnet run --project src/AI_Interface
 ```
 
 Run it in the background (it blocks while the window is open). On first launch the app auto-connects,
-loads the installed models into the top-bar picker, and is ready for Chat / Web Search / Deep Research.
+loads the installed models into the sidebar picker, and is ready for Chat / Web Search / Deep Research /
+Project. The Project agent needs a tool-calling-capable model (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`).
 
 ## Notes
 
 - A clean build is expected (`dotnet build AI_Interface.sln` → 0 warnings/errors). If the build fails
   with a net10.0 targeting error, the csproj's `TargetFramework` was reverted — it must stay `net9.0`.
+- On Windows a running instance locks `AI_Interface.exe`, so a rebuild fails at the copy step while the
+  app is open. Stop it first: `Stop-Process -Name AI_Interface -Force`.
 - Web Search and Deep Research additionally require internet access (DuckDuckGo + page fetches).

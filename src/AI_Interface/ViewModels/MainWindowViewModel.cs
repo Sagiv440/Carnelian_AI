@@ -120,6 +120,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool HasProjectSkills => ProjectSkillCount > 0;
     public string ProjectSkillSummary => ProjectSkillCount == 1 ? "1 skill loaded" : $"{ProjectSkillCount} skills loaded";
 
+    /// <summary>Sidebar tab state (only meaningful while a project is loaded): false = Chat Log, true = Files.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsChatLogTabSelected))]
+    [NotifyPropertyChangedFor(nameof(IsFilesTabSelected))]
+    private bool _showProjectFiles;
+
+    public bool IsChatLogTabSelected => !ShowProjectFiles;
+    public bool IsFilesTabSelected => ShowProjectFiles;
+
+    /// <summary>Root of the project file tree (one node = the project directory) for the Files tab.</summary>
+    public ObservableCollection<FileNode> FileTree { get; } = new();
+
     public MainWindowViewModel(
         IOllamaClient ollama,
         IWebSearchService search,
@@ -335,7 +347,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             }
             else
             {
-                var text = await _attachments.ExtractPdfTextAsync(a.Path, _settings.Current.MaxCharsPerPage, ct);
+                var text = await _attachments.ExtractTextAsync(a.Path, _settings.Current.MaxCharsPerPage, ct);
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     docs.AppendLine($"--- {a.FileName} ---");
@@ -562,6 +574,33 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void OpenProject() => ProjectRequested?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>Sidebar tab: show the chat log.</summary>
+    [RelayCommand]
+    private void ShowChatLog() => ShowProjectFiles = false;
+
+    /// <summary>Sidebar tab: show the project file tree (and refresh it to reflect any agent changes).</summary>
+    [RelayCommand]
+    private void ShowFiles()
+    {
+        ShowProjectFiles = true;
+        LoadFileTree();
+    }
+
+    /// <summary>Re-read the project file tree from disk.</summary>
+    [RelayCommand]
+    private void RefreshFiles() => LoadFileTree();
+
+    /// <summary>Rebuilds the file tree from the active project's directory (root node, expanded).</summary>
+    private void LoadFileTree()
+    {
+        FileTree.Clear();
+        if (ActiveProject is null)
+            return;
+
+        var root = new FileNode(ActiveProject.Directory, isDirectory: true) { IsExpanded = true };
+        FileTree.Add(root);
+    }
+
     /// <summary>
     /// Called by the view once a project is created/opened: enter project (agent) mode, load that
     /// project's saved chats (from <c>.AI/chats</c>) into the log, and scan it for skill files.
@@ -574,7 +613,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         StatusText = "";
         ActiveProject = project;          // project store is now active
         SetMode(AppMode.Project);
+        ShowProjectFiles = false;         // start on the Chat Log tab
         LoadLog();                        // load this project's chats into the sidebar log
+        LoadFileTree();                   // build the Files tab tree
         await LoadProjectSkillsAsync(project);
     }
 
@@ -589,6 +630,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ActiveProject = null;             // global store is now active
         _projectSkills = Array.Empty<ProjectSkill>();
         ProjectSkillCount = 0;
+        ShowProjectFiles = false;
+        FileTree.Clear();
         LoadLog();                        // reload the global chat log
         SetMode(AppMode.Chat);
     }
@@ -730,7 +773,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void AttachPhotos() => AttachFilesRequested?.Invoke(this, AttachmentKind.Photo);
 
     [RelayCommand]
-    private void AttachPdfs() => AttachFilesRequested?.Invoke(this, AttachmentKind.Pdf);
+    private void AttachDocuments() => AttachFilesRequested?.Invoke(this, AttachmentKind.Document);
 
     [RelayCommand]
     private void RemoveAttachment(Attachment? attachment)

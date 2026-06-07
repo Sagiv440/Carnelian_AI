@@ -32,8 +32,10 @@ The **signature gradient** is teal→violet, 90°. Use it sparingly for emphasis
 CTA) — not on large fills.
 
 ## Design tokens — reference these, don't inline colors
-- Font: `{StaticResource AppFont}` (Poppins, embedded in `Assets/Fonts`). FontFamily inherits, so the
-  `Window` style already sets it app-wide.
+- Font: `{DynamicResource AppFont}` (defaults to Poppins, embedded in `Assets/Fonts`) + base size
+  `{DynamicResource AppFontSize}`. Both are **user-selectable** (Settings → Theme → Typography) and
+  overridden live by `ThemeService`, so reference them dynamically — don't hard-code a font or size.
+  FontFamily/FontSize inherit, so the `Window` style already sets them app-wide.
 - Accent: `{DynamicResource AppAccentBrush}` (user-themeable) · gradient: `{DynamicResource AccentGradientBrush}`.
 - Chat bubbles: `{DynamicResource UserBubbleBrush}` / `{DynamicResource AssistantBubbleBrush}` (user-themeable).
 - Structural, **theme-variant-aware** (auto light/dark): `AppWindowBackground`, `AppSurfaceBrush`,
@@ -64,10 +66,13 @@ CTA) — not on large fills.
 - **Per-prompt toolbar toggles** (Web search, Thinking) are `ToggleButton`s with the local `toolToggle`
   pill style defined in `MainWindow.axaml` — the `:checked` state tints with the accent. Add new
   composer toggles the same way so they read as a set.
-- **Dialogs** (Settings, Project, tool approval) are plain `Window`s whose content is wrapped in a
-  `Border.card`, using `Button.cta` for the primary action and `Button.ghost` for Cancel/secondary.
-  Tabbed dialogs use a `TabControl` inside that card (see `SettingsWindow` / `ProjectWindow`). Match this
-  for any new dialog instead of styling a bare window.
+- **Dialogs** (Settings, Project, tool approval, Model Config) are plain `Window`s whose content is
+  wrapped in a `Border.card`, using `Button.cta` for the primary action and `Button.ghost` for
+  Cancel/secondary. Tabbed dialogs use a `TabControl` inside that card (see `SettingsWindow` /
+  `ProjectWindow` / `ModelConfigWindow`). Match this for any new dialog instead of styling a bare window.
+- **Sidebar tabs** (Chat Log / Files, shown only with a project) use the local `Button.tab` /
+  `Button.tab.active` style in `MainWindow.axaml`; the Files tab hosts a `TreeView.files`. Reuse those
+  classes for any new sidebar tab rather than restyling from scratch.
 
 ## Gradient CTA button — the one tricky bit
 The Fluent `Button` template paints its background on `ContentPresenter#PART_ContentPresenter`, so a

@@ -6,9 +6,11 @@
          Poppins type, generous rounding, glassy surfaces, gradient CTA.
          ==================================================================== -->
 
-    <!-- Window: Poppins + deep-navy gradient background -->
+    <!-- Window: app font (user-selectable) + deep-navy gradient background. Font family/size use
+         DynamicResource so the Theme settings can change them live. -->
     <Style Selector="Window">
-        <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource AppFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
         <Setter Property="Background" Value="{DynamicResource AppWindowBackground}"/>
     </Style>
 
@@ -68,7 +70,7 @@
 
     <!-- Section / muted text helpers -->
     <Style Selector="TextBlock.brand">
-        <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource AppFont}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="FontSize" Value="18"/>
         <Setter Property="Foreground" Value="{DynamicResource AccentGradientBrush}"/>

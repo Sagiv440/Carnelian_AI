@@ -4,7 +4,9 @@ namespace AI_Interface.Models;
 public enum AttachmentKind
 {
     Photo,
-    Pdf
+
+    /// <summary>A document or text file (PDF, DOCX, TXT, MD, code, …) — read as text for the model.</summary>
+    Document
 }
 
 /// <summary>A file attached to a prompt (selected via the composer's attach button).</summary>

@@ -77,18 +77,35 @@ public partial class MainWindow : Window
     private async void OnAttachFilesRequested(object? sender, AttachmentKind kind)
     {
         // MainWindow is itself a TopLevel, so its StorageProvider drives the native file dialog.
-        var filter = kind == AttachmentKind.Photo
-            ? new FilePickerFileType("Images")
+        FilePickerFileType[] filters = kind == AttachmentKind.Photo
+            ? new[]
             {
-                Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp" }
+                new FilePickerFileType("Images")
+                {
+                    Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp" }
+                }
             }
-            : new FilePickerFileType("PDF") { Patterns = new[] { "*.pdf" } };
+            : new[]
+            {
+                new FilePickerFileType("Documents & text")
+                {
+                    Patterns = new[]
+                    {
+                        "*.pdf", "*.docx", "*.doc", "*.rtf", "*.odt",
+                        "*.txt", "*.md", "*.markdown", "*.csv", "*.tsv", "*.log",
+                        "*.json", "*.xml", "*.yaml", "*.yml", "*.html", "*.htm",
+                        "*.cs", "*.js", "*.ts", "*.py", "*.java", "*.c", "*.cpp", "*.h",
+                        "*.go", "*.rs", "*.rb", "*.php", "*.sh", "*.sql", "*.css"
+                    }
+                },
+                new FilePickerFileType("All files") { Patterns = new[] { "*" } }
+            };
 
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = kind == AttachmentKind.Photo ? "Attach photos" : "Attach PDFs",
+            Title = kind == AttachmentKind.Photo ? "Attach photos" : "Attach documents",
             AllowMultiple = true,
-            FileTypeFilter = new[] { filter }
+            FileTypeFilter = filters
         });
 
         var picked = new List<Attachment>();

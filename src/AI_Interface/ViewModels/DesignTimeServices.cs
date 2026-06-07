@@ -76,7 +76,7 @@ internal sealed class DesignSettingsService : ISettingsService
 
 internal sealed class DesignAttachmentService : IAttachmentService
 {
-    public Task<string> ExtractPdfTextAsync(string path, int maxChars, CancellationToken ct = default) =>
+    public Task<string> ExtractTextAsync(string path, int maxChars, CancellationToken ct = default) =>
         Task.FromResult("");
 
     public Task<string> ReadImageBase64Async(string path, CancellationToken ct = default) =>

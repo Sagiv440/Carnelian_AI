@@ -15,6 +15,19 @@ public static class ThemeDefaults
     /// <summary>Background of assistant message bubbles (neutral, theme-agnostic).</summary>
     public const string AssistantBubble = "#22888888";
 
+    /// <summary>Default font family — the embedded Poppins (see <c>App.axaml</c> AppFont).</summary>
+    public const string FontFamily = "Poppins";
+
+    /// <summary>Default base font size.</summary>
+    public const double FontSize = 14;
+
+    /// <summary>Selectable font families for the Theme tab. "Poppins" maps to the embedded font.</summary>
+    public static readonly string[] Fonts =
+    {
+        "Poppins", "Inter", "Segoe UI", "Arial", "Calibri", "Verdana",
+        "Georgia", "Times New Roman", "Consolas", "Cascadia Code"
+    };
+
     /// <summary>Preset color swatches offered in the Theme settings tab.</summary>
     public static readonly string[] Palette =
     {
