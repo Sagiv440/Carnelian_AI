@@ -23,7 +23,8 @@ public interface IProjectAgentService
     /// <param name="projectSkills">Project skill files appended to the system prompt (empty = none).</param>
     /// <param name="installPermission">Whether/how the agent may install software machine-wide.</param>
     /// <param name="status">Step progress (constructed on the UI thread, so it auto-marshals).</param>
-    /// <param name="onDelta">Receives transcript text (action log + final answer). Must marshal to the UI thread.</param>
+    /// <param name="onActivity">Receives the action log / intermediate reasoning (the "work"). Must marshal to the UI thread.</param>
+    /// <param name="onAnswer">Receives the final plain-text answer. Must marshal to the UI thread.</param>
     /// <param name="approve">Asked to approve a single tool call; returns false to skip it.</param>
     Task RunAsync(
         Project project,
@@ -34,7 +35,8 @@ public interface IProjectAgentService
         string projectSkills,
         SoftwareInstallPermission installPermission,
         IProgress<string> status,
-        Action<string> onDelta,
+        Action<string> onActivity,
+        Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct);
 }

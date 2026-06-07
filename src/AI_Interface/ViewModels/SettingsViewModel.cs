@@ -28,6 +28,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(TestConnectionCommand))]
     [NotifyCanExecuteChangedFor(nameof(QuickSetupCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     private bool _isTestingConnection;
 
     /// <summary>Result of the last Quick setup / Test connection probe (empty = none yet).</summary>
@@ -43,6 +44,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     /// <summary>Raised when the view should open the Model Config window.</summary>
     public event System.EventHandler? ModelConfigRequested;
+
+    /// <summary>Raised by the Connect button — the main window reconnects and reloads its model list.</summary>
+    public event System.EventHandler? ConnectRequested;
 
     /// <summary>Preset color swatches (the flat IDE palette).</summary>
     public IReadOnlyList<string> Palette { get; } = ThemeDefaults.Palette;
@@ -349,6 +353,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
         {
             IsTestingConnection = false;
         }
+    }
+
+    /// <summary>Reconnect: reload the main window's model list (via the host) and re-probe to show the result here.</summary>
+    [RelayCommand(CanExecute = nameof(CanProbe))]
+    private async Task Connect()
+    {
+        ConnectRequested?.Invoke(this, System.EventArgs.Empty);
+        await TestConnection();
     }
 
     private bool CanProbe => !IsTestingConnection;

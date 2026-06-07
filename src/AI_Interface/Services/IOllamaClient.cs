@@ -25,9 +25,13 @@ public interface IOllamaClient
     /// <summary>Deletes a locally installed model.</summary>
     Task DeleteModelAsync(string name, CancellationToken ct = default);
 
-    /// <summary>Streams the assistant reply token-by-token. Each yielded string is a content delta.</summary>
+    /// <summary>
+    /// Streams the assistant reply token-by-token. Each yielded string is a delta. When
+    /// <paramref name="think"/> is true the model's native reasoning is requested and streamed inline,
+    /// wrapped in <c>&lt;think&gt;…&lt;/think&gt;</c> (models that don't support thinking fall back automatically).
+    /// </summary>
     IAsyncEnumerable<string> ChatStreamAsync(
-        string model, IEnumerable<ChatMessage> messages, CancellationToken ct = default);
+        string model, IEnumerable<ChatMessage> messages, bool think, CancellationToken ct = default);
 
     /// <summary>Runs a chat to completion and returns the full reply. Used for internal research steps.</summary>
     Task<string> CompleteAsync(

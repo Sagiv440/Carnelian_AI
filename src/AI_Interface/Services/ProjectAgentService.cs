@@ -40,7 +40,8 @@ public sealed class ProjectAgentService : IProjectAgentService
         string projectSkills,
         SoftwareInstallPermission installPermission,
         IProgress<string> status,
-        Action<string> onDelta,
+        Action<string> onActivity,
+        Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct)
     {
@@ -62,26 +63,27 @@ public sealed class ProjectAgentService : IProjectAgentService
             // No tool calls → the model gave its final answer.
             if (turn.ToolCalls.Count == 0)
             {
-                onDelta(string.IsNullOrWhiteSpace(turn.Content) ? "_(no response)_" : turn.Content);
+                onAnswer(string.IsNullOrWhiteSpace(turn.Content) ? "_(no response)_" : turn.Content);
                 return;
             }
 
             // Record the assistant turn (with its tool calls) so the model sees its own request next round.
             messages.Add(new ChatMessage(ChatRole.Assistant, turn.Content) { ToolCalls = turn.ToolCalls });
+            // Any text the model emits alongside a tool call is part of its "work", not the final answer.
             if (!string.IsNullOrWhiteSpace(turn.Content))
-                onDelta(turn.Content + "\n");
+                onActivity(turn.Content + "\n");
 
             foreach (var call in turn.ToolCalls)
             {
                 ct.ThrowIfCancellationRequested();
                 var result = await ExecuteAsync(
-                    project, call, approvalMode, installPermission, status, onDelta, approve, ct)
+                    project, call, approvalMode, installPermission, status, onActivity, approve, ct)
                     .ConfigureAwait(false);
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
         }
 
-        onDelta($"\n\n_(stopped after {MaxSteps} steps — the task may be unfinished)_");
+        onAnswer($"_(stopped after {MaxSteps} steps — the task may be unfinished)_");
     }
 
     // ---- the agent loop's single-tool step -------------------------------------------------
@@ -89,13 +91,13 @@ public sealed class ProjectAgentService : IProjectAgentService
     private async Task<string> ExecuteAsync(
         Project project, AgentToolCall call, AgentApprovalMode approvalMode,
         SoftwareInstallPermission installPermission,
-        IProgress<string> status, Action<string> onDelta,
+        IProgress<string> status, Action<string> onActivity,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         var path = GetString(call.Arguments, "path");
         var (summary, detail, destructive) = Describe(project, call, path);
 
-        onDelta($"\n🔧 {summary}{(string.IsNullOrEmpty(detail) ? "" : $"  `{detail}`")}\n");
+        onActivity($"\n🔧 {summary}{(string.IsNullOrEmpty(detail) ? "" : $"  `{detail}`")}\n");
 
         // Is this a machine-wide software install (the install tool, or a run_command that looks like one)?
         var isInstallAction = call.Name == "install_software" ||
@@ -106,11 +108,11 @@ public sealed class ProjectAgentService : IProjectAgentService
         {
             if (call.Name == "install_software")
             {
-                onDelta("   ⛔ blocked — software installation is disabled for this project\n");
+                onActivity("   ⛔ blocked — software installation is disabled for this project\n");
                 return "Software installation is disabled. Ask the user to allow installs in " +
                        "Settings → Project (\"Ask every time\" or \"Allow agent to install software\"), then retry.";
             }
-            onDelta("   ⛔ blocked — that looks like a system install (disabled for this project)\n");
+            onActivity("   ⛔ blocked — that looks like a system install (disabled for this project)\n");
             return "That command installs software machine-wide, which is disabled. Ask the user to allow " +
                    "installs in Settings → Project, then retry.";
         }
@@ -125,7 +127,7 @@ public sealed class ProjectAgentService : IProjectAgentService
                 .ConfigureAwait(false);
             if (!ok)
             {
-                onDelta("   ⛔ skipped (you declined this action)\n");
+                onActivity("   ⛔ skipped (you declined this action)\n");
                 return "The user declined to run this action.";
             }
         }
@@ -159,7 +161,7 @@ public sealed class ProjectAgentService : IProjectAgentService
             result = $"Error: {ex.Message}";
         }
 
-        onDelta(IndentForDisplay(result) + "\n");
+        onActivity(IndentForDisplay(result) + "\n");
         return Truncate(result);
     }
 

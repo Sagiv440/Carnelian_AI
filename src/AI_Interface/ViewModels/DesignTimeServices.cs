@@ -27,7 +27,7 @@ internal sealed class DesignOllamaClient : IOllamaClient
         Task.FromResult<IReadOnlyList<string>>(new[] { "llama3:latest", "mistral:latest" });
 
     public async IAsyncEnumerable<string> ChatStreamAsync(
-        string model, IEnumerable<ChatMessage> messages,
+        string model, IEnumerable<ChatMessage> messages, bool think,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         await Task.CompletedTask;
@@ -110,10 +110,11 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
     public Task RunAsync(
         Project project, string model, IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode, string thinkingDirective, string projectSkills,
-        SoftwareInstallPermission installPermission, IProgress<string> status, Action<string> onDelta,
+        SoftwareInstallPermission installPermission, IProgress<string> status,
+        Action<string> onActivity, Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
-        onDelta("Design-time project agent response.");
+        onAnswer("Design-time project agent response.");
         return Task.CompletedTask;
     }
 }

@@ -119,11 +119,17 @@
                                         Command="{Binding ModelConfigCommand}"
                                         ToolTip.Tip="Recommend models for your hardware (requires a connected Ollama)"/>
 
-                                <!-- Test connection sits at the bottom-most field -->
-                                <Button Classes="cta" Content="Test connection" MinWidth="150"
-                                        HorizontalAlignment="Left" Margin="0,18,0,8"
-                                        IsEnabled="{Binding !IsTestingConnection}"
-                                        Command="{Binding TestConnectionCommand}"/>
+                                <!-- Test connection + Connect sit at the bottom-most field -->
+                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,18,0,8"
+                                            HorizontalAlignment="Left">
+                                    <Button Classes="cta" Content="Test connection" MinWidth="150"
+                                            IsEnabled="{Binding !IsTestingConnection}"
+                                            Command="{Binding TestConnectionCommand}"/>
+                                    <Button Classes="ghost" Content="Connect" MinWidth="120"
+                                            IsEnabled="{Binding !IsTestingConnection}"
+                                            Command="{Binding ConnectCommand}"
+                                            ToolTip.Tip="Reconnect to Ollama and reload the model list"/>
+                                </StackPanel>
                                 <TextBlock Text="{Binding ConnectionTestMessage}" FontWeight="SemiBold"
                                            TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
                                            IsVisible="{Binding ConnectionTestMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"

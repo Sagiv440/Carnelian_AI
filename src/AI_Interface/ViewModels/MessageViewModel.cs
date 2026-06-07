@@ -23,9 +23,24 @@ public sealed partial class MessageViewModel : ObservableObject
         _ => "?"
     };
 
-    /// <summary>Message body. Grows in place while a reply is streaming.</summary>
+    /// <summary>Message body (the final answer). Grows in place while a reply is streaming.</summary>
     [ObservableProperty]
     private string _text;
+
+    /// <summary>
+    /// The model's reasoning / the agent's action log — "how it got to the answer". Shown in a
+    /// collapsible block above the answer. Empty for user messages and non-reasoning replies.
+    /// </summary>
+    [ObservableProperty]
+    private string _work = "";
+
+    /// <summary>True when <see cref="Work"/> has content (drives the collapsible block's visibility).</summary>
+    [ObservableProperty]
+    private bool _hasWork;
+
+    /// <summary>Whether the reasoning block is expanded. Collapsed by default.</summary>
+    [ObservableProperty]
+    private bool _isWorkExpanded;
 
     /// <summary>True while this (assistant) message is still being generated.</summary>
     [ObservableProperty]
@@ -57,6 +72,22 @@ public sealed partial class MessageViewModel : ObservableObject
 
     /// <summary>Appends a streamed token to the message body. Call on the UI thread.</summary>
     public void Append(string delta) => Text += delta;
+
+    /// <summary>Appends to the reasoning/action log and flags it visible. Call on the UI thread.</summary>
+    public void AppendWork(string delta)
+    {
+        if (string.IsNullOrEmpty(delta))
+            return;
+        Work += delta;
+        HasWork = true;
+    }
+
+    /// <summary>Replaces the reasoning/action log wholesale (used while re-splitting a stream).</summary>
+    public void SetWork(string work)
+    {
+        Work = work ?? "";
+        HasWork = !string.IsNullOrWhiteSpace(Work);
+    }
 
     public void SetSources(IEnumerable<SearchResult> sources)
     {

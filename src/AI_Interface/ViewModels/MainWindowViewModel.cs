@@ -302,7 +302,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     break;
             }
 
-            if (assistant.Text.Length == 0)
+            if (assistant.Text.Length == 0 && assistant.Work.Length == 0)
                 assistant.Text = "_(no response)_";
         }
         catch (OperationCanceledException)
@@ -364,12 +364,25 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private async Task RunChatAsync(string model, MessageViewModel assistant, CancellationToken ct)
     {
         var history = BuildChatHistory(assistant);
+        var raw = new StringBuilder();
         // No ConfigureAwait(false): stream deltas must apply on the UI thread.
-        await foreach (var delta in _ollama.ChatStreamAsync(model, history, ct))
+        await foreach (var delta in _ollama.ChatStreamAsync(model, history, ThinkingEnabled, ct))
         {
-            assistant.Append(delta);
+            ApplyStreamDelta(assistant, raw, delta);
             RequestScroll();
         }
+    }
+
+    /// <summary>
+    /// Accumulates a streamed reply and re-splits it into the visible answer and the model's hidden
+    /// reasoning (<c>&lt;think&gt;…&lt;/think&gt;</c>), so reasoning shows in the collapsible block, not the answer.
+    /// </summary>
+    private static void ApplyStreamDelta(MessageViewModel assistant, StringBuilder raw, string delta)
+    {
+        raw.Append(delta);
+        var (reasoning, answer) = ReasoningSplit.Split(raw.ToString());
+        assistant.SetWork(reasoning);
+        assistant.Text = answer;
     }
 
     private async Task RunWebSearchAsync(
@@ -387,9 +400,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         StatusText = $"Found {results.Count} results — answering…";
         var messages = BuildWebSearchMessages(
             WithAttachedContext(prompt, user), results, user.Images, ThinkingDirective());
-        await foreach (var delta in _ollama.ChatStreamAsync(model, messages, ct))
+        var raw = new StringBuilder();
+        await foreach (var delta in _ollama.ChatStreamAsync(model, messages, ThinkingEnabled, ct))
         {
-            assistant.Append(delta);
+            ApplyStreamDelta(assistant, raw, delta);
             RequestScroll();
         }
         assistant.SetSources(results);
@@ -400,6 +414,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         // Progress is constructed on the UI thread, so its callbacks marshal back automatically.
         var progress = new Progress<string>(s => StatusText = s);
+        var raw = new StringBuilder();
 
         var sources = await _research.RunAsync(
             WithAttachedContext(prompt, user),
@@ -408,7 +423,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // The research service streams on a background thread; marshal each token to the UI.
             delta => Dispatcher.UIThread.Post(() =>
             {
-                assistant.Append(delta);
+                ApplyStreamDelta(assistant, raw, delta);
                 RequestScroll();
             }),
             ct);
@@ -428,13 +443,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var progress = new Progress<string>(s => StatusText = s);
         var conversation = BuildAgentConversation(assistant);
 
-        // The agent runs on background threads; marshal its transcript deltas back to the UI.
+        // The agent runs on background threads; marshal its callbacks back to the UI.
+        // Activity (the 🔧 action log) goes to the collapsible "work" block; the final reply to the answer.
         await _agent.RunAsync(
             ActiveProject, model, conversation, _settings.Current.AgentApproval,
             ThinkingDirective(), ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
-            delta => Dispatcher.UIThread.Post(() =>
+            activity => Dispatcher.UIThread.Post(() =>
             {
-                assistant.Append(delta);
+                assistant.AppendWork(activity);
+                RequestScroll();
+            }),
+            answer => Dispatcher.UIThread.Post(() =>
+            {
+                var (reasoning, text) = ReasoningSplit.Split(answer);
+                if (!string.IsNullOrEmpty(reasoning))
+                    assistant.AppendWork(reasoning);
+                assistant.Append(text);
                 RequestScroll();
             }),
             RequestToolApprovalAsync,

@@ -73,7 +73,7 @@ public sealed class DeepResearchService : IDeepResearchService
         // 4. Synthesize a cited answer, streamed back to the caller.
         status.Report("Synthesizing answer…");
         var messages = BuildSynthesisPrompt(question, toRead);
-        await foreach (var delta in _ollama.ChatStreamAsync(model, messages, ct).ConfigureAwait(false))
+        await foreach (var delta in _ollama.ChatStreamAsync(model, messages, think: false, ct).ConfigureAwait(false))
             onAnswerDelta(delta);
 
         return toRead;

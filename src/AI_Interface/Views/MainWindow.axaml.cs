@@ -123,11 +123,16 @@ public partial class MainWindow : Window
 
     private async void OnSettingsRequested(object? sender, EventArgs e)
     {
-        var settings = new SettingsWindow
-        {
-            DataContext = App.Services.GetRequiredService<SettingsViewModel>()
-        };
+        var settingsVm = App.Services.GetRequiredService<SettingsViewModel>();
+
+        // The Connect button lives in Settings now, but reconnecting/reloading models is the main VM's job.
+        void OnConnect(object? s, EventArgs args) => _vm?.RefreshCommand.Execute(null);
+        settingsVm.ConnectRequested += OnConnect;
+
+        var settings = new SettingsWindow { DataContext = settingsVm };
         await settings.ShowDialog(this);
+
+        settingsVm.ConnectRequested -= OnConnect;
     }
 
     private async void OnCopyMessage(object? sender, RoutedEventArgs e)

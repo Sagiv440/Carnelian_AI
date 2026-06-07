@@ -152,71 +152,118 @@ public sealed class OllamaClient : IOllamaClient
     public async IAsyncEnumerable<string> ChatStreamAsync(
         string model,
         IEnumerable<ChatMessage> messages,
+        bool think,
         [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var wire = messages
+            .Select(m => new OllamaChatMessage
+            {
+                Role = m.Role.ToWire(),
+                Content = m.Content,
+                Images = m.Images is { Count: > 0 } imgs ? new List<string>(imgs) : null
+            })
+            .ToList();
+
+        var resp = await SendChatStreamAsync(model, wire, think, ct).ConfigureAwait(false);
+
+        // Some models reject think:true with HTTP 400 ("… does not support thinking"). Retry without it
+        // so enabling Thinking never breaks a non-thinking model.
+        if (think && !resp.IsSuccessStatusCode && (int)resp.StatusCode == 400)
+        {
+            var probe = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            resp.Dispose();
+            if (probe.Contains("think", StringComparison.OrdinalIgnoreCase))
+                resp = await SendChatStreamAsync(model, wire, false, ct).ConfigureAwait(false);
+            else
+                throw new InvalidOperationException(BuildErrorMessage(400, probe));
+        }
+
+        try
+        {
+            if (!resp.IsSuccessStatusCode)
+            {
+                // Ollama returns a JSON body like {"error":"..."} — surface it instead of a generic status.
+                var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                throw new InvalidOperationException(BuildErrorMessage((int)resp.StatusCode, body));
+            }
+
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            using var reader = new StreamReader(stream);
+
+            var thinkOpen = false;
+            while (!reader.EndOfStream)
+            {
+                ct.ThrowIfCancellationRequested();
+                var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                OllamaChatChunk? chunk;
+                try
+                {
+                    chunk = JsonSerializer.Deserialize<OllamaChatChunk>(line, JsonOptions);
+                }
+                catch (JsonException)
+                {
+                    continue; // skip malformed line rather than aborting the stream
+                }
+
+                if (chunk is null)
+                    continue;
+                if (!string.IsNullOrEmpty(chunk.Error))
+                    throw new InvalidOperationException($"Ollama error: {chunk.Error}");
+
+                // Reasoning comes in a separate "thinking" field; wrap it in <think>…</think> so the UI's
+                // reasoning splitter routes it to the collapsible block instead of the answer.
+                var thinking = chunk.Message?.Thinking;
+                if (!string.IsNullOrEmpty(thinking))
+                {
+                    if (!thinkOpen) { thinkOpen = true; yield return "<think>"; }
+                    yield return thinking;
+                }
+
+                var delta = chunk.Message?.Content;
+                if (!string.IsNullOrEmpty(delta))
+                {
+                    if (thinkOpen) { thinkOpen = false; yield return "</think>"; }
+                    yield return delta;
+                }
+
+                if (chunk.Done)
+                {
+                    if (thinkOpen) yield return "</think>";
+                    yield break;
+                }
+            }
+
+            if (thinkOpen) yield return "</think>";
+        }
+        finally
+        {
+            resp.Dispose();
+        }
+    }
+
+    /// <summary>Posts a streaming chat request (optionally enabling native thinking) and returns the open response.</summary>
+    private Task<HttpResponseMessage> SendChatStreamAsync(
+        string model, List<OllamaChatMessage> messages, bool think, CancellationToken ct)
     {
         var request = new OllamaChatRequest
         {
             Model = model,
             Stream = true,
-            Messages = messages
-                .Select(m => new OllamaChatMessage
-                {
-                    Role = m.Role.ToWire(),
-                    Content = m.Content,
-                    Images = m.Images is { Count: > 0 } imgs ? new List<string>(imgs) : null
-                })
-                .ToList()
+            Messages = messages,
+            Think = think ? true : null
         };
 
-        using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/chat")
+        var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/chat")
         {
             Content = new StringContent(
                 JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json")
         };
 
-        using var resp = await _http
-            .SendAsync(httpReq, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
-
-        if (!resp.IsSuccessStatusCode)
-        {
-            // Ollama returns a JSON body like {"error":"..."} — surface it instead of a generic status.
-            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            throw new InvalidOperationException(BuildErrorMessage((int)resp.StatusCode, body));
-        }
-
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var reader = new StreamReader(stream);
-
-        while (!reader.EndOfStream)
-        {
-            ct.ThrowIfCancellationRequested();
-            var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-
-            OllamaChatChunk? chunk;
-            try
-            {
-                chunk = JsonSerializer.Deserialize<OllamaChatChunk>(line, JsonOptions);
-            }
-            catch (JsonException)
-            {
-                continue; // skip malformed line rather than aborting the stream
-            }
-
-            if (chunk is null)
-                continue;
-            if (!string.IsNullOrEmpty(chunk.Error))
-                throw new InvalidOperationException($"Ollama error: {chunk.Error}");
-
-            var delta = chunk.Message?.Content;
-            if (!string.IsNullOrEmpty(delta))
-                yield return delta;
-
-            if (chunk.Done)
-                yield break;
-        }
+        // ResponseHeadersRead so the 10-min client timeout only bounds time-to-first-byte.
+        return _http.SendAsync(httpReq, HttpCompletionOption.ResponseHeadersRead, ct);
     }
 
     private static string BuildErrorMessage(int status, string body)
@@ -241,7 +288,7 @@ public sealed class OllamaClient : IOllamaClient
         string model, IEnumerable<ChatMessage> messages, CancellationToken ct = default)
     {
         var sb = new StringBuilder();
-        await foreach (var delta in ChatStreamAsync(model, messages, ct).ConfigureAwait(false))
+        await foreach (var delta in ChatStreamAsync(model, messages, think: false, ct).ConfigureAwait(false))
             sb.Append(delta);
         return sb.ToString();
     }

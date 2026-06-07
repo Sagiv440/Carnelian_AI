@@ -38,6 +38,13 @@ public sealed class OllamaChatRequest
     /// <summary>Tools the model may call (function calling). Omitted from JSON when null.</summary>
     [JsonPropertyName("tools")]
     public List<OllamaTool>? Tools { get; set; }
+
+    /// <summary>
+    /// Enables the model's native chain-of-thought ("thinking"). Omitted from JSON when null so
+    /// non-thinking models are unaffected; only thinking models (qwen3, deepseek-r1, …) honor it.
+    /// </summary>
+    [JsonPropertyName("think")]
+    public bool? Think { get; set; }
 }
 
 public sealed class OllamaChatMessage
@@ -47,6 +54,13 @@ public sealed class OllamaChatMessage
 
     [JsonPropertyName("content")]
     public string Content { get; set; } = "";
+
+    /// <summary>
+    /// The model's reasoning, returned separately from <see cref="Content"/> when thinking is enabled.
+    /// Present on responses from thinking models; null otherwise.
+    /// </summary>
+    [JsonPropertyName("thinking")]
+    public string? Thinking { get; set; }
 
     /// <summary>Base64-encoded images for vision models. Omitted from JSON when null.</summary>
     [JsonPropertyName("images")]
