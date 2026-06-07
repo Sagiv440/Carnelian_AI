@@ -1,0 +1,15 @@
+# .NET build output
+bin/
+obj/
+publish/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.suo
+
+# Avalonia / OS
+*.DotSettings.user
+.DS_Store
+Thumbs.db

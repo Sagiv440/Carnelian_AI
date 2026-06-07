@@ -1,0 +1,12 @@
+# Normalize line endings on checkin; let git pick the working-copy style by platform.
+* text=auto
+
+# Shell scripts must stay LF or they fail on Linux (bad interpreter / ^M errors).
+*.sh text eol=lf
+
+# PowerShell scripts stay CRLF on Windows.
+*.ps1 text eol=crlf
+
+# Treat binary assets as binary (no EOL conversion).
+*.ico binary
+*.png binary
