@@ -1,0 +1,256 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AI_Interface.ViewModels"
+        xmlns:conv="using:AI_Interface.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="620"
+        x:Class="AI_Interface.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Width="520" Height="640"
+        MinWidth="460" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Title="Settings">
+
+    <Design.DataContext>
+        <vm:SettingsViewModel/>
+    </Design.DataContext>
+
+    <Window.Resources>
+        <conv:StringToBrushConverter x:Key="StringToBrush"/>
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="TextBlock.section">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="0,12,0,6"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="Margin" Value="0,8,0,2"/>
+        </Style>
+        <Style Selector="Button.swatch">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#40808080"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="*,Auto">
+        <TabControl Grid.Row="0" Margin="6">
+
+            <!-- THEME TAB -->
+            <TabItem Header="Theme">
+                <ScrollViewer>
+                    <StackPanel Margin="14,6">
+
+                        <TextBlock Classes="section" Text="Appearance"/>
+                        <StackPanel Spacing="2">
+                            <RadioButton GroupName="appearance" Content="Follow system"
+                                         IsChecked="{Binding IsSystemMode}"/>
+                            <RadioButton GroupName="appearance" Content="Light"
+                                         IsChecked="{Binding IsLightMode}"/>
+                            <RadioButton GroupName="appearance" Content="Dark  (Night mode)"
+                                         IsChecked="{Binding IsDarkMode}"/>
+                        </StackPanel>
+
+                        <TextBlock Classes="section" Text="Colors"/>
+
+                        <!-- Accent -->
+                        <TextBlock Classes="label" Text="Accent (buttons &amp; highlights)"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Border Width="28" Height="28" CornerRadius="6" BorderThickness="1" BorderBrush="#40808080"
+                                    Background="{Binding AccentColor, Converter={StaticResource StringToBrush}}"/>
+                            <TextBox Width="130" Text="{Binding AccentColor}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:CompileBindings="False">
+                                    <Button Classes="swatch" ToolTip.Tip="{Binding}"
+                                            Background="{Binding Converter={StaticResource StringToBrush}}"
+                                            CommandParameter="{Binding}"
+                                            Command="{Binding DataContext.SetAccentCommand,
+                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- User bubble -->
+                        <TextBlock Classes="label" Text="Your message bubbles"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Border Width="28" Height="28" CornerRadius="6" BorderThickness="1" BorderBrush="#40808080"
+                                    Background="{Binding UserBubbleColor, Converter={StaticResource StringToBrush}}"/>
+                            <TextBox Width="130" Text="{Binding UserBubbleColor}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:CompileBindings="False">
+                                    <Button Classes="swatch" ToolTip.Tip="{Binding}"
+                                            Background="{Binding Converter={StaticResource StringToBrush}}"
+                                            CommandParameter="{Binding}"
+                                            Command="{Binding DataContext.SetUserColorCommand,
+                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Assistant bubble -->
+                        <TextBlock Classes="label" Text="Assistant message bubbles"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Border Width="28" Height="28" CornerRadius="6" BorderThickness="1" BorderBrush="#40808080"
+                                    Background="{Binding AssistantBubbleColor, Converter={StaticResource StringToBrush}}"/>
+                            <TextBox Width="130" Text="{Binding AssistantBubbleColor}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:CompileBindings="False">
+                                    <Button Classes="swatch" ToolTip.Tip="{Binding}"
+                                            Background="{Binding Converter={StaticResource StringToBrush}}"
+                                            CommandParameter="{Binding}"
+                                            Command="{Binding DataContext.SetAssistantColorCommand,
+                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Button Classes="ghost" Content="Reset to defaults"
+                                Command="{Binding ResetThemeCommand}" Margin="0,16,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- GENERAL TAB -->
+            <TabItem Header="General">
+                <ScrollViewer>
+                    <StackPanel Margin="14,6" Spacing="2">
+                        <TextBlock Classes="section" Text="Ollama"/>
+                        <TextBlock Classes="label" Text="Server URL"/>
+                        <TextBox Text="{Binding OllamaBaseUrl}" Width="320" HorizontalAlignment="Left"
+                                 PlaceholderText="http://localhost:11434"/>
+
+                        <TextBlock Classes="section" Text="Research depth"/>
+                        <TextBlock Classes="label" Text="Search results per query"/>
+                        <NumericUpDown Value="{Binding ResultsPerQuery}" Minimum="1" Maximum="10" Increment="1"
+                                       FormatString="0" Width="150" HorizontalAlignment="Left"/>
+                        <TextBlock Classes="label" Text="Pages read per deep-research run"/>
+                        <NumericUpDown Value="{Binding MaxPagesToRead}" Minimum="1" Maximum="15" Increment="1"
+                                       FormatString="0" Width="150" HorizontalAlignment="Left"/>
+                        <TextBlock Classes="label" Text="Planned queries per deep-research run"/>
+                        <NumericUpDown Value="{Binding ResearchQueryCount}" Minimum="1" Maximum="8" Increment="1"
+                                       FormatString="0" Width="150" HorizontalAlignment="Left"/>
+
+                        <TextBlock Classes="section" Text="Thinking"/>
+                        <TextBlock Classes="label" TextWrapping="Wrap"
+                                   Text="Effort — how hard the model plans before acting when the Thinking toggle is on."/>
+                        <Grid ColumnDefinitions="Auto,*,Auto" Width="340" HorizontalAlignment="Left" Margin="0,4,0,0">
+                            <TextBlock Grid.Column="0" Classes="label" Margin="0,0,8,0" VerticalAlignment="Center"
+                                       Text="Minimal"/>
+                            <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding ThinkingEffort}"
+                                    TickFrequency="25" IsSnapToTickEnabled="False" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Classes="label" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       Text="Maximum"/>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- PROJECT AGENT TAB -->
+            <TabItem Header="Project">
+                <ScrollViewer>
+                    <StackPanel Margin="14,6">
+                        <TextBlock Classes="section" Text="Tool approval"/>
+                        <TextBlock Classes="label" TextWrapping="Wrap"
+                                   Text="Controls when the project agent asks before it writes/deletes files or runs terminal commands."/>
+                        <StackPanel Spacing="2" Margin="0,6,0,0">
+                            <RadioButton GroupName="approval" Content="Confirm destructive actions"
+                                         IsChecked="{Binding IsConfirmDestructive}"/>
+                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                       Text="Reads and listings run automatically; ask before overwriting/deleting files or running commands."/>
+                            <RadioButton GroupName="approval" Content="Auto-run everything"
+                                         IsChecked="{Binding IsAutoRun}"/>
+                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                       Text="The agent runs every action without asking. Each action is still logged in the chat."/>
+                            <RadioButton GroupName="approval" Content="Confirm every action"
+                                         IsChecked="{Binding IsConfirmEverything}"/>
+                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                       Text="Ask before every tool call, including reads and directory listings."/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- WEB SEARCH TAB -->
+            <TabItem Header="Web Search">
+                <ScrollViewer>
+                    <StackPanel Margin="14,6" Spacing="2">
+                        <TextBlock Classes="section" Text="Search provider"/>
+                        <TextBlock Classes="label" Text="Service used for web search and deep research"/>
+                        <ComboBox ItemsSource="{Binding SearchProviders}"
+                                  SelectedItem="{Binding SelectedSearchProvider}"
+                                  Width="320" HorizontalAlignment="Left"/>
+
+                        <!-- DuckDuckGo: no configuration -->
+                        <StackPanel IsVisible="{Binding IsDuckDuckGoSelected}">
+                            <TextBlock Classes="label" TextWrapping="Wrap"
+                                       Text="DuckDuckGo needs no configuration — it works out of the box without an API key."/>
+                        </StackPanel>
+
+                        <!-- SearXNG: instance URL -->
+                        <StackPanel IsVisible="{Binding IsSearxngSelected}">
+                            <TextBlock Classes="label" Text="Instance URL"/>
+                            <TextBox Text="{Binding SearxngUrl}" Width="320" HorizontalAlignment="Left"
+                                     PlaceholderText="https://searx.example.org"/>
+                        </StackPanel>
+
+                        <!-- Brave: API key -->
+                        <StackPanel IsVisible="{Binding IsBraveSelected}">
+                            <TextBlock Classes="label" Text="API key"/>
+                            <TextBox Text="{Binding BraveApiKey}" PasswordChar="•"
+                                     Width="320" HorizontalAlignment="Left"
+                                     PlaceholderText="X-Subscription-Token"/>
+                        </StackPanel>
+
+                        <!-- Tavily: API key -->
+                        <StackPanel IsVisible="{Binding IsTavilySelected}">
+                            <TextBlock Classes="label" Text="API key"/>
+                            <TextBox Text="{Binding TavilyApiKey}" PasswordChar="•"
+                                     Width="320" HorizontalAlignment="Left"
+                                     PlaceholderText="tvly-..."/>
+                        </StackPanel>
+
+                        <!-- Google: API key + Search Engine ID -->
+                        <StackPanel IsVisible="{Binding IsGoogleSelected}">
+                            <TextBlock Classes="label" Text="API key"/>
+                            <TextBox Text="{Binding GoogleApiKey}" PasswordChar="•"
+                                     Width="320" HorizontalAlignment="Left"
+                                     PlaceholderText="Custom Search JSON API key"/>
+                            <TextBlock Classes="label" Text="Search Engine ID (cx)"/>
+                            <TextBox Text="{Binding GoogleSearchEngineId}"
+                                     Width="320" HorizontalAlignment="Left"
+                                     PlaceholderText="Programmable Search engine ID"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Button Grid.Row="1" Classes="cta" Content="Close" Click="OnClose"
+                HorizontalAlignment="Right" Margin="0,0,14,12" MinWidth="100"/>
+    </Grid>
+
+</Window>

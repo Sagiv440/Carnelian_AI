@@ -69,6 +69,31 @@ markup. Page text extraction strips script/style/nav/etc. and collapses whitespa
 **Settings** (`SettingsService`): JSON file under the per-user app-data folder
 (`%APPDATA%\AI_Interface` / `~/.config/AI_Interface`). All reads/writes are best-effort and never throw.
 
+**Theming & design system** (`ThemeService` + `SettingsWindow` + `Styles/ControlStyles.axaml`): the
+app's visual language is adapted from sagiv440.github.io/sagiv-reuben — Poppins type (embedded in
+`Assets/Fonts`), a teal→violet signature gradient, purple accent, deep-navy dark base, glassy rounded
+surfaces. **Before doing any UI work, read the `app-style` skill** — it documents the tokens, palette,
+and style classes to reuse instead of hard-coding colors.
+- Design tokens live in `App.axaml`: shared brushes (`AppAccentBrush`, `AccentGradientBrush`,
+  `UserBubbleBrush`, `AssistantBubbleBrush`, `AppFont`) plus **theme-variant-aware** structural tokens
+  in `ResourceDictionary.ThemeDictionaries` (Dark/Light): `AppWindowBackground`, `AppSurfaceBrush`,
+  `AppSurfaceBorderBrush`, `AppInputBackground`, `AppTextPrimary`, `AppTextSecondary`. Reference all via
+  `{DynamicResource ...}` so they swap with night mode.
+- Reusable style classes are in `Styles/ControlStyles.axaml`: `Button.cta` (gradient primary),
+  `Button.ghost`, `Border.card`, `TextBlock.brand`, `TextBlock.muted`.
+- Light/dark mode and custom colors (accent, user/assistant bubbles) are user-editable in Settings →
+  Theme. Night mode is `ThemeMode.Dark` via `Application.RequestedThemeVariant` (default is now Dark).
+  Custom colors override the themeable brush keys at runtime. Defaults + preset swatch palette live in
+  `Models/ThemeDefaults.cs`.
+- `ThemeService.Apply` runs once at startup and again on every change in `SettingsViewModel` (guarded by
+  `_loading` so constructor field-init doesn't trigger it). It overrides the three themeable brush keys
+  flat; structural tokens come from the ThemeDictionaries.
+
+**Resolving view models from views.** Most views are data-templated, but the Settings dialog is opened
+imperatively: `App.Services` (a static `IServiceProvider`) lets `MainWindow` code-behind resolve a
+`SettingsViewModel` when the VM raises `SettingsRequested`. Use this pattern (VM event → code-behind
+opens window) for any new dialog rather than newing up windows or services in the VM.
+
 ## Conventions specific to this project
 
 - **Compiled bindings are on by default** (`AvaloniaUseCompiledBindingsByDefault`). XAML needs

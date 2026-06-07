@@ -3,13 +3,68 @@
              x:Class="AI_Interface.App"
              xmlns:local="using:AI_Interface"
              RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             <!-- "Default" follows the system; ThemeService overrides this from saved settings. -->
 
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
-  
+
+    <!-- ============================================================================
+         Design tokens — derived from sagiv440.github.io/sagiv-reuben
+         Poppins type · teal→violet signature gradient · purple accent · deep-navy base.
+         Themeable keys (AppAccentBrush / UserBubbleBrush / AssistantBubbleBrush) are
+         overridden at runtime by ThemeService; structural tokens adapt per light/dark.
+         ============================================================================ -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <FontFamily x:Key="AppFont">avares://AI_Interface/Assets/Fonts#Poppins</FontFamily>
+
+            <!-- Accent (variant-independent; AppAccentBrush is user-themeable) -->
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#804DEE"/>
+            <SolidColorBrush x:Key="UserBubbleBrush" Color="#33804DEE"/>
+            <SolidColorBrush x:Key="AssistantBubbleBrush" Color="#22888888"/>
+
+            <!-- Signature teal → violet gradient (the site's hero gradient, 90°) -->
+            <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Offset="0" Color="#00CEA8"/>
+                <GradientStop Offset="1" Color="#BF61FF"/>
+            </LinearGradientBrush>
+
+            <ResourceDictionary.ThemeDictionaries>
+
+                <!-- DARK (the site's native look) -->
+                <ResourceDictionary x:Key="Dark">
+                    <LinearGradientBrush x:Key="AppWindowBackground" StartPoint="0%,0%" EndPoint="100%,100%">
+                        <GradientStop Offset="0"   Color="#04090F"/>
+                        <GradientStop Offset="0.55" Color="#070A14"/>
+                        <GradientStop Offset="1"   Color="#0D0922"/>
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#14101F" Opacity="0.72"/>
+                    <SolidColorBrush x:Key="AppSurfaceBorderBrush" Color="#26FFFFFF"/>
+                    <SolidColorBrush x:Key="AppInputBackground" Color="#0B0F1A" Opacity="0.9"/>
+                    <SolidColorBrush x:Key="AppTextPrimary" Color="#ECEAFB"/>
+                    <SolidColorBrush x:Key="AppTextSecondary" Color="#9AA3B2"/>
+                </ResourceDictionary>
+
+                <!-- LIGHT -->
+                <ResourceDictionary x:Key="Light">
+                    <LinearGradientBrush x:Key="AppWindowBackground" StartPoint="0%,0%" EndPoint="100%,100%">
+                        <GradientStop Offset="0" Color="#F8F6FE"/>
+                        <GradientStop Offset="1" Color="#EEEAFB"/>
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#FFFFFF" Opacity="0.75"/>
+                    <SolidColorBrush x:Key="AppSurfaceBorderBrush" Color="#1A000000"/>
+                    <SolidColorBrush x:Key="AppInputBackground" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="AppTextPrimary" Color="#1B1633"/>
+                    <SolidColorBrush x:Key="AppTextSecondary" Color="#5C6473"/>
+                </ResourceDictionary>
+
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://AI_Interface/Styles/ControlStyles.axaml"/>
     </Application.Styles>
 </Application>

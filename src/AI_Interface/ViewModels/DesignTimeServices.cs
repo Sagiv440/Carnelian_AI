@@ -30,6 +30,11 @@ internal sealed class DesignOllamaClient : IOllamaClient
     public Task<string> CompleteAsync(
         string model, IEnumerable<ChatMessage> messages, CancellationToken ct = default) =>
         Task.FromResult("design-time");
+
+    public Task<AgentTurn> ChatWithToolsAsync(
+        string model, IEnumerable<ChatMessage> messages,
+        IReadOnlyList<AgentTool> tools, CancellationToken ct = default) =>
+        Task.FromResult(new AgentTurn("design-time", Array.Empty<AgentToolCall>()));
 }
 
 internal sealed class DesignWebSearchService : IWebSearchService
@@ -60,4 +65,31 @@ internal sealed class DesignSettingsService : ISettingsService
 {
     public AppSettings Current { get; } = new();
     public void Save() { }
+}
+
+internal sealed class DesignAttachmentService : IAttachmentService
+{
+    public Task<string> ExtractPdfTextAsync(string path, int maxChars, CancellationToken ct = default) =>
+        Task.FromResult("");
+
+    public Task<string> ReadImageBase64Async(string path, CancellationToken ct = default) =>
+        Task.FromResult("");
+}
+
+internal sealed class DesignChatHistoryService : IChatHistoryService
+{
+    public IReadOnlyList<ChatSession> Load() => Array.Empty<ChatSession>();
+    public void Save(IReadOnlyList<ChatSession> sessions) { }
+}
+
+internal sealed class DesignProjectAgentService : IProjectAgentService
+{
+    public Task RunAsync(
+        Project project, string model, IReadOnlyList<ChatMessage> conversation,
+        AgentApprovalMode approvalMode, string thinkingDirective, IProgress<string> status,
+        Action<string> onDelta, Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+    {
+        onDelta("Design-time project agent response.");
+        return Task.CompletedTask;
+    }
 }

@@ -22,15 +22,51 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IWebSearchService _search;
     private readonly IDeepResearchService _research;
     private readonly ISettingsService _settings;
+    private readonly IAttachmentService _attachments;
+    private readonly IChatHistoryService _history;
+    private readonly IProjectAgentService _agent;
 
     private CancellationTokenSource? _cts;
+
+    /// <summary>The conversation currently shown in the transcript.</summary>
+    private ChatSession _currentSession = new();
 
     /// <summary>Raised when the view should scroll the transcript to the bottom.</summary>
     public event EventHandler? ScrollToEndRequested;
 
+    /// <summary>Raised when the view should open the Settings window (a view-only concern).</summary>
+    public event EventHandler? SettingsRequested;
+
+    /// <summary>Raised when the view should open a file picker for the given attachment kind.</summary>
+    public event EventHandler<AttachmentKind>? AttachFilesRequested;
+
+    /// <summary>Raised when the view should open the New Project window (a view-only concern).</summary>
+    public event EventHandler? ProjectRequested;
+
+    /// <summary>Raised when the project agent needs the user to approve a tool call.</summary>
+    public event EventHandler<ToolApprovalEventArgs>? ToolApprovalRequested;
+
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
     public ObservableCollection<string> Models { get; } = new();
     public IReadOnlyList<ModeOption> Modes { get; }
+
+    /// <summary>Saved conversations, newest first (the sidebar "Chat Log").</summary>
+    public ObservableCollection<ChatSession> ChatLog { get; } = new();
+
+    /// <summary>Files staged for the next prompt (shown as chips in the composer).</summary>
+    public ObservableCollection<Attachment> Attachments { get; } = new();
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SendCommand))]
+    private bool _hasAttachments;
+
+    /// <summary>Per-prompt toggle: when on, a plain chat prompt is answered with a web search first.</summary>
+    [ObservableProperty]
+    private bool _webSearchEnabled;
+
+    /// <summary>Per-prompt toggle: when on, the model is asked to plan before answering (depth = Effort setting).</summary>
+    [ObservableProperty]
+    private bool _thinkingEnabled;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
@@ -60,32 +96,55 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string _statusText = "";
 
+    /// <summary>The active project, or null when not in project mode. Single active project per session.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveProject))]
+    [NotifyPropertyChangedFor(nameof(ActiveProjectName))]
+    [NotifyPropertyChangedFor(nameof(ActiveProjectDirectory))]
+    private Project? _activeProject;
+
+    public bool HasActiveProject => ActiveProject is not null;
+    public string ActiveProjectName => ActiveProject?.Name ?? "";
+    public string ActiveProjectDirectory => ActiveProject?.Directory ?? "";
+
     public MainWindowViewModel(
         IOllamaClient ollama,
         IWebSearchService search,
         IDeepResearchService research,
-        ISettingsService settings)
+        ISettingsService settings,
+        IAttachmentService attachments,
+        IChatHistoryService history,
+        IProjectAgentService agent)
     {
         _ollama = ollama;
         _search = search;
         _research = research;
         _settings = settings;
+        _attachments = attachments;
+        _history = history;
+        _agent = agent;
 
         Modes = new[]
         {
             new ModeOption(AppMode.Chat, "Chat", "Talk directly to the local model."),
             new ModeOption(AppMode.WebSearch, "Web Search", "Search the web once, then answer with citations."),
-            new ModeOption(AppMode.DeepResearch, "Deep Research", "Plan queries, read pages, synthesize a cited report.")
+            new ModeOption(AppMode.DeepResearch, "Deep Research", "Plan queries, read pages, synthesize a cited report."),
+            new ModeOption(AppMode.Project, "Project", "Use tools to edit files and run commands in a project directory.")
         };
         _selectedMode = Modes[0];
         _ollamaBaseUrl = settings.Current.OllamaBaseUrl;
         _selectedModel = settings.Current.DefaultModel;
+
+        foreach (var session in _history.Load())
+            ChatLog.Add(session);
     }
 
     // Design-time / fallback constructor so the XAML previewer can instantiate the window.
     public MainWindowViewModel()
         : this(new DesignOllamaClient(), new DesignWebSearchService(),
-               new DesignDeepResearchService(), new DesignSettingsService())
+               new DesignDeepResearchService(), new DesignSettingsService(),
+               new DesignAttachmentService(), new DesignChatHistoryService(),
+               new DesignProjectAgentService())
     {
     }
 
@@ -99,6 +158,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         _settings.Current.DefaultModel = value;
         _settings.Save();
+    }
+
+    /// <summary>Deep Research sidebar tab: on = deep-research mode, off = plain chat.</summary>
+    public bool DeepResearchEnabled
+    {
+        get => SelectedMode.Mode == AppMode.DeepResearch;
+        set => SetMode(value ? AppMode.DeepResearch : AppMode.Chat);
+    }
+
+    partial void OnSelectedModeChanged(ModeOption value) =>
+        OnPropertyChanged(nameof(DeepResearchEnabled));
+
+    private void SetMode(AppMode mode)
+    {
+        var option = Modes.FirstOrDefault(o => o.Mode == mode);
+        if (option is not null)
+            SelectedMode = option;
     }
 
     /// <summary>Called once after the view loads: connect and load the model list.</summary>
@@ -145,7 +221,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private bool CanSend =>
-        !IsBusy && !string.IsNullOrWhiteSpace(InputText) && !string.IsNullOrEmpty(SelectedModel);
+        !IsBusy && (!string.IsNullOrWhiteSpace(InputText) || HasAttachments) && !string.IsNullOrEmpty(SelectedModel);
 
     [RelayCommand(CanExecute = nameof(CanSend))]
     private async Task SendAsync()
@@ -154,8 +230,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var model = SelectedModel!;
         InputText = "";
 
-        Messages.Add(new MessageViewModel(ChatRole.User, prompt));
-        var assistant = new MessageViewModel(ChatRole.Assistant) { IsStreaming = true };
+        // Snapshot and clear the staged attachments.
+        var attachments = Attachments.ToList();
+        Attachments.Clear();
+        HasAttachments = false;
+
+        // The per-prompt toggle upgrades a plain chat into a web-searched answer.
+        var mode = SelectedMode.Mode;
+        if (WebSearchEnabled && mode == AppMode.Chat)
+            mode = AppMode.WebSearch;
+
+        var user = new MessageViewModel(ChatRole.User, prompt);
+        user.SetAttachments(attachments);
+        Messages.Add(user);
+        var assistant = new MessageViewModel(ChatRole.Assistant) { IsStreaming = true, ModelName = model };
         Messages.Add(assistant);
         RequestScroll();
 
@@ -165,16 +253,25 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         try
         {
-            switch (SelectedMode.Mode)
+            if (attachments.Count > 0)
+            {
+                StatusText = "Reading attachments…";
+                await ProcessAttachmentsAsync(attachments, user, ct);
+            }
+
+            switch (mode)
             {
                 case AppMode.Chat:
                     await RunChatAsync(model, assistant, ct);
                     break;
                 case AppMode.WebSearch:
-                    await RunWebSearchAsync(model, prompt, assistant, ct);
+                    await RunWebSearchAsync(model, prompt, user, assistant, ct);
                     break;
                 case AppMode.DeepResearch:
-                    await RunDeepResearchAsync(model, prompt, assistant, ct);
+                    await RunDeepResearchAsync(model, prompt, user, assistant, ct);
+                    break;
+                case AppMode.Project:
+                    await RunProjectAgentAsync(model, assistant, ct);
                     break;
             }
 
@@ -188,6 +285,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             assistant.Text = $"⚠️ {ex.Message}";
+            if (user.Images.Count > 0)
+                assistant.Append(
+                    "\n\nℹ️ Image input requires a vision-capable model (your current model is text-only). " +
+                    "Install one — e.g. `ollama pull llava` or `ollama pull llama3.2-vision` — then select it in the sidebar.");
         }
         finally
         {
@@ -197,7 +298,40 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _cts?.Dispose();
             _cts = null;
             RequestScroll();
+            PersistCurrentSession(); // keep the chat log up to date after every turn
         }
+    }
+
+    /// <summary>Reads each attachment: images become base64 (vision), PDFs become extracted text context.</summary>
+    private async Task ProcessAttachmentsAsync(
+        List<Attachment> attachments, MessageViewModel user, CancellationToken ct)
+    {
+        var images = new List<string>();
+        var docs = new StringBuilder();
+
+        foreach (var a in attachments)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (a.Kind == AttachmentKind.Photo)
+            {
+                var b64 = await _attachments.ReadImageBase64Async(a.Path, ct);
+                if (!string.IsNullOrEmpty(b64))
+                    images.Add(b64);
+            }
+            else
+            {
+                var text = await _attachments.ExtractPdfTextAsync(a.Path, _settings.Current.MaxCharsPerPage, ct);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    docs.AppendLine($"--- {a.FileName} ---");
+                    docs.AppendLine(text);
+                    docs.AppendLine();
+                }
+            }
+        }
+
+        user.Images = images;
+        user.AttachedContext = docs.ToString().Trim();
     }
 
     private async Task RunChatAsync(string model, MessageViewModel assistant, CancellationToken ct)
@@ -212,7 +346,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private async Task RunWebSearchAsync(
-        string model, string prompt, MessageViewModel assistant, CancellationToken ct)
+        string model, string prompt, MessageViewModel user, MessageViewModel assistant, CancellationToken ct)
     {
         StatusText = "Searching the web…";
         var results = await _search.SearchAsync(prompt, _settings.Current.SearchResultsPerQuery, ct);
@@ -224,7 +358,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         StatusText = $"Found {results.Count} results — answering…";
-        var messages = BuildWebSearchMessages(prompt, results);
+        var messages = BuildWebSearchMessages(
+            WithAttachedContext(prompt, user), results, user.Images, ThinkingDirective());
         await foreach (var delta in _ollama.ChatStreamAsync(model, messages, ct))
         {
             assistant.Append(delta);
@@ -234,13 +369,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private async Task RunDeepResearchAsync(
-        string model, string prompt, MessageViewModel assistant, CancellationToken ct)
+        string model, string prompt, MessageViewModel user, MessageViewModel assistant, CancellationToken ct)
     {
         // Progress is constructed on the UI thread, so its callbacks marshal back automatically.
         var progress = new Progress<string>(s => StatusText = s);
 
         var sources = await _research.RunAsync(
-            prompt,
+            WithAttachedContext(prompt, user),
             model,
             progress,
             // The research service streams on a background thread; marshal each token to the UI.
@@ -254,21 +389,114 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         assistant.SetSources(sources);
     }
 
+    private async Task RunProjectAgentAsync(string model, MessageViewModel assistant, CancellationToken ct)
+    {
+        if (ActiveProject is null)
+        {
+            assistant.Text = "No active project. Click “📁 Project” in the sidebar to create one.";
+            return;
+        }
+
+        // Progress is constructed on the UI thread, so its callbacks marshal back automatically.
+        var progress = new Progress<string>(s => StatusText = s);
+        var conversation = BuildAgentConversation(assistant);
+
+        // The agent runs on background threads; marshal its transcript deltas back to the UI.
+        await _agent.RunAsync(
+            ActiveProject, model, conversation, _settings.Current.AgentApproval, ThinkingDirective(), progress,
+            delta => Dispatcher.UIThread.Post(() =>
+            {
+                assistant.Append(delta);
+                RequestScroll();
+            }),
+            RequestToolApprovalAsync,
+            ct);
+    }
+
+    /// <summary>Asks the view to confirm a tool call (raised on a background thread, marshalled to the UI).</summary>
+    private Task<bool> RequestToolApprovalAsync(ToolApprovalRequest request)
+    {
+        if (ToolApprovalRequested is null)
+            return Task.FromResult(true); // no UI wired (e.g. design time) → allow
+
+        var tcs = new TaskCompletionSource<bool>();
+        Dispatcher.UIThread.Post(() =>
+            ToolApprovalRequested?.Invoke(this, new ToolApprovalEventArgs(request, tcs)));
+        return tcs.Task;
+    }
+
+    /// <summary>Builds the user/assistant turns for the agent; it prepends its own system prompt.</summary>
+    private List<ChatMessage> BuildAgentConversation(MessageViewModel pendingAssistant)
+    {
+        var conversation = new List<ChatMessage>();
+        foreach (var m in Messages)
+        {
+            if (ReferenceEquals(m, pendingAssistant))
+                continue;
+            if (m.Role != ChatRole.User && m.Role != ChatRole.Assistant)
+                continue;
+            if (string.IsNullOrEmpty(m.Text) && string.IsNullOrEmpty(m.AttachedContext))
+                continue;
+
+            var content = m.Text;
+            if (!string.IsNullOrEmpty(m.AttachedContext))
+                content += $"\n\n[Attached documents]\n{m.AttachedContext}";
+
+            conversation.Add(new ChatMessage(m.Role, content));
+        }
+        return conversation;
+    }
+
+    /// <summary>
+    /// Planning instruction appended to a system prompt when Thinking is on, scaled by the Effort
+    /// setting. Empty when the toggle is off so behaviour is unchanged.
+    /// </summary>
+    private string ThinkingDirective()
+    {
+        if (!ThinkingEnabled)
+            return "";
+
+        var depth = _settings.Current.ThinkingEffort switch
+        {
+            <= 33 => "Before answering, briefly think about what the user needs and sketch a quick plan " +
+                     "(a sentence or two), then respond.",
+            <= 66 => "Before answering, think step by step about what the task requires and outline your " +
+                     "approach, then carry it out.",
+            _ => "Before answering, think carefully and thoroughly: break the task into steps, consider " +
+                 "edge cases and alternatives, lay out a clear plan, and only then execute it. " +
+                 "Prioritise correctness over speed."
+        };
+
+        return "\n\n" + depth;
+    }
+
     private List<ChatMessage> BuildChatHistory(MessageViewModel pendingAssistant)
     {
-        var history = new List<ChatMessage> { ChatMessage.System(ChatSystemPrompt) };
+        var history = new List<ChatMessage> { ChatMessage.System(ChatSystemPrompt + ThinkingDirective()) };
         foreach (var m in Messages)
         {
             if (ReferenceEquals(m, pendingAssistant))
                 continue; // skip the empty placeholder we're about to fill
-            if (string.IsNullOrEmpty(m.Text))
+            if (string.IsNullOrEmpty(m.Text) && m.Images.Count == 0 && string.IsNullOrEmpty(m.AttachedContext))
                 continue;
-            history.Add(new ChatMessage(m.Role, m.Text));
+
+            var content = m.Text;
+            if (!string.IsNullOrEmpty(m.AttachedContext))
+                content += $"\n\n[Attached documents]\n{m.AttachedContext}";
+
+            history.Add(new ChatMessage(m.Role, content, m.Images.Count > 0 ? m.Images : null));
         }
         return history;
     }
 
-    private static List<ChatMessage> BuildWebSearchMessages(string prompt, IReadOnlyList<SearchResult> results)
+    private static string WithAttachedContext(string prompt, MessageViewModel user) =>
+        string.IsNullOrEmpty(user.AttachedContext)
+            ? prompt
+            : $"{prompt}\n\n[Attached documents]\n{user.AttachedContext}";
+
+    private static List<ChatMessage> BuildWebSearchMessages(
+        string prompt, IReadOnlyList<SearchResult> results, IReadOnlyList<string> images,
+        string thinkingDirective)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Web search results:");
@@ -287,8 +515,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             ChatMessage.System(
                 "Answer the question using the web search results below. Cite sources inline with " +
-                "bracketed numbers like [1]. If the results are insufficient, say so."),
-            ChatMessage.User(sb.ToString())
+                "bracketed numbers like [1]. If the results are insufficient, say so." + thinkingDirective),
+            new ChatMessage(ChatRole.User, sb.ToString(), images.Count > 0 ? images : null)
         };
     }
 
@@ -300,6 +528,144 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         Messages.Clear();
         StatusText = "";
+    }
+
+    /// <summary>Sidebar "New Chat": save the current conversation to the log, then start a fresh one.</summary>
+    [RelayCommand]
+    private void NewChat()
+    {
+        PersistCurrentSession();
+        _currentSession = new ChatSession();
+        Messages.Clear();
+        StatusText = "";
+        ActiveProject = null; // leaving any active project
+        SetMode(AppMode.Chat);
+    }
+
+    /// <summary>Sidebar "Project" button: ask the view to open the New Project window.</summary>
+    [RelayCommand]
+    private void OpenProject() => ProjectRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Called by the view once a project is created: enter project (agent) mode for it.</summary>
+    public void ActivateProject(Project project)
+    {
+        PersistCurrentSession(); // save whatever conversation we're leaving
+        _currentSession = new ChatSession();
+        Messages.Clear();
+        StatusText = "";
+        ActiveProject = project;
+        SetMode(AppMode.Project);
+    }
+
+    /// <summary>Leave project mode and return to a fresh chat.</summary>
+    [RelayCommand]
+    private void ExitProject()
+    {
+        PersistCurrentSession();
+        _currentSession = new ChatSession();
+        Messages.Clear();
+        StatusText = "";
+        ActiveProject = null;
+        SetMode(AppMode.Chat);
+    }
+
+    /// <summary>Open a saved conversation from the chat log.</summary>
+    [RelayCommand]
+    private void OpenSession(ChatSession? session)
+    {
+        if (session is null || ReferenceEquals(session, _currentSession))
+            return;
+
+        PersistCurrentSession(); // save the conversation we're leaving
+        Messages.Clear();
+        foreach (var turn in session.Messages)
+            Messages.Add(new MessageViewModel(turn.Role, turn.Text) { ModelName = turn.ModelName });
+
+        _currentSession = session;
+        // Project sessions need a live active project (not persisted); fall back to chat without one.
+        SetMode(session.Mode == AppMode.Project && ActiveProject is null ? AppMode.Chat : session.Mode);
+        StatusText = "";
+        RequestScroll();
+    }
+
+    /// <summary>Delete a saved conversation from the chat log.</summary>
+    [RelayCommand]
+    private void DeleteSession(ChatSession? session)
+    {
+        if (session is null)
+            return;
+
+        ChatLog.Remove(session);
+        _history.Save(ChatLog.ToList());
+
+        if (ReferenceEquals(session, _currentSession))
+        {
+            _currentSession = new ChatSession();
+            Messages.Clear();
+            StatusText = "";
+            SetMode(AppMode.Chat);
+        }
+    }
+
+    /// <summary>Captures the transcript into the current session and persists the whole log.</summary>
+    private void PersistCurrentSession()
+    {
+        var turns = new List<ChatTurn>();
+        foreach (var m in Messages)
+        {
+            if (string.IsNullOrEmpty(m.Text))
+                continue;
+            turns.Add(new ChatTurn { Role = m.Role, Text = m.Text, ModelName = m.ModelName });
+        }
+
+        if (turns.Count == 0)
+            return; // nothing worth logging
+
+        _currentSession.Messages = turns;
+        _currentSession.Mode = SelectedMode.Mode;
+        _currentSession.Title = BuildSessionTitle(turns);
+
+        if (!ChatLog.Contains(_currentSession))
+            ChatLog.Insert(0, _currentSession);
+
+        _history.Save(ChatLog.ToList());
+    }
+
+    private static string BuildSessionTitle(List<ChatTurn> turns)
+    {
+        var firstUser = turns.FirstOrDefault(t => t.Role == ChatRole.User);
+        var text = firstUser?.Text.Replace('\n', ' ').Trim();
+        if (string.IsNullOrEmpty(text))
+            return "New chat";
+        return text.Length <= 40 ? text : text[..40] + "…";
+    }
+
+    [RelayCommand]
+    private void OpenSettings() => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void AttachPhotos() => AttachFilesRequested?.Invoke(this, AttachmentKind.Photo);
+
+    [RelayCommand]
+    private void AttachPdfs() => AttachFilesRequested?.Invoke(this, AttachmentKind.Pdf);
+
+    [RelayCommand]
+    private void RemoveAttachment(Attachment? attachment)
+    {
+        if (attachment is not null && Attachments.Remove(attachment))
+            HasAttachments = Attachments.Count > 0;
+    }
+
+    /// <summary>Adds files chosen in the file dialog (called by the view), de-duplicating by path.</summary>
+    public void AddAttachments(IEnumerable<Attachment> items)
+    {
+        foreach (var a in items)
+        {
+            if (Attachments.Any(x => string.Equals(x.Path, a.Path, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            Attachments.Add(a);
+        }
+        HasAttachments = Attachments.Count > 0;
     }
 
     [RelayCommand]

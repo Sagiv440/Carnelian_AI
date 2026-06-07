@@ -11,6 +11,9 @@ namespace AI_Interface;
 
 public partial class App : Application
 {
+    /// <summary>App-wide service provider, used by views to resolve view models (e.g. settings dialog).</summary>
+    public static IServiceProvider Services { get; private set; } = default!;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -20,10 +23,15 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var services = ConfigureServices();
+            Services = ConfigureServices();
+
+            // Apply the saved theme before the first window shows.
+            Services.GetRequiredService<IThemeService>()
+                .Apply(Services.GetRequiredService<ISettingsService>().Current);
+
             desktop.MainWindow = new MainWindow
             {
-                DataContext = services.GetRequiredService<MainWindowViewModel>()
+                DataContext = Services.GetRequiredService<MainWindowViewModel>()
             };
         }
 
@@ -53,7 +61,14 @@ public partial class App : Application
         });
 
         services.AddTransient<IDeepResearchService, DeepResearchService>();
+        services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<IAttachmentService, AttachmentService>();
+        services.AddSingleton<IChatHistoryService, ChatHistoryService>();
+        services.AddSingleton<IProjectAgentService, ProjectAgentService>();
+
         services.AddTransient<MainWindowViewModel>();
+        services.AddTransient<SettingsViewModel>();
+        services.AddTransient<ProjectViewModel>();
 
         return services.BuildServiceProvider();
     }

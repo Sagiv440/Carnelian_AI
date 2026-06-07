@@ -21,4 +21,12 @@ public interface IOllamaClient
     /// <summary>Runs a chat to completion and returns the full reply. Used for internal research steps.</summary>
     Task<string> CompleteAsync(
         string model, IEnumerable<ChatMessage> messages, CancellationToken ct = default);
+
+    /// <summary>
+    /// Runs one non-streaming chat turn with tools available. Returns the model's text plus any tool
+    /// calls it requested. Used by the project agent's tool-use loop.
+    /// </summary>
+    Task<AgentTurn> ChatWithToolsAsync(
+        string model, IEnumerable<ChatMessage> messages,
+        IReadOnlyList<AgentTool> tools, CancellationToken ct = default);
 }

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:AI_Interface.ViewModels"
         xmlns:models="using:AI_Interface.Models"
+        xmlns:conv="using:AI_Interface.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
@@ -9,125 +10,407 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Width="1000" Height="700"
-        MinWidth="720" MinHeight="480"
+        MinWidth="780" MinHeight="520"
         Title="AI Interface — Local AI">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
+    <Window.Resources>
+        <conv:PathToBitmapConverter x:Key="PathToBitmap"/>
+    </Window.Resources>
+
     <Window.Styles>
-        <Style Selector="Border.bubble">
-            <Setter Property="Margin" Value="6,4"/>
-            <Setter Property="Padding" Value="12,8"/>
+        <!-- Sidebar nav tabs -->
+        <Style Selector="Button.nav">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Margin" Value="0,2"/>
             <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="MaxWidth" Value="700"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+        </Style>
+        <Style Selector="Button.nav /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+        </Style>
+        <Style Selector="Button.nav.active">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#2E804DEE"/>
+        </Style>
+
+        <!-- Chat bubbles -->
+        <Style Selector="Border.bubble">
+            <Setter Property="Margin" Value="6,5"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="MaxWidth" Value="720"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
-            <Setter Property="Background" Value="#22888888"/>
+            <Setter Property="Background" Value="{DynamicResource AssistantBubbleBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BoxShadow" Value="0 6 18 0 #2A000000"/>
         </Style>
         <Style Selector="Border.bubble.user">
             <Setter Property="HorizontalAlignment" Value="Right"/>
-            <Setter Property="Background" Value="#332D7DD2"/>
+            <Setter Property="Background" Value="{DynamicResource UserBubbleBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
         </Style>
+
+        <!-- Copy-message button: visibility is bound to the bubble's hover state (see template) -->
+        <Style Selector="Button.copy">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.copy /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <!-- Source links -->
         <Style Selector="Button.link">
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="#4F9DEC"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
         </Style>
+
+        <!-- Connection status dot -->
+        <Style Selector="Ellipse.status">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="Fill" Value="#E0573A"/>
+        </Style>
+        <Style Selector="Ellipse.status.online">
+            <Setter Property="Fill" Value="#00CEA8"/>
+        </Style>
+
+        <!-- Composer text box blends into its card -->
+        <Style Selector="TextBox.composer">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style Selector="TextBox.composer:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- Attachment chips -->
+        <Style Selector="Border.chip">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+        <Style Selector="Button.chipclose">
+            <Setter Property="Padding" Value="2,0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <!-- Remove button overlaid on an attachment thumbnail -->
+        <Style Selector="Button.thumbremove">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.thumbremove /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#B0000000"/>
+        </Style>
+        <Style Selector="Button.thumbremove:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#D8000000"/>
+        </Style>
+
+        <!-- Web-search toggle in the composer toolbar -->
+        <Style Selector="ToggleButton.toolToggle">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+        </Style>
+        <Style Selector="ToggleButton.toolToggle:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#2E804DEE"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto,Auto">
+    <Grid ColumnDefinitions="Auto,*">
 
-        <!-- Top bar: model, mode, connection -->
-        <Border Grid.Row="0" Padding="10,8" Background="#11808080">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
-                <TextBlock Grid.Column="0" Text="Model" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.7"/>
-                <ComboBox Grid.Column="1" Width="200" MinHeight="32"
-                          ItemsSource="{Binding Models}"
-                          SelectedItem="{Binding SelectedModel}"
-                          PlaceholderText="(no models)"/>
+        <!-- ===================== SIDEBAR ===================== -->
+        <Border Grid.Column="0" Classes="card" CornerRadius="16" Margin="10" Padding="12" Width="240">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+                <TextBlock Grid.Row="0" Classes="brand" Text="AI Interface" Margin="4,2,0,12"/>
 
-                <TextBlock Grid.Column="2" Text="Mode" VerticalAlignment="Center" Margin="16,0,6,0" Opacity="0.7"/>
-                <ComboBox Grid.Column="3" Width="150" MinHeight="32"
-                          ItemsSource="{Binding Modes}"
-                          SelectedItem="{Binding SelectedMode}"
-                          ToolTip.Tip="{Binding SelectedMode.Description}"/>
+                <!-- New Chat -->
+                <Button Grid.Row="1" Classes="cta" Content="＋  New Chat"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Command="{Binding NewChatCommand}"/>
 
-                <TextBox Grid.Column="5" Width="210" Margin="0,0,6,0"
-                         Text="{Binding OllamaBaseUrl}"
-                         PlaceholderText="http://localhost:11434"
-                         ToolTip.Tip="Ollama server URL"/>
-                <Button Grid.Column="6" Content="Connect" Command="{Binding RefreshCommand}" Margin="0,0,6,0"/>
-                <Button Grid.Column="7" Content="Clear" Command="{Binding ClearChatCommand}"/>
+                <!-- Project: opens the New Project window -->
+                <Button Grid.Row="2" Classes="ghost" Content="📁  Project" Margin="0,8,0,0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Command="{Binding OpenProjectCommand}"
+                        ToolTip.Tip="Create a project the agent can edit files and run commands in"/>
+
+                <!-- Chat Log header -->
+                <TextBlock Grid.Row="3" Classes="muted" Text="CHAT LOG" Margin="4,16,0,4"/>
+
+                <!-- Chat Log: all saved conversations -->
+                <ScrollViewer Grid.Row="4" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding ChatLog}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:CompileBindings="False">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                                    <Button Grid.Column="0" Classes="nav"
+                                            Content="{Binding Title}"
+                                            ToolTip.Tip="{Binding Title}"
+                                            CommandParameter="{Binding}"
+                                            Command="{Binding DataContext.OpenSessionCommand,
+                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                    <Button Grid.Column="1" Classes="chipclose" Content="✕" ToolTip.Tip="Delete"
+                                            VerticalAlignment="Center"
+                                            CommandParameter="{Binding}"
+                                            Command="{Binding DataContext.DeleteSessionCommand,
+                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Deep Research tab (toggles deep-research mode) -->
+                <ToggleButton Grid.Row="5" Classes="toolToggle" Margin="0,8,0,0"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              IsChecked="{Binding DeepResearchEnabled}"
+                              Content="🔎  Deep Research"
+                              ToolTip.Tip="Plan queries, read pages, synthesize a cited report"/>
+
+                <!-- Active project card (shown only in project mode) -->
+                <Border Grid.Row="6" Classes="card" CornerRadius="12" Padding="12,10" Margin="0,10,0,0"
+                        IsVisible="{Binding HasActiveProject}">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="📁 PROJECT" Classes="muted"/>
+                        <Button Grid.Row="0" Grid.Column="1" Classes="chipclose" Content="✕" ToolTip.Tip="Exit project"
+                                VerticalAlignment="Center" Command="{Binding ExitProjectCommand}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                   Text="{Binding ActiveProjectName}" FontWeight="SemiBold" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource AppTextPrimary}" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding ActiveProjectDirectory}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Footer: model + connection -->
+                <StackPanel Grid.Row="7" Spacing="8" Margin="0,12,0,0">
+                    <TextBlock Classes="muted" Text="MODEL"/>
+                    <ComboBox HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding Models}"
+                              SelectedItem="{Binding SelectedModel}"
+                              PlaceholderText="Select model"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Ellipse Classes="status" Classes.online="{Binding IsConnected}" VerticalAlignment="Center"/>
+                        <TextBlock Classes="muted" Text="{Binding ConnectionStatus}"
+                                   TextWrapping="Wrap" Width="186"/>
+                    </StackPanel>
+                    <Button Classes="ghost" Content="Connect" HorizontalAlignment="Stretch"
+                            Command="{Binding RefreshCommand}"/>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Transcript -->
-        <ScrollViewer Grid.Row="1" x:Name="TranscriptScroll" Padding="6">
-            <ItemsControl ItemsSource="{Binding Messages}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:MessageViewModel">
-                        <Border Classes="bubble" Classes.user="{Binding IsUser}">
-                            <StackPanel>
-                                <TextBlock Text="{Binding Header}" FontSize="11" Opacity="0.6" Margin="0,0,0,2"/>
-                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+        <!-- ===================== MAIN AREA ===================== -->
+        <Grid Grid.Column="1" RowDefinitions="*,Auto,Auto" Margin="0,10,10,10">
 
-                                <!-- Sources (web search / deep research) -->
-                                <Expander Margin="0,8,0,0" IsVisible="{Binding HasSources}"
-                                          Header="Sources">
-                                    <ItemsControl ItemsSource="{Binding Sources}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:CompileBindings="False">
-                                                <StackPanel Margin="0,4">
-                                                    <Button Classes="link"
-                                                            Content="{Binding Title}"
-                                                            CommandParameter="{Binding Url}"
-                                                            Command="{Binding DataContext.OpenUrlCommand,
-                                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                                    <TextBlock Text="{Binding Url}" FontSize="11" Opacity="0.55"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </Expander>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+            <!-- Transcript + floating Settings button (top right) -->
+            <Grid Grid.Row="0">
+                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,6,6">
+                    <ItemsControl ItemsSource="{Binding Messages}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:MessageViewModel">
+                                <Border Classes="bubble" Classes.user="{Binding IsUser}">
+                                    <Panel>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Header}" Classes="muted"
+                                                   FontWeight="Medium" Margin="0,0,0,3"/>
+                                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                             Foreground="{DynamicResource AppTextPrimary}"/>
 
-        <!-- Status / progress bar -->
-        <Border Grid.Row="2" Padding="12,6" Background="#11808080" IsVisible="{Binding IsBusy}">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Opacity="0.8"/>
-            </StackPanel>
-        </Border>
+                                        <!-- Attached files -->
+                                        <ItemsControl ItemsSource="{Binding Attachments}"
+                                                      IsVisible="{Binding HasAttachments}" Margin="0,6,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:CompileBindings="False">
+                                                    <StackPanel Width="120" Margin="0,0,8,4">
+                                                        <Border CornerRadius="8" ClipToBounds="True" Height="84"
+                                                                IsVisible="{Binding IsPhoto}">
+                                                            <Image Stretch="UniformToFill"
+                                                                   Source="{Binding Path, Converter={StaticResource PathToBitmap}}"/>
+                                                        </Border>
+                                                        <Border CornerRadius="8" Height="84" IsVisible="{Binding !IsPhoto}"
+                                                                Background="{DynamicResource AppSurfaceBrush}"
+                                                                BorderBrush="{DynamicResource AppSurfaceBorderBrush}" BorderThickness="1">
+                                                            <TextBlock Text="{Binding Glyph}" FontSize="30"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding FileName}" Classes="muted"
+                                                                   TextTrimming="CharacterEllipsis" MaxWidth="116"
+                                                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
 
-        <!-- Connection status line -->
-        <TextBlock Grid.Row="2" Text="{Binding ConnectionStatus}" IsVisible="{Binding !IsBusy}"
-                   Margin="12,4" FontSize="12" Opacity="0.6" VerticalAlignment="Center"/>
+                                        <Expander Margin="0,10,0,0" IsVisible="{Binding HasSources}" Header="Sources">
+                                            <ItemsControl ItemsSource="{Binding Sources}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:CompileBindings="False">
+                                                        <StackPanel Margin="0,5">
+                                                            <Button Classes="link"
+                                                                    Content="{Binding Title}"
+                                                                    CommandParameter="{Binding Url}"
+                                                                    Command="{Binding DataContext.OpenUrlCommand,
+                                                                               RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                            <TextBlock Text="{Binding Url}" Classes="muted"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Expander>
+                                    </StackPanel>
 
-        <!-- Input -->
-        <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="8" >
-            <TextBox Grid.Column="0" x:Name="InputBox"
-                     Text="{Binding InputText}"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     MaxHeight="160"
-                     PlaceholderText="Type a message…  (Enter to send, Shift+Enter for a new line)"/>
-            <Button Grid.Column="1" Content="Send" Margin="6,0,0,0" MinWidth="80"
-                    Classes="accent"
-                    Command="{Binding SendCommand}"
-                    IsVisible="{Binding !IsBusy}"/>
-            <Button Grid.Column="2" Content="Stop" Margin="6,0,0,0" MinWidth="80"
-                    Command="{Binding StopCommand}"
-                    IsVisible="{Binding IsBusy}"/>
+                                    <!-- Copy message (top-left, appears when the bubble is hovered) -->
+                                    <Button Classes="copy" Click="OnCopyMessage" Content="📋"
+                                            ToolTip.Tip="Copy message"
+                                            HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0"
+                                            IsVisible="{Binding $parent[Border].IsPointerOver}"/>
+                                    </Panel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <Button Classes="ghost" Content="⚙" FontSize="15"
+                        Command="{Binding OpenSettingsCommand}" ToolTip.Tip="Settings"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,8,0"/>
+            </Grid>
+
+            <!-- Status line (only while busy) -->
+            <Border Grid.Row="1" Classes="card" CornerRadius="12" Margin="0,4" Padding="14,7"
+                    IsVisible="{Binding IsBusy}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding StatusText}" Classes="muted" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Composer -->
+            <Border Grid.Row="2" Classes="card" CornerRadius="18" Margin="0,4,0,0" Padding="8">
+                <StackPanel Spacing="6">
+
+                    <!-- Staged attachment chips -->
+                    <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:CompileBindings="False">
+                                <StackPanel Width="120" Margin="0,0,8,0">
+                                    <Panel>
+                                        <Border CornerRadius="8" ClipToBounds="True" Height="84"
+                                                IsVisible="{Binding IsPhoto}">
+                                            <Image Stretch="UniformToFill"
+                                                   Source="{Binding Path, Converter={StaticResource PathToBitmap}}"/>
+                                        </Border>
+                                        <Border CornerRadius="8" Height="84" IsVisible="{Binding !IsPhoto}"
+                                                Background="{DynamicResource AppSurfaceBrush}"
+                                                BorderBrush="{DynamicResource AppSurfaceBorderBrush}" BorderThickness="1">
+                                            <TextBlock Text="{Binding Glyph}" FontSize="30"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <Button Classes="thumbremove" Content="✕" ToolTip.Tip="Remove"
+                                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
+                                                CommandParameter="{Binding}"
+                                                Command="{Binding DataContext.RemoveAttachmentCommand,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                    </Panel>
+                                    <TextBlock Text="{Binding FileName}" Classes="muted"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="116"
+                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Text input -->
+                    <TextBox x:Name="InputBox" Classes="composer"
+                             Text="{Binding InputText}"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             MaxHeight="160"
+                             PlaceholderText="Type a message…  (Enter to send, Shift+Enter for a new line)"/>
+
+                    <!-- Toolbar: attach + web-search + thinking toggles (left), send/stop (right) -->
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                        <Button Grid.Column="0" Classes="ghost" Content="📎" FontSize="15"
+                                ToolTip.Tip="Attach files">
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuItem Header="🖼  Photos" Command="{Binding AttachPhotosCommand}"/>
+                                    <MenuItem Header="📄  PDF" Command="{Binding AttachPdfsCommand}"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+
+                        <ToggleButton Grid.Column="1" Classes="toolToggle" Margin="8,0,0,0"
+                                      IsChecked="{Binding WebSearchEnabled}"
+                                      Content="🌐 Web search"
+                                      ToolTip.Tip="Search the web for this prompt"/>
+
+                        <ToggleButton Grid.Column="2" Classes="toolToggle" Margin="8,0,0,0"
+                                      IsChecked="{Binding ThinkingEnabled}"
+                                      Content="🧠 Thinking"
+                                      ToolTip.Tip="Make the AI plan what it needs to do before answering (effort set in Settings)"/>
+
+                        <Button Grid.Column="4" Classes="cta" Content="Send" MinWidth="96"
+                                Command="{Binding SendCommand}"
+                                IsVisible="{Binding !IsBusy}"/>
+                        <Button Grid.Column="5" Content="Stop" MinWidth="96"
+                                Command="{Binding StopCommand}"
+                                IsVisible="{Binding IsBusy}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 

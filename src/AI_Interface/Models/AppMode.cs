@@ -10,5 +10,8 @@ public enum AppMode
     WebSearch,
 
     /// <summary>Multi-step research: the model plans queries, the app searches and reads pages, then the model synthesizes a cited answer.</summary>
-    DeepResearch
+    DeepResearch,
+
+    /// <summary>Project agent: the model uses tools to create/delete files and folders and run terminal commands inside the active project directory.</summary>
+    Project
 }

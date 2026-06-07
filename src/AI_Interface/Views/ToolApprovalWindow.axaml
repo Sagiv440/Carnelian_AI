@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="using:AI_Interface.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="300"
+        x:Class="AI_Interface.Views.ToolApprovalWindow"
+        x:DataType="models:ToolApprovalRequest"
+        Width="480" SizeToContent="Height"
+        MinWidth="420"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="Approve action">
+
+    <Border Classes="card" CornerRadius="16" Margin="16" Padding="22">
+        <StackPanel Spacing="6">
+            <TextBlock Classes="brand" Text="The project agent wants to:"/>
+            <TextBlock Text="{Binding Summary}" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AppTextPrimary}" Margin="0,4,0,0"/>
+
+            <Border Classes="card" CornerRadius="10" Padding="12,10" Margin="0,4"
+                    IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <SelectableTextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontFamily="Cascadia Code,Consolas,monospace"
+                                     Foreground="{DynamicResource AppTextPrimary}"/>
+            </Border>
+
+            <TextBlock IsVisible="{Binding IsDestructive}" TextWrapping="Wrap"
+                       Foreground="#E0573A" FontWeight="Medium"
+                       Text="⚠ This can modify or delete files, or run a command on your machine."/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        Spacing="10" Margin="0,14,0,0">
+                <Button Classes="ghost" Content="Decline" MinWidth="100" Click="OnDeny"/>
+                <Button Classes="cta" Content="Approve" MinWidth="110" Click="OnApprove"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+
+</Window>

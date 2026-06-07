@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace AI_Interface.Models;
@@ -33,6 +34,10 @@ public sealed class OllamaChatRequest
 
     [JsonPropertyName("stream")]
     public bool Stream { get; set; } = true;
+
+    /// <summary>Tools the model may call (function calling). Omitted from JSON when null.</summary>
+    [JsonPropertyName("tools")]
+    public List<OllamaTool>? Tools { get; set; }
 }
 
 public sealed class OllamaChatMessage
@@ -42,6 +47,58 @@ public sealed class OllamaChatMessage
 
     [JsonPropertyName("content")]
     public string Content { get; set; } = "";
+
+    /// <summary>Base64-encoded images for vision models. Omitted from JSON when null.</summary>
+    [JsonPropertyName("images")]
+    public List<string>? Images { get; set; }
+
+    /// <summary>Tool calls the assistant requested. Omitted from JSON when null.</summary>
+    [JsonPropertyName("tool_calls")]
+    public List<OllamaToolCall>? ToolCalls { get; set; }
+
+    /// <summary>For a tool-result message: the name of the tool whose output this carries.</summary>
+    [JsonPropertyName("tool_name")]
+    public string? ToolName { get; set; }
+}
+
+/// <summary>A tool definition advertised to the model in a chat request.</summary>
+public sealed class OllamaTool
+{
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "function";
+
+    [JsonPropertyName("function")]
+    public OllamaFunctionDef Function { get; set; } = new();
+}
+
+public sealed class OllamaFunctionDef
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = "";
+
+    /// <summary>JSON-schema object describing the function's parameters.</summary>
+    [JsonPropertyName("parameters")]
+    public JsonElement Parameters { get; set; }
+}
+
+/// <summary>A tool call the model emitted in its response message.</summary>
+public sealed class OllamaToolCall
+{
+    [JsonPropertyName("function")]
+    public OllamaFunctionCall? Function { get; set; }
+}
+
+public sealed class OllamaFunctionCall
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    /// <summary>Ollama sends arguments as a JSON object (not a string, unlike OpenAI).</summary>
+    [JsonPropertyName("arguments")]
+    public JsonElement Arguments { get; set; }
 }
 
 /// <summary>A single NDJSON chunk streamed back from <c>POST /api/chat</c>.</summary>

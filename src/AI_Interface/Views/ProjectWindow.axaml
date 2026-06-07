@@ -1,0 +1,97 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AI_Interface.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="380"
+        x:Class="AI_Interface.Views.ProjectWindow"
+        x:DataType="vm:ProjectViewModel"
+        Width="520" Height="390"
+        MinWidth="440" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Title="Project">
+
+    <Design.DataContext>
+        <vm:ProjectViewModel/>
+    </Design.DataContext>
+
+    <Window.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="Margin" Value="0,12,0,3"/>
+        </Style>
+    </Window.Styles>
+
+    <Border Classes="card" CornerRadius="16" Margin="16" Padding="18">
+        <Grid RowDefinitions="Auto,*">
+
+            <TextBlock Grid.Row="0" Classes="brand" Text="Project" Margin="2,0,0,8"/>
+
+            <TabControl Grid.Row="1">
+
+                <!-- ===== NEW PROJECT ===== -->
+                <TabItem Header="New Project">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="2,8">
+                        <TextBlock Grid.Row="0" Classes="muted" TextWrapping="Wrap"
+                                   Text="The agent can create, edit and delete files and run terminal commands inside the directory you choose."/>
+
+                        <StackPanel Grid.Row="1">
+                            <TextBlock Classes="label" Text="Project name"/>
+                            <TextBox Text="{Binding ProjectName}" PlaceholderText="My project"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2">
+                            <TextBlock Classes="label" Text="Active directory"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox Grid.Column="0" Text="{Binding Directory}"
+                                         PlaceholderText="Path to the project folder"/>
+                                <Button Grid.Column="1" Classes="ghost" Content="Browse…" Margin="8,0,0,0"
+                                        Click="OnBrowse"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"
+                                    Spacing="10" Margin="0,12,0,0">
+                            <Button Classes="ghost" Content="Cancel" MinWidth="96" Click="OnCancel"/>
+                            <Button Classes="cta" Content="Create" MinWidth="110"
+                                    IsEnabled="{Binding CanCreate}" Click="OnCreate"/>
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+
+                <!-- ===== OPEN PROJECT ===== -->
+                <TabItem Header="Open Project">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="2,8">
+                        <TextBlock Grid.Row="0" Classes="muted" TextWrapping="Wrap"
+                                   Text="Select an existing folder to work in. The folder's name becomes the project name."/>
+
+                        <StackPanel Grid.Row="1">
+                            <TextBlock Classes="label" Text="Folder"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox Grid.Column="0" Text="{Binding OpenDirectory}" IsReadOnly="True"
+                                         PlaceholderText="No folder selected"/>
+                                <Button Grid.Column="1" Classes="cta" Content="Choose folder…" Margin="8,0,0,0"
+                                        Click="OnBrowseOpen"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" IsVisible="{Binding CanOpen}">
+                            <TextBlock Classes="label" Text="Project name"/>
+                            <TextBlock Text="{Binding OpenProjectName}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AppTextPrimary}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"
+                                    Spacing="10" Margin="0,12,0,0">
+                            <Button Classes="ghost" Content="Cancel" MinWidth="96" Click="OnCancel"/>
+                            <Button Classes="cta" Content="Open" MinWidth="110"
+                                    IsEnabled="{Binding CanOpen}" Click="OnOpen"/>
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+
+            </TabControl>
+        </Grid>
+    </Border>
+
+</Window>

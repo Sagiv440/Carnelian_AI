@@ -5,7 +5,10 @@ public enum ChatRole
 {
     System,
     User,
-    Assistant
+    Assistant,
+
+    /// <summary>Result of a tool call fed back to the model (Ollama role "tool").</summary>
+    Tool
 }
 
 public static class ChatRoleExtensions
@@ -16,6 +19,7 @@ public static class ChatRoleExtensions
         ChatRole.System => "system",
         ChatRole.User => "user",
         ChatRole.Assistant => "assistant",
+        ChatRole.Tool => "tool",
         _ => "user"
     };
 }

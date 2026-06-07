@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using AI_Interface.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,10 +12,13 @@ public sealed partial class MessageViewModel : ObservableObject
 
     public bool IsUser => Role == ChatRole.User;
 
+    /// <summary>For assistant messages, the model that generated the reply (shown as the header).</summary>
+    public string? ModelName { get; init; }
+
     public string Header => Role switch
     {
         ChatRole.User => "You",
-        ChatRole.Assistant => "Assistant",
+        ChatRole.Assistant => string.IsNullOrWhiteSpace(ModelName) ? "Assistant" : ModelName,
         ChatRole.System => "System",
         _ => "?"
     };
@@ -33,6 +37,18 @@ public sealed partial class MessageViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasSources;
 
+    /// <summary>Files attached to this (user) message, shown as chips in the bubble.</summary>
+    public ObservableCollection<Attachment> Attachments { get; } = new();
+
+    [ObservableProperty]
+    private bool _hasAttachments;
+
+    /// <summary>Base64 images sent to the model (vision). Not displayed.</summary>
+    public List<string> Images { get; set; } = new();
+
+    /// <summary>Extracted text from attached documents (PDFs), folded into the model prompt. Not displayed.</summary>
+    public string AttachedContext { get; set; } = "";
+
     public MessageViewModel(ChatRole role, string text = "")
     {
         Role = role;
@@ -42,11 +58,19 @@ public sealed partial class MessageViewModel : ObservableObject
     /// <summary>Appends a streamed token to the message body. Call on the UI thread.</summary>
     public void Append(string delta) => Text += delta;
 
-    public void SetSources(System.Collections.Generic.IEnumerable<SearchResult> sources)
+    public void SetSources(IEnumerable<SearchResult> sources)
     {
         Sources.Clear();
         foreach (var s in sources)
             Sources.Add(s);
         HasSources = Sources.Count > 0;
+    }
+
+    public void SetAttachments(IEnumerable<Attachment> attachments)
+    {
+        Attachments.Clear();
+        foreach (var a in attachments)
+            Attachments.Add(a);
+        HasAttachments = Attachments.Count > 0;
     }
 }
