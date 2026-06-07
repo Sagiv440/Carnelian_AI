@@ -77,9 +77,10 @@ text (`MaxSteps` cap). Tools: `list_directory`, `read_file`, `write_file`, `crea
 - **Approval.** `AgentApprovalMode` (Settings → Project): `AutoRun` / `ConfirmDestructive` /
   `ConfirmEverything`. The service awaits an `approve` callback; the VM raises `ToolApprovalRequested`,
   the code-behind shows `ToolApprovalWindow`, and the decision returns via a `TaskCompletionSource<bool>`.
-- **Software install permission.** `AppSettings.AllowSoftwareInstall`. When off, `install_software` is
-  withheld and `run_command` refuses machine-wide package-manager installs (winget/apt/brew/`npm -g`/…)
-  while still allowing project-local deps.
+- **Software install permission.** `AppSettings.SoftwareInstall` (`SoftwareInstallPermission`:
+  `Never` / `Ask` / `Allow`). Under `Never`, `install_software` is withheld and `run_command` refuses
+  machine-wide package-manager installs (winget/apt/brew/`npm -g`/…) while still allowing project-local
+  deps. `Ask` permits installs but confirms each one even under `AutoRun`; `Allow` follows the approval mode.
 - **Active project** is single and in-memory (`Project` = Name + Directory). Entered via the sidebar
   **Project** button → `ProjectWindow` (New tab creates `<location>/<name>/` + a `.AI` folder; Open tab
   uses an existing folder, name = folder name). The code-behind calls `vm.ActivateProjectAsync`.
@@ -117,24 +118,27 @@ prompt as `[Attached documents]`. The composer's 📎 menu offers *Photos* and *
   ("Coming Soon").
 - **Theme** — appearance (light/dark/system), accent + bubble colors, and **Typography** (font family +
   base size).
-- **Project** — agent approval mode + *Allow software installation*.
+- **Project** — agent approval mode + *Software installation* (No permission / Ask every time / Allow).
 - **General** — research depth + Thinking *Effort*.
 - **Web Search** — provider + API keys.
 
-**Theming & design system** (`ThemeService` + `SettingsWindow` + `Styles/ControlStyles.axaml`): adapted
-from sagiv440.github.io/sagiv-reuben — Poppins type (embedded in `Assets/Fonts`), teal→violet gradient,
-purple accent, deep-navy dark base, glassy rounded surfaces. **Read the `app-style` skill before UI work.**
-- Design tokens in `App.axaml`: shared brushes (`AppAccentBrush`, `AccentGradientBrush`, `UserBubbleBrush`,
-  `AssistantBubbleBrush`), font tokens `AppFont` + `AppFontSize` (now **DynamicResource** so the font
-  family/size can change live), plus **theme-variant-aware** structural tokens in the `ThemeDictionaries`
-  (`AppWindowBackground`, `AppSurfaceBrush`, `AppSurfaceBorderBrush`, `AppInputBackground`,
+**Theming & design system** (`ThemeService` + `SettingsWindow` + `Styles/ControlStyles.axaml`): a flat
+"IDE" look modelled on VS Code / Photoshop — the system UI font (Poppins still embedded in `Assets/Fonts`
+and selectable by name), a red-orange accent (`#F2542D`), neutral dark-gray surfaces, sharp 3–5px corners,
+hairline borders, flat (no gradients/glass/shadows). **Read the `app-style` skill before UI work.**
+- Design tokens in `App.axaml`: shared brushes (`AppAccentBrush`, `UserBubbleBrush`, `AssistantBubbleBrush`,
+  plus a near-flat compat `AccentGradientBrush`), font tokens `AppFont` + `AppFontSize` (**DynamicResource**
+  so the font family/size can change live), plus **theme-variant-aware** structural tokens in the
+  `ThemeDictionaries` (`AppWindowBackground`, `AppSurfaceBrush`, `AppSurfaceBorderBrush`, `AppInputBackground`,
   `AppTextPrimary`, `AppTextSecondary`). Reference all via `{DynamicResource ...}`.
-- Reusable style classes in `Styles/ControlStyles.axaml`: `Button.cta`, `Button.ghost`, `Border.card`,
-  `TextBlock.brand`, `TextBlock.muted`.
+- Reusable style classes in `Styles/ControlStyles.axaml`: `Button.cta` (flat solid accent), `Button.ghost`,
+  `Border.card`, `TextBlock.brand`, `TextBlock.muted`.
 - `ThemeService.Apply` runs at startup and on every change in `SettingsViewModel` (guarded by `_loading`).
-  It overrides the themeable brush keys, the appearance variant, and `AppFont` (the default "Poppins"
-  maps to the embedded font) + `AppFontSize`. Defaults + the swatch palette + font list live in
-  `Models/ThemeDefaults.cs`.
+  It overrides the themeable brush keys, the appearance variant, and `AppFont` ("Poppins" maps to the
+  embedded font; anything else is a system family) + `AppFontSize`. Defaults + the swatch palette + font
+  list live in `Models/ThemeDefaults.cs`; `SettingsService` migrates the old purple/Poppins defaults on load.
+- `SettingsWindow` puts its top-level tabs in a **left category rail** (a `TabControl` with
+  `Classes="settings"` + `TabStripPlacement="Left"`), with the selected category's content on the right.
 
 **Sidebar.** New Chat + Project buttons, then the chat log, the Deep Research toggle, the active-project
 card, and the model/connection footer. When a project is active a **Chat Log / Files** tab strip appears:

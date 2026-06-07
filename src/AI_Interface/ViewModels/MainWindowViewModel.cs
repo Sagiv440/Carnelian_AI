@@ -431,7 +431,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // The agent runs on background threads; marshal its transcript deltas back to the UI.
         await _agent.RunAsync(
             ActiveProject, model, conversation, _settings.Current.AgentApproval,
-            ThinkingDirective(), ProjectSkillsContext(), _settings.Current.AllowSoftwareInstall, progress,
+            ThinkingDirective(), ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
             delta => Dispatcher.UIThread.Post(() =>
             {
                 assistant.Append(delta);

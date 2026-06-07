@@ -11,55 +11,49 @@
     </Application.DataTemplates>
 
     <!-- ============================================================================
-         Design tokens — derived from sagiv440.github.io/sagiv-reuben
-         Poppins type · teal→violet signature gradient · purple accent · deep-navy base.
+         Design tokens — flat "IDE" look (Visual Studio Code / Photoshop):
+         system type · neutral dark-gray surfaces · red-orange accent · sharp corners.
          Themeable keys (AppAccentBrush / UserBubbleBrush / AssistantBubbleBrush) are
          overridden at runtime by ThemeService; structural tokens adapt per light/dark.
          ============================================================================ -->
     <Application.Resources>
         <ResourceDictionary>
-            <FontFamily x:Key="AppFont">avares://AI_Interface/Assets/Fonts#Poppins</FontFamily>
+            <!-- System UI font (overridden at runtime by ThemeService from saved settings) -->
+            <FontFamily x:Key="AppFont">Segoe UI</FontFamily>
             <!-- Base font size; overridden at runtime by ThemeService from saved settings. -->
-            <sys:Double x:Key="AppFontSize">14</sys:Double>
+            <sys:Double x:Key="AppFontSize">13</sys:Double>
 
-            <!-- Accent (variant-independent; AppAccentBrush is user-themeable) -->
-            <SolidColorBrush x:Key="AppAccentBrush" Color="#804DEE"/>
-            <SolidColorBrush x:Key="UserBubbleBrush" Color="#33804DEE"/>
+            <!-- Accent (variant-independent; AppAccentBrush is user-themeable) — red-orange -->
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#F2542D"/>
+            <SolidColorBrush x:Key="UserBubbleBrush" Color="#2EF2542D"/>
             <SolidColorBrush x:Key="AssistantBubbleBrush" Color="#22888888"/>
 
-            <!-- Signature teal → violet gradient (the site's hero gradient, 90°) -->
-            <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0%,0%" EndPoint="100%,0%">
-                <GradientStop Offset="0" Color="#00CEA8"/>
-                <GradientStop Offset="1" Color="#BF61FF"/>
+            <!-- Near-flat red-orange gradient, kept for compatibility (CTA/brand now use solids) -->
+            <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Offset="0" Color="#FF6A45"/>
+                <GradientStop Offset="1" Color="#F2542D"/>
             </LinearGradientBrush>
 
             <ResourceDictionary.ThemeDictionaries>
 
-                <!-- DARK (the site's native look) -->
+                <!-- DARK (VS Code / Photoshop neutral gray) — the default -->
                 <ResourceDictionary x:Key="Dark">
-                    <LinearGradientBrush x:Key="AppWindowBackground" StartPoint="0%,0%" EndPoint="100%,100%">
-                        <GradientStop Offset="0"   Color="#04090F"/>
-                        <GradientStop Offset="0.55" Color="#070A14"/>
-                        <GradientStop Offset="1"   Color="#0D0922"/>
-                    </LinearGradientBrush>
-                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#14101F" Opacity="0.72"/>
-                    <SolidColorBrush x:Key="AppSurfaceBorderBrush" Color="#26FFFFFF"/>
-                    <SolidColorBrush x:Key="AppInputBackground" Color="#0B0F1A" Opacity="0.9"/>
-                    <SolidColorBrush x:Key="AppTextPrimary" Color="#ECEAFB"/>
-                    <SolidColorBrush x:Key="AppTextSecondary" Color="#9AA3B2"/>
+                    <SolidColorBrush x:Key="AppWindowBackground" Color="#1E1E1E"/>
+                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#252526"/>
+                    <SolidColorBrush x:Key="AppSurfaceBorderBrush" Color="#3C3C3C"/>
+                    <SolidColorBrush x:Key="AppInputBackground" Color="#3C3C3C"/>
+                    <SolidColorBrush x:Key="AppTextPrimary" Color="#D4D4D4"/>
+                    <SolidColorBrush x:Key="AppTextSecondary" Color="#858585"/>
                 </ResourceDictionary>
 
                 <!-- LIGHT -->
                 <ResourceDictionary x:Key="Light">
-                    <LinearGradientBrush x:Key="AppWindowBackground" StartPoint="0%,0%" EndPoint="100%,100%">
-                        <GradientStop Offset="0" Color="#F8F6FE"/>
-                        <GradientStop Offset="1" Color="#EEEAFB"/>
-                    </LinearGradientBrush>
-                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#FFFFFF" Opacity="0.75"/>
-                    <SolidColorBrush x:Key="AppSurfaceBorderBrush" Color="#1A000000"/>
+                    <SolidColorBrush x:Key="AppWindowBackground" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#F3F3F3"/>
+                    <SolidColorBrush x:Key="AppSurfaceBorderBrush" Color="#D0D0D0"/>
                     <SolidColorBrush x:Key="AppInputBackground" Color="#FFFFFF"/>
-                    <SolidColorBrush x:Key="AppTextPrimary" Color="#1B1633"/>
-                    <SolidColorBrush x:Key="AppTextSecondary" Color="#5C6473"/>
+                    <SolidColorBrush x:Key="AppTextPrimary" Color="#1F1F1F"/>
+                    <SolidColorBrush x:Key="AppTextSecondary" Color="#6E6E6E"/>
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>

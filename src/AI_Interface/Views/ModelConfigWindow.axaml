@@ -45,7 +45,7 @@
         </Style>
     </Window.Styles>
 
-    <Border Classes="card" CornerRadius="16" Margin="14" Padding="18">
+    <Border Classes="card" CornerRadius="4" Margin="14" Padding="18">
         <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" RowSpacing="10">
 
             <!-- Header -->
@@ -56,7 +56,7 @@
             </StackPanel>
 
             <!-- Scan + hardware summary -->
-            <Border Grid.Row="1" Classes="card" CornerRadius="12" Padding="14,12">
+            <Border Grid.Row="1" Classes="card" CornerRadius="4" Padding="14,12">
                 <Grid ColumnDefinitions="Auto,*">
                     <Button Grid.Column="0" Classes="cta" Content="🔍  Scan hardware" MinWidth="150"
                             VerticalAlignment="Top"
@@ -98,7 +98,7 @@
             </StackPanel>
 
             <!-- Ranked model list -->
-            <Border Grid.Row="3" Classes="card" CornerRadius="12" Padding="0" ClipToBounds="True">
+            <Border Grid.Row="3" Classes="card" CornerRadius="4" Padding="0" ClipToBounds="True">
                 <Grid RowDefinitions="Auto,*">
                     <!-- column header -->
                     <Grid Grid.Row="0" ColumnDefinitions="42,*,82,78,120" Margin="14,10,14,8">

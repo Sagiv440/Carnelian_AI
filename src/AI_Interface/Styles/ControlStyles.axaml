@@ -2,11 +2,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ====================================================================
-         App-wide control styling for the sagiv-reuben look:
-         Poppins type, generous rounding, glassy surfaces, gradient CTA.
+         App-wide control styling for the flat "IDE" look (VS Code / Photoshop):
+         system type, sharp corners, hairline borders, solid red-orange accent.
          ==================================================================== -->
 
-    <!-- Window: app font (user-selectable) + deep-navy gradient background. Font family/size use
+    <!-- Window: app font (user-selectable) + flat neutral background. Font family/size use
          DynamicResource so the Theme settings can change them live. -->
     <Style Selector="Window">
         <Setter Property="FontFamily" Value="{DynamicResource AppFont}"/>
@@ -14,23 +14,23 @@
         <Setter Property="Background" Value="{DynamicResource AppWindowBackground}"/>
     </Style>
 
-    <!-- Rounded inputs -->
+    <!-- Sharp inputs -->
     <Style Selector="TextBox">
-        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="CornerRadius" Value="3"/>
     </Style>
     <Style Selector="ComboBox">
-        <Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="MinHeight" Value="34"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="MinHeight" Value="30"/>
     </Style>
     <Style Selector="NumericUpDown">
-        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="CornerRadius" Value="3"/>
     </Style>
 
-    <!-- Default buttons: rounded, medium weight -->
+    <!-- Default buttons: square-ish, compact -->
     <Style Selector="Button">
-        <Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="FontWeight" Value="Medium"/>
-        <Setter Property="Padding" Value="14,8"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Padding" Value="11,5"/>
     </Style>
 
     <!-- Ghost / toolbar buttons: subtle until hovered -->
@@ -39,41 +39,47 @@
         <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
     </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#18FFFFFF"/>
+    </Style>
 
-    <!-- CTA button: the signature teal→violet gradient -->
+    <!-- CTA button: flat solid red-orange accent (VS Code primary-button style) -->
     <Style Selector="Button.cta">
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="CornerRadius" Value="3"/>
     </Style>
     <Style Selector="Button.cta /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
         <Setter Property="BorderThickness" Value="0"/>
     </Style>
     <Style Selector="Button.cta:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
     </Style>
     <Style Selector="Button.cta:pressed /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
     </Style>
     <Style Selector="Button.cta:pointerover">
-        <Setter Property="Opacity" Value="0.92"/>
+        <Setter Property="Opacity" Value="0.88"/>
+    </Style>
+    <Style Selector="Button.cta:pressed">
+        <Setter Property="Opacity" Value="0.78"/>
     </Style>
 
-    <!-- Glassy surface card -->
+    <!-- Flat surface panel (sidebar / composer / dialogs) -->
     <Style Selector="Border.card">
         <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="16"/>
+        <Setter Property="CornerRadius" Value="4"/>
     </Style>
 
     <!-- Section / muted text helpers -->
     <Style Selector="TextBlock.brand">
         <Setter Property="FontFamily" Value="{DynamicResource AppFont}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="FontSize" Value="18"/>
-        <Setter Property="Foreground" Value="{DynamicResource AccentGradientBrush}"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
     </Style>
     <Style Selector="TextBlock.muted">
         <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>

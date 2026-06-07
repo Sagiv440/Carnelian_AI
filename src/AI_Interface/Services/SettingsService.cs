@@ -26,6 +26,36 @@ public sealed class SettingsService : ISettingsService
         _filePath = Path.Combine(dir, "settings.json");
 
         Current = Load() ?? new AppSettings();
+        MigrateLegacyTheme();
+    }
+
+    /// <summary>
+    /// One-time upgrade of the old sagiv-reuben theme defaults (purple accent / Poppins) to the new
+    /// flat IDE defaults. Only values still sitting at a previous default are changed, so a user's
+    /// genuine customizations (a hand-picked accent, font, or size) are preserved.
+    /// </summary>
+    private void MigrateLegacyTheme()
+    {
+        var changed = false;
+
+        if (Current.AccentColor == "#804DEE")
+        {
+            Current.AccentColor = ThemeDefaults.Accent;
+            changed = true;
+        }
+        if (Current.UserBubbleColor == "#33804DEE")
+        {
+            Current.UserBubbleColor = ThemeDefaults.UserBubble;
+            changed = true;
+        }
+        if (Current.FontFamily == "Poppins")
+        {
+            Current.FontFamily = ThemeDefaults.FontFamily;
+            changed = true;
+        }
+
+        if (changed)
+            Save();
     }
 
     private AppSettings? Load()

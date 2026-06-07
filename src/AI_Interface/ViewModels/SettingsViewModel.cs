@@ -19,9 +19,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IOllamaClient _ollama;
     private readonly bool _loading;
 
-    private const string OkColor = "#00CEA8";   // status OK (teal)
-    private const string ErrColor = "#E0573A";  // status error (red)
-    private const string BusyColor = "#9AA0A6"; // neutral grey while a probe runs
+    private const string OkColor = "#3FB950";   // status OK (green)
+    private const string ErrColor = "#E5534B";  // status error (red)
+    private const string BusyColor = "#858585"; // neutral grey while a probe runs
 
     // --- AI model: connection probe (Local AI) ---
 
@@ -44,7 +44,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Raised when the view should open the Model Config window.</summary>
     public event System.EventHandler? ModelConfigRequested;
 
-    /// <summary>Preset color swatches (from the sagiv-reuben site palette).</summary>
+    /// <summary>Preset color swatches (the flat IDE palette).</summary>
     public IReadOnlyList<string> Palette { get; } = ThemeDefaults.Palette;
 
     /// <summary>Selectable web search backends for the Web Search tab.</summary>
@@ -100,7 +100,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     // --- Project agent ---
 
     [ObservableProperty] private AgentApprovalMode _agentApproval;
-    [ObservableProperty] private bool _allowSoftwareInstall;
+    [ObservableProperty] private SoftwareInstallPermission _softwareInstall;
 
     public bool IsAutoRun
     {
@@ -118,6 +118,25 @@ public sealed partial class SettingsViewModel : ViewModelBase
     {
         get => AgentApproval == AgentApprovalMode.ConfirmEverything;
         set { if (value) AgentApproval = AgentApprovalMode.ConfirmEverything; }
+    }
+
+    // Software-install permission, as three mutually exclusive radio options.
+    public bool IsInstallNever
+    {
+        get => SoftwareInstall == SoftwareInstallPermission.Never;
+        set { if (value) SoftwareInstall = SoftwareInstallPermission.Never; }
+    }
+
+    public bool IsInstallAsk
+    {
+        get => SoftwareInstall == SoftwareInstallPermission.Ask;
+        set { if (value) SoftwareInstall = SoftwareInstallPermission.Ask; }
+    }
+
+    public bool IsInstallAllow
+    {
+        get => SoftwareInstall == SoftwareInstallPermission.Allow;
+        set { if (value) SoftwareInstall = SoftwareInstallPermission.Allow; }
     }
 
     // --- Web search ---
@@ -171,7 +190,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _researchQueryCount = s.ResearchQueryCount;
         _thinkingEffort = s.ThinkingEffort;
         _agentApproval = s.AgentApproval;
-        _allowSoftwareInstall = s.AllowSoftwareInstall;
+        _softwareInstall = s.SoftwareInstall;
         _searchProvider = s.SearchProvider;
         _searxngUrl = s.SearxngUrl;
         _braveApiKey = s.BraveApiKey;
@@ -225,14 +244,20 @@ public sealed partial class SettingsViewModel : ViewModelBase
         SaveAgent();
     }
 
-    partial void OnAllowSoftwareInstallChanged(bool value) => SaveAgent();
+    partial void OnSoftwareInstallChanged(SoftwareInstallPermission value)
+    {
+        OnPropertyChanged(nameof(IsInstallNever));
+        OnPropertyChanged(nameof(IsInstallAsk));
+        OnPropertyChanged(nameof(IsInstallAllow));
+        SaveAgent();
+    }
 
     private void SaveAgent()
     {
         if (_loading)
             return;
         _settings.Current.AgentApproval = AgentApproval;
-        _settings.Current.AllowSoftwareInstall = AllowSoftwareInstall;
+        _settings.Current.SoftwareInstall = SoftwareInstall;
         _settings.Save();
     }
 

@@ -22,7 +22,7 @@
         </Style>
     </Window.Styles>
 
-    <Border Classes="card" CornerRadius="16" Margin="16" Padding="18">
+    <Border Classes="card" CornerRadius="4" Margin="16" Padding="18">
         <Grid RowDefinitions="Auto,*">
 
             <TextBlock Grid.Row="0" Classes="brand" Text="Project" Margin="2,0,0,8"/>

@@ -47,9 +47,11 @@ When the mode needs the model to *act* (call tools, take steps), follow `Project
   and the decision returns through a `TaskCompletionSource<bool>`.
 - **Sandboxing:** all file ops are confined to the active project directory (`TryResolve` rejects paths
   outside it) and commands run with that directory as the working dir. Keep any new tool inside that guard.
-- **Software installs** are a separate permission (`AppSettings.AllowSoftwareInstall`): when on the agent
-  gets an `install_software` tool; when off, system package-manager installs (winget/apt/brew/`npm -g`/…)
-  are refused. Installs still follow the approval mode.
+- **Software installs** are a separate permission (`AppSettings.SoftwareInstall`, a
+  `SoftwareInstallPermission` of `Never` / `Ask` / `Allow`): when not `Never` the agent gets an
+  `install_software` tool; under `Never`, system package-manager installs (winget/apt/brew/`npm -g`/…)
+  are refused. `Ask` permits installs but forces a confirmation for each one even under `AutoRun`;
+  `Allow` follows the approval mode.
 - **Project state** is a single in-memory `Project` (Name + Directory). Its chats persist to
   `<project>/.AI/chats` (via `IChatHistoryService.LoadFrom/SaveTo`), and skill files found in the project
   (`IProjectSkillService`) are appended to the agent's system prompt. `MainWindowViewModel` routes chat

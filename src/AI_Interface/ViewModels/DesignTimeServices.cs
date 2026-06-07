@@ -110,7 +110,7 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
     public Task RunAsync(
         Project project, string model, IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode, string thinkingDirective, string projectSkills,
-        bool allowSoftwareInstall, IProgress<string> status, Action<string> onDelta,
+        SoftwareInstallPermission installPermission, IProgress<string> status, Action<string> onDelta,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         onDelta("Design-time project agent response.");

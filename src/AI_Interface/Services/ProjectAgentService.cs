@@ -38,17 +38,17 @@ public sealed class ProjectAgentService : IProjectAgentService
         AgentApprovalMode approvalMode,
         string thinkingDirective,
         string projectSkills,
-        bool allowSoftwareInstall,
+        SoftwareInstallPermission installPermission,
         IProgress<string> status,
         Action<string> onDelta,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct)
     {
-        var tools = BuildTools(allowSoftwareInstall);
+        var tools = BuildTools(installPermission);
 
         var messages = new List<ChatMessage>
         {
-            ChatMessage.System(SystemPrompt(project, allowSoftwareInstall) + thinkingDirective + projectSkills)
+            ChatMessage.System(SystemPrompt(project, installPermission) + thinkingDirective + projectSkills)
         };
         messages.AddRange(conversation);
 
@@ -75,7 +75,7 @@ public sealed class ProjectAgentService : IProjectAgentService
             {
                 ct.ThrowIfCancellationRequested();
                 var result = await ExecuteAsync(
-                    project, call, approvalMode, allowSoftwareInstall, status, onDelta, approve, ct)
+                    project, call, approvalMode, installPermission, status, onDelta, approve, ct)
                     .ConfigureAwait(false);
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
@@ -87,7 +87,8 @@ public sealed class ProjectAgentService : IProjectAgentService
     // ---- the agent loop's single-tool step -------------------------------------------------
 
     private async Task<string> ExecuteAsync(
-        Project project, AgentToolCall call, AgentApprovalMode approvalMode, bool allowSoftwareInstall,
+        Project project, AgentToolCall call, AgentApprovalMode approvalMode,
+        SoftwareInstallPermission installPermission,
         IProgress<string> status, Action<string> onDelta,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
@@ -96,22 +97,29 @@ public sealed class ProjectAgentService : IProjectAgentService
 
         onDelta($"\n🔧 {summary}{(string.IsNullOrEmpty(detail) ? "" : $"  `{detail}`")}\n");
 
-        // Permission gate: software installs require the project's "Allow software installation" setting.
-        if (call.Name == "install_software" && !allowSoftwareInstall)
+        // Is this a machine-wide software install (the install tool, or a run_command that looks like one)?
+        var isInstallAction = call.Name == "install_software" ||
+            (call.Name == "run_command" && LooksLikeSystemInstall(GetString(call.Arguments, "command") ?? ""));
+
+        // Permission gate: when installs aren't permitted, refuse install actions outright.
+        if (isInstallAction && installPermission == SoftwareInstallPermission.Never)
         {
-            onDelta("   ⛔ blocked — software installation is disabled for this project\n");
-            return "Software installation is disabled. Ask the user to enable " +
-                   "“Allow the agent to install software” in Settings → Project, then retry.";
-        }
-        if (call.Name == "run_command" && !allowSoftwareInstall &&
-            LooksLikeSystemInstall(GetString(call.Arguments, "command") ?? ""))
-        {
+            if (call.Name == "install_software")
+            {
+                onDelta("   ⛔ blocked — software installation is disabled for this project\n");
+                return "Software installation is disabled. Ask the user to allow installs in " +
+                       "Settings → Project (\"Ask every time\" or \"Allow agent to install software\"), then retry.";
+            }
             onDelta("   ⛔ blocked — that looks like a system install (disabled for this project)\n");
-            return "That command installs software machine-wide, which is disabled. Ask the user to " +
-                   "enable “Allow the agent to install software” in Settings → Project, then retry.";
+            return "That command installs software machine-wide, which is disabled. Ask the user to allow " +
+                   "installs in Settings → Project, then retry.";
         }
 
-        if (NeedsApproval(approvalMode, destructive))
+        // "Ask every time" forces confirmation for installs even when the approval mode wouldn't.
+        var needsApproval = NeedsApproval(approvalMode, destructive) ||
+            (isInstallAction && installPermission == SoftwareInstallPermission.Ask);
+
+        if (needsApproval)
         {
             var ok = await approve(new ToolApprovalRequest(call.Name, summary, detail, destructive))
                 .ConfigureAwait(false);
@@ -398,14 +406,14 @@ public sealed class ProjectAgentService : IProjectAgentService
         return string.Join('\n', lines.Select(l => "   " + l));
     }
 
-    private static string SystemPrompt(Project project, bool allowSoftwareInstall)
+    private static string SystemPrompt(Project project, SoftwareInstallPermission installPermission)
     {
-        var install = allowSoftwareInstall
+        var install = installPermission != SoftwareInstallPermission.Never
             ? "- If the project is missing software needed to run or build it (a runtime, SDK, CLI, or " +
               "package manager package), you MAY install it with the install_software tool, which the user " +
               "has permitted for this project. Prefer the platform's package manager."
             : "- You may NOT install software machine-wide. If the project needs a missing runtime/SDK/tool, " +
-              "say so and ask the user to enable “Allow the agent to install software” in Settings → Project. " +
+              "say so and ask the user to allow installs in Settings → Project. " +
               "Installing project-local dependencies (e.g. npm install in the project) is still fine.";
 
         return $"""
@@ -423,7 +431,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         """;
     }
 
-    private static IReadOnlyList<AgentTool> BuildTools(bool allowSoftwareInstall)
+    private static IReadOnlyList<AgentTool> BuildTools(SoftwareInstallPermission installPermission)
     {
         static JsonElement Schema(object o) => JsonSerializer.SerializeToElement(o);
 
@@ -475,8 +483,8 @@ public sealed class ProjectAgentService : IProjectAgentService
                 commandSchema)
         };
 
-        // Offered only when the project permits machine-wide software installation.
-        if (allowSoftwareInstall)
+        // Offered only when the project permits machine-wide software installation (Ask or Allow).
+        if (installPermission != SoftwareInstallPermission.Never)
         {
             tools.Add(new AgentTool("install_software",
                 "Install software/tooling machine-wide (e.g. a runtime, SDK, CLI, or package-manager package) " +

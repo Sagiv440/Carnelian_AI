@@ -51,11 +51,13 @@ public sealed class AppSettings
     public AgentApprovalMode AgentApproval { get; set; } = AgentApprovalMode.ConfirmDestructive;
 
     /// <summary>
-    /// Whether the project agent may install software on the machine (package managers / system-wide
-    /// installs). Off by default; when off, system install commands are refused. Still gated by
-    /// <see cref="AgentApproval"/> when on.
+    /// Whether/how the project agent may install software on the machine (package managers / system-wide
+    /// installs). Defaults to <see cref="SoftwareInstallPermission.Never"/>; when Never, system install
+    /// commands are refused. <see cref="SoftwareInstallPermission.Ask"/> always confirms each install;
+    /// <see cref="SoftwareInstallPermission.Allow"/> follows <see cref="AgentApproval"/>.
     /// </summary>
-    public bool AllowSoftwareInstall { get; set; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public SoftwareInstallPermission SoftwareInstall { get; set; } = SoftwareInstallPermission.Never;
 
     // --- Thinking ---
 
