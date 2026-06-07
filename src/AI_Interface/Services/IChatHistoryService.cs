@@ -11,4 +11,10 @@ public interface IChatHistoryService
 
     /// <summary>Persists the full set of sessions (best-effort; never throws).</summary>
     void Save(IReadOnlyList<ChatSession> sessions);
+
+    /// <summary>Loads a project's chats from its <c>.AI/chats</c> folder, newest first.</summary>
+    IReadOnlyList<ChatSession> LoadFrom(string projectDirectory);
+
+    /// <summary>Persists a project's chats into its <c>.AI/chats</c> folder (best-effort; never throws).</summary>
+    void SaveTo(string projectDirectory, IReadOnlyList<ChatSession> sessions);
 }

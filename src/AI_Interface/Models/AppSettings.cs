@@ -44,6 +44,13 @@ public sealed class AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AgentApprovalMode AgentApproval { get; set; } = AgentApprovalMode.ConfirmDestructive;
 
+    /// <summary>
+    /// Whether the project agent may install software on the machine (package managers / system-wide
+    /// installs). Off by default; when off, system install commands are refused. Still gated by
+    /// <see cref="AgentApproval"/> when on.
+    /// </summary>
+    public bool AllowSoftwareInstall { get; set; }
+
     // --- Thinking ---
 
     /// <summary>

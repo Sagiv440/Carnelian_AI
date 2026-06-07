@@ -25,6 +25,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IAttachmentService _attachments;
     private readonly IChatHistoryService _history;
     private readonly IProjectAgentService _agent;
+    private readonly IProjectSkillService _skills;
+
+    /// <summary>Skill files loaded from the active project (empty when not in a project).</summary>
+    private IReadOnlyList<ProjectSkill> _projectSkills = Array.Empty<ProjectSkill>();
 
     private CancellationTokenSource? _cts;
 
@@ -107,6 +111,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public string ActiveProjectName => ActiveProject?.Name ?? "";
     public string ActiveProjectDirectory => ActiveProject?.Directory ?? "";
 
+    /// <summary>Number of skill files loaded from the active project (shown in the project card).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProjectSkills))]
+    [NotifyPropertyChangedFor(nameof(ProjectSkillSummary))]
+    private int _projectSkillCount;
+
+    public bool HasProjectSkills => ProjectSkillCount > 0;
+    public string ProjectSkillSummary => ProjectSkillCount == 1 ? "1 skill loaded" : $"{ProjectSkillCount} skills loaded";
+
     public MainWindowViewModel(
         IOllamaClient ollama,
         IWebSearchService search,
@@ -114,7 +127,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ISettingsService settings,
         IAttachmentService attachments,
         IChatHistoryService history,
-        IProjectAgentService agent)
+        IProjectAgentService agent,
+        IProjectSkillService skills)
     {
         _ollama = ollama;
         _search = search;
@@ -123,6 +137,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _attachments = attachments;
         _history = history;
         _agent = agent;
+        _skills = skills;
 
         Modes = new[]
         {
@@ -144,7 +159,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         : this(new DesignOllamaClient(), new DesignWebSearchService(),
                new DesignDeepResearchService(), new DesignSettingsService(),
                new DesignAttachmentService(), new DesignChatHistoryService(),
-               new DesignProjectAgentService())
+               new DesignProjectAgentService(), new DesignProjectSkillService())
     {
     }
 
@@ -403,7 +418,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         // The agent runs on background threads; marshal its transcript deltas back to the UI.
         await _agent.RunAsync(
-            ActiveProject, model, conversation, _settings.Current.AgentApproval, ThinkingDirective(), progress,
+            ActiveProject, model, conversation, _settings.Current.AgentApproval,
+            ThinkingDirective(), ProjectSkillsContext(), _settings.Current.AllowSoftwareInstall, progress,
             delta => Dispatcher.UIThread.Post(() =>
             {
                 assistant.Append(delta);
@@ -530,7 +546,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         StatusText = "";
     }
 
-    /// <summary>Sidebar "New Chat": save the current conversation to the log, then start a fresh one.</summary>
+    /// <summary>Sidebar "New Chat": save the current conversation, then start a fresh one (staying in
+    /// the active project, if any, so the new chat is still saved under it).</summary>
     [RelayCommand]
     private void NewChat()
     {
@@ -538,35 +555,89 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _currentSession = new ChatSession();
         Messages.Clear();
         StatusText = "";
-        ActiveProject = null; // leaving any active project
-        SetMode(AppMode.Chat);
+        SetMode(ActiveProject is not null ? AppMode.Project : AppMode.Chat);
     }
 
     /// <summary>Sidebar "Project" button: ask the view to open the New Project window.</summary>
     [RelayCommand]
     private void OpenProject() => ProjectRequested?.Invoke(this, EventArgs.Empty);
 
-    /// <summary>Called by the view once a project is created: enter project (agent) mode for it.</summary>
-    public void ActivateProject(Project project)
+    /// <summary>
+    /// Called by the view once a project is created/opened: enter project (agent) mode, load that
+    /// project's saved chats (from <c>.AI/chats</c>) into the log, and scan it for skill files.
+    /// </summary>
+    public async Task ActivateProjectAsync(Project project)
     {
-        PersistCurrentSession(); // save whatever conversation we're leaving
+        PersistCurrentSession();          // save whatever conversation we're leaving (to the old store)
         _currentSession = new ChatSession();
         Messages.Clear();
         StatusText = "";
-        ActiveProject = project;
+        ActiveProject = project;          // project store is now active
         SetMode(AppMode.Project);
+        LoadLog();                        // load this project's chats into the sidebar log
+        await LoadProjectSkillsAsync(project);
     }
 
-    /// <summary>Leave project mode and return to a fresh chat.</summary>
+    /// <summary>Leave project mode, restore the global chat log, and drop the project's skills.</summary>
     [RelayCommand]
     private void ExitProject()
     {
-        PersistCurrentSession();
+        PersistCurrentSession();          // save to the project store while it's still active
         _currentSession = new ChatSession();
         Messages.Clear();
         StatusText = "";
-        ActiveProject = null;
+        ActiveProject = null;             // global store is now active
+        _projectSkills = Array.Empty<ProjectSkill>();
+        ProjectSkillCount = 0;
+        LoadLog();                        // reload the global chat log
         SetMode(AppMode.Chat);
+    }
+
+    /// <summary>Loads the active project's skill files off the UI thread and updates the count.</summary>
+    private async Task LoadProjectSkillsAsync(Project project)
+    {
+        var skills = await Task.Run(() => _skills.Load(project.Directory)).ConfigureAwait(true);
+        _projectSkills = skills;
+        ProjectSkillCount = skills.Count;
+    }
+
+    /// <summary>Replaces the sidebar chat log with the currently active store's sessions.</summary>
+    private void LoadLog()
+    {
+        ChatLog.Clear();
+        var sessions = ActiveProject is not null
+            ? _history.LoadFrom(ActiveProject.Directory)
+            : _history.Load();
+        foreach (var session in sessions)
+            ChatLog.Add(session);
+    }
+
+    /// <summary>Persists the chat log to whichever store is active: the project's, or the global one.</summary>
+    private void SaveLog()
+    {
+        if (ActiveProject is not null)
+            _history.SaveTo(ActiveProject.Directory, ChatLog.ToList());
+        else
+            _history.Save(ChatLog.ToList());
+    }
+
+    /// <summary>Combined skill text appended to the agent's system prompt (empty when no skills).</summary>
+    private string ProjectSkillsContext()
+    {
+        if (_projectSkills.Count == 0)
+            return "";
+
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine();
+        sb.AppendLine("The user has added project skills. Treat them as authoritative guidance for this project:");
+        foreach (var skill in _projectSkills)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"--- skill: {skill.Name} ---");
+            sb.AppendLine(skill.Content);
+        }
+        return sb.ToString();
     }
 
     /// <summary>Open a saved conversation from the chat log.</summary>
@@ -596,14 +667,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
 
         ChatLog.Remove(session);
-        _history.Save(ChatLog.ToList());
+        SaveLog();
 
         if (ReferenceEquals(session, _currentSession))
         {
             _currentSession = new ChatSession();
             Messages.Clear();
             StatusText = "";
-            SetMode(AppMode.Chat);
+            SetMode(ActiveProject is not null ? AppMode.Project : AppMode.Chat);
         }
     }
 
@@ -628,7 +699,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (!ChatLog.Contains(_currentSession))
             ChatLog.Insert(0, _currentSession);
 
-        _history.Save(ChatLog.ToList());
+        SaveLog();
     }
 
     private static string BuildSessionTitle(List<ChatTurn> turns)
@@ -638,6 +709,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (string.IsNullOrEmpty(text))
             return "New chat";
         return text.Length <= 40 ? text : text[..40] + "…";
+    }
+
+    /// <summary>Re-submit a user message's prompt as a new turn (the ↻ button on user bubbles).</summary>
+    [RelayCommand]
+    private void RerunPrompt(MessageViewModel? message)
+    {
+        if (message is null || IsBusy || !message.IsUser || string.IsNullOrWhiteSpace(message.Text))
+            return;
+
+        InputText = message.Text;
+        if (SendCommand.CanExecute(null))
+            SendCommand.Execute(null);
     }
 
     [RelayCommand]

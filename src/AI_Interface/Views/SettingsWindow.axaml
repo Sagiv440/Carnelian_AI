@@ -239,6 +239,12 @@
                             <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
                                        Text="Ask before every tool call, including reads and directory listings."/>
                         </StackPanel>
+
+                        <TextBlock Classes="section" Text="Permissions"/>
+                        <CheckBox Content="Allow the agent to install software"
+                                  IsChecked="{Binding AllowSoftwareInstall}"/>
+                        <TextBlock Classes="label" Margin="0,0,0,4" TextWrapping="Wrap"
+                                   Text="Lets the agent install missing tools/runtimes machine-wide via package managers (winget, apt, brew, …). When off, system install commands are refused. Installs still follow the approval setting above."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

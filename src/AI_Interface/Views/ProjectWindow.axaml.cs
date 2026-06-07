@@ -47,11 +47,12 @@ public partial class ProjectWindow : Window
         if (DataContext is not ProjectViewModel vm || !vm.CanCreate)
             return;
 
-        var project = vm.Build();
+        var project = vm.Build(); // Directory = <location>/<project name>
         try
         {
-            // A typed-in directory that doesn't exist yet is created so the agent has somewhere to work.
+            // Create the new project folder (named after the project) and its .AI workspace folder.
             Directory.CreateDirectory(project.Directory);
+            Directory.CreateDirectory(Path.Combine(project.Directory, ".AI", "chats"));
         }
         catch (Exception)
         {

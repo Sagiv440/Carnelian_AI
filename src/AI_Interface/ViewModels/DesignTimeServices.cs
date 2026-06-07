@@ -87,6 +87,13 @@ internal sealed class DesignChatHistoryService : IChatHistoryService
 {
     public IReadOnlyList<ChatSession> Load() => Array.Empty<ChatSession>();
     public void Save(IReadOnlyList<ChatSession> sessions) { }
+    public IReadOnlyList<ChatSession> LoadFrom(string projectDirectory) => Array.Empty<ChatSession>();
+    public void SaveTo(string projectDirectory, IReadOnlyList<ChatSession> sessions) { }
+}
+
+internal sealed class DesignProjectSkillService : IProjectSkillService
+{
+    public IReadOnlyList<ProjectSkill> Load(string projectDirectory) => Array.Empty<ProjectSkill>();
 }
 
 internal sealed class DesignHardwareService : IHardwareService
@@ -102,8 +109,9 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
 {
     public Task RunAsync(
         Project project, string model, IReadOnlyList<ChatMessage> conversation,
-        AgentApprovalMode approvalMode, string thinkingDirective, IProgress<string> status,
-        Action<string> onDelta, Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+        AgentApprovalMode approvalMode, string thinkingDirective, string projectSkills,
+        bool allowSoftwareInstall, IProgress<string> status, Action<string> onDelta,
+        Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         onDelta("Design-time project agent response.");
         return Task.CompletedTask;

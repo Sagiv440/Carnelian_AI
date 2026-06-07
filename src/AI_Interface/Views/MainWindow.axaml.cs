@@ -63,8 +63,8 @@ public partial class MainWindow : Window
             DataContext = App.Services.GetRequiredService<ProjectViewModel>()
         };
         var project = await dialog.ShowDialog<Project?>(this);
-        if (project is not null)
-            _vm?.ActivateProject(project);
+        if (project is not null && _vm is not null)
+            await _vm.ActivateProjectAsync(project);
     }
 
     private async void OnToolApprovalRequested(object? sender, ToolApprovalEventArgs e)
@@ -117,6 +117,12 @@ public partial class MainWindow : Window
     {
         if (sender is Button { DataContext: MessageViewModel message } && Clipboard is not null)
             await Clipboard.SetTextAsync(message.Text);
+    }
+
+    private void OnRerunMessage(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: MessageViewModel message } && _vm is not null)
+            _vm.RerunPromptCommand.Execute(message);
     }
 
     private void OnScrollToEndRequested(object? sender, EventArgs e)

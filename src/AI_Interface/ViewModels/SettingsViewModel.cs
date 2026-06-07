@@ -95,6 +95,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     // --- Project agent ---
 
     [ObservableProperty] private AgentApprovalMode _agentApproval;
+    [ObservableProperty] private bool _allowSoftwareInstall;
 
     public bool IsAutoRun
     {
@@ -163,6 +164,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _researchQueryCount = s.ResearchQueryCount;
         _thinkingEffort = s.ThinkingEffort;
         _agentApproval = s.AgentApproval;
+        _allowSoftwareInstall = s.AllowSoftwareInstall;
         _searchProvider = s.SearchProvider;
         _searxngUrl = s.SearxngUrl;
         _braveApiKey = s.BraveApiKey;
@@ -214,11 +216,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
         SaveAgent();
     }
 
+    partial void OnAllowSoftwareInstallChanged(bool value) => SaveAgent();
+
     private void SaveAgent()
     {
         if (_loading)
             return;
         _settings.Current.AgentApproval = AgentApproval;
+        _settings.Current.AllowSoftwareInstall = AllowSoftwareInstall;
         _settings.Save();
     }
 

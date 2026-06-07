@@ -37,14 +37,19 @@ public sealed class ProjectAgentService : IProjectAgentService
         IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode,
         string thinkingDirective,
+        string projectSkills,
+        bool allowSoftwareInstall,
         IProgress<string> status,
         Action<string> onDelta,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct)
     {
-        var tools = BuildTools();
+        var tools = BuildTools(allowSoftwareInstall);
 
-        var messages = new List<ChatMessage> { ChatMessage.System(SystemPrompt(project) + thinkingDirective) };
+        var messages = new List<ChatMessage>
+        {
+            ChatMessage.System(SystemPrompt(project, allowSoftwareInstall) + thinkingDirective + projectSkills)
+        };
         messages.AddRange(conversation);
 
         for (var step = 0; step < MaxSteps; step++)
@@ -69,7 +74,8 @@ public sealed class ProjectAgentService : IProjectAgentService
             foreach (var call in turn.ToolCalls)
             {
                 ct.ThrowIfCancellationRequested();
-                var result = await ExecuteAsync(project, call, approvalMode, status, onDelta, approve, ct)
+                var result = await ExecuteAsync(
+                    project, call, approvalMode, allowSoftwareInstall, status, onDelta, approve, ct)
                     .ConfigureAwait(false);
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
@@ -81,7 +87,7 @@ public sealed class ProjectAgentService : IProjectAgentService
     // ---- the agent loop's single-tool step -------------------------------------------------
 
     private async Task<string> ExecuteAsync(
-        Project project, AgentToolCall call, AgentApprovalMode approvalMode,
+        Project project, AgentToolCall call, AgentApprovalMode approvalMode, bool allowSoftwareInstall,
         IProgress<string> status, Action<string> onDelta,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
@@ -89,6 +95,21 @@ public sealed class ProjectAgentService : IProjectAgentService
         var (summary, detail, destructive) = Describe(project, call, path);
 
         onDelta($"\n🔧 {summary}{(string.IsNullOrEmpty(detail) ? "" : $"  `{detail}`")}\n");
+
+        // Permission gate: software installs require the project's "Allow software installation" setting.
+        if (call.Name == "install_software" && !allowSoftwareInstall)
+        {
+            onDelta("   ⛔ blocked — software installation is disabled for this project\n");
+            return "Software installation is disabled. Ask the user to enable " +
+                   "“Allow the agent to install software” in Settings → Project, then retry.";
+        }
+        if (call.Name == "run_command" && !allowSoftwareInstall &&
+            LooksLikeSystemInstall(GetString(call.Arguments, "command") ?? ""))
+        {
+            onDelta("   ⛔ blocked — that looks like a system install (disabled for this project)\n");
+            return "That command installs software machine-wide, which is disabled. Ask the user to " +
+                   "enable “Allow the agent to install software” in Settings → Project, then retry.";
+        }
 
         if (NeedsApproval(approvalMode, destructive))
         {
@@ -115,6 +136,8 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "delete_file"    => DeleteFile(project, path),
                 "delete_folder"  => DeleteFolder(project, path),
                 "run_command"    => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
+                                        .ConfigureAwait(false),
+                "install_software" => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
                                         .ConfigureAwait(false),
                 _ => $"Unknown tool '{call.Name}'."
             };
@@ -151,8 +174,28 @@ public sealed class ProjectAgentService : IProjectAgentService
         "delete_file"    => ("Delete file", path ?? "", true),
         "delete_folder"  => ("Delete folder", path ?? "", true),
         "run_command"    => ("Run command", GetString(call.Arguments, "command") ?? "", true),
+        "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
         _ => (call.Name, "", true)
     };
+
+    private static readonly string[] SystemInstallSignatures =
+    {
+        "winget install", "winget upgrade", "choco install", "choco upgrade", "scoop install",
+        "apt install", "apt-get install", "apt install", "dnf install", "yum install",
+        "pacman -s", "zypper install", "brew install", "snap install",
+        "npm install -g", "npm i -g", "npm install --global", "yarn global add", "pnpm add -g"
+    };
+
+    /// <summary>Heuristically detects a machine-wide package-manager install command (to gate run_command).</summary>
+    private static bool LooksLikeSystemInstall(string command)
+    {
+        var c = command.ToLowerInvariant();
+        foreach (var sig in SystemInstallSignatures)
+            if (c.Contains(sig))
+                return true;
+        // elevated install on Windows (e.g. "sudo …" handled above for *nix package managers)
+        return c.Contains("msiexec") || c.Contains("sudo apt") || c.Contains("sudo dnf") || c.Contains("sudo yum");
+    }
 
     private static bool WouldOverwrite(Project project, string? path) =>
         TryResolve(project.Directory, path, out var full, out _) && File.Exists(full);
@@ -355,8 +398,17 @@ public sealed class ProjectAgentService : IProjectAgentService
         return string.Join('\n', lines.Select(l => "   " + l));
     }
 
-    private static string SystemPrompt(Project project) =>
-        $"""
+    private static string SystemPrompt(Project project, bool allowSoftwareInstall)
+    {
+        var install = allowSoftwareInstall
+            ? "- If the project is missing software needed to run or build it (a runtime, SDK, CLI, or " +
+              "package manager package), you MAY install it with the install_software tool, which the user " +
+              "has permitted for this project. Prefer the platform's package manager."
+            : "- You may NOT install software machine-wide. If the project needs a missing runtime/SDK/tool, " +
+              "say so and ask the user to enable “Allow the agent to install software” in Settings → Project. " +
+              "Installing project-local dependencies (e.g. npm install in the project) is still fine.";
+
+        return $"""
         You are the project agent for "{project.Name}", working inside this directory:
           {project.Directory}
 
@@ -365,11 +417,13 @@ public sealed class ProjectAgentService : IProjectAgentService
         - Terminal commands run with the project root as the working directory.
         - Inspect before you change: list_directory / read_file before write_file or delete.
         - Make the smallest change that satisfies the request. Do not invent unrelated work.
+        {install}
         - When the task is complete, stop calling tools and reply with a short plain-text summary of
           what you did.
         """;
+    }
 
-    private static IReadOnlyList<AgentTool> BuildTools()
+    private static IReadOnlyList<AgentTool> BuildTools(bool allowSoftwareInstall)
     {
         static JsonElement Schema(object o) => JsonSerializer.SerializeToElement(o);
 
@@ -380,9 +434,16 @@ public sealed class ProjectAgentService : IProjectAgentService
             required = new[] { "path" }
         });
 
-        return new[]
+        var commandSchema = Schema(new
         {
-            new AgentTool("list_directory",
+            type = "object",
+            properties = new { command = new { type = "string", description = "The shell command line to run." } },
+            required = new[] { "command" }
+        });
+
+        var tools = new List<AgentTool>
+        {
+            new("list_directory",
                 "List the files and sub-folders of a directory in the project (path defaults to the root).",
                 Schema(new
                 {
@@ -390,9 +451,9 @@ public sealed class ProjectAgentService : IProjectAgentService
                     properties = new { path = new { type = "string", description = "Directory path relative to the project root. Omit or \".\" for the root." } }
                 })),
 
-            new AgentTool("read_file", "Read and return the full text of a file in the project.", pathOnly),
+            new("read_file", "Read and return the full text of a file in the project.", pathOnly),
 
-            new AgentTool("write_file",
+            new("write_file",
                 "Create a file or overwrite an existing one with the given text content.",
                 Schema(new
                 {
@@ -405,18 +466,25 @@ public sealed class ProjectAgentService : IProjectAgentService
                     required = new[] { "path", "content" }
                 })),
 
-            new AgentTool("create_folder", "Create a folder (and any missing parents) in the project.", pathOnly),
-            new AgentTool("delete_file", "Delete a file in the project.", pathOnly),
-            new AgentTool("delete_folder", "Delete a folder in the project and everything inside it.", pathOnly),
+            new("create_folder", "Create a folder (and any missing parents) in the project.", pathOnly),
+            new("delete_file", "Delete a file in the project.", pathOnly),
+            new("delete_folder", "Delete a folder in the project and everything inside it.", pathOnly),
 
-            new AgentTool("run_command",
+            new("run_command",
                 "Run a terminal command with the project root as the working directory; returns its exit code and output.",
-                Schema(new
-                {
-                    type = "object",
-                    properties = new { command = new { type = "string", description = "The shell command line to run." } },
-                    required = new[] { "command" }
-                }))
+                commandSchema)
         };
+
+        // Offered only when the project permits machine-wide software installation.
+        if (allowSoftwareInstall)
+        {
+            tools.Add(new AgentTool("install_software",
+                "Install software/tooling machine-wide (e.g. a runtime, SDK, CLI, or package-manager package) " +
+                "needed to run or build the project. Provide the full install command (e.g. 'winget install ...', " +
+                "'apt-get install -y ...', 'brew install ...').",
+                commandSchema));
+        }
+
+        return tools;
     }
 }

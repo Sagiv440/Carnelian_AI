@@ -215,7 +215,7 @@
                 <!-- Active project card (shown only in project mode) -->
                 <Border Grid.Row="6" Classes="card" CornerRadius="12" Padding="12,10" Margin="0,10,0,0"
                         IsVisible="{Binding HasActiveProject}">
-                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="📁 PROJECT" Classes="muted"/>
                         <Button Grid.Row="0" Grid.Column="1" Classes="chipclose" Content="✕" ToolTip.Tip="Exit project"
                                 VerticalAlignment="Center" Command="{Binding ExitProjectCommand}"/>
@@ -223,6 +223,10 @@
                                    Text="{Binding ActiveProjectName}" FontWeight="SemiBold" Margin="0,2,0,0"
                                    Foreground="{DynamicResource AppTextPrimary}" TextTrimming="CharacterEllipsis"
                                    ToolTip.Tip="{Binding ActiveProjectDirectory}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                                   Classes="muted" Margin="0,3,0,0"
+                                   IsVisible="{Binding HasProjectSkills}"
+                                   Text="{Binding ProjectSkillSummary}"/>
                     </Grid>
                 </Border>
 
@@ -249,7 +253,8 @@
 
             <!-- Transcript + floating Settings button (top right) -->
             <Grid Grid.Row="0">
-                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,6,6">
+                <!-- Right padding keeps bubbles from sliding under the floating Settings button. -->
+                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,48,6">
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:MessageViewModel">
@@ -308,11 +313,16 @@
                                         </Expander>
                                     </StackPanel>
 
-                                    <!-- Copy message (top-left, appears when the bubble is hovered) -->
-                                    <Button Classes="copy" Click="OnCopyMessage" Content="📋"
-                                            ToolTip.Tip="Copy message"
-                                            HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0"
-                                            IsVisible="{Binding $parent[Border].IsPointerOver}"/>
+                                    <!-- Message actions (top-right, appear on hover). Rerun only for user prompts. -->
+                                    <StackPanel Orientation="Horizontal" Spacing="4"
+                                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0"
+                                                IsVisible="{Binding $parent[Border].IsPointerOver}">
+                                        <Button Classes="copy" Click="OnRerunMessage" Content="↻"
+                                                ToolTip.Tip="Rerun this prompt"
+                                                IsVisible="{Binding IsUser}"/>
+                                        <Button Classes="copy" Click="OnCopyMessage" Content="📋"
+                                                ToolTip.Tip="Copy message"/>
+                                    </StackPanel>
                                     </Panel>
                                 </Border>
                             </DataTemplate>

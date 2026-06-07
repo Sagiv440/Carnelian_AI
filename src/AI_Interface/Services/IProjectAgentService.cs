@@ -20,6 +20,8 @@ public interface IProjectAgentService
     /// <param name="conversation">Prior user/assistant turns; the agent prepends its own system prompt.</param>
     /// <param name="approvalMode">Whether/when to ask the user before a tool runs.</param>
     /// <param name="thinkingDirective">Extra planning instruction appended to the system prompt (empty = off).</param>
+    /// <param name="projectSkills">Project skill files appended to the system prompt (empty = none).</param>
+    /// <param name="allowSoftwareInstall">When true, the agent may install software machine-wide.</param>
     /// <param name="status">Step progress (constructed on the UI thread, so it auto-marshals).</param>
     /// <param name="onDelta">Receives transcript text (action log + final answer). Must marshal to the UI thread.</param>
     /// <param name="approve">Asked to approve a single tool call; returns false to skip it.</param>
@@ -29,6 +31,8 @@ public interface IProjectAgentService
         IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode,
         string thinkingDirective,
+        string projectSkills,
+        bool allowSoftwareInstall,
         IProgress<string> status,
         Action<string> onDelta,
         Func<ToolApprovalRequest, Task<bool>> approve,
