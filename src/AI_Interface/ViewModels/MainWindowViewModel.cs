@@ -83,6 +83,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _thinkingEnabled;
 
+    /// <summary>When on, each completed reply is read aloud automatically. Persisted; composer 🔊 toggle.</summary>
+    [ObservableProperty]
+    private bool _autoSpeakEnabled;
+
+    /// <summary>True when a voice is set up — gates the composer's Auto-read toggle's visibility.</summary>
+    public bool IsVoiceConfigured => _speech.IsConfigured;
+
+    /// <summary>Re-evaluate <see cref="IsVoiceConfigured"/> (e.g. after Settings → Voice may have changed).</summary>
+    public void RefreshVoiceAvailability() => OnPropertyChanged(nameof(IsVoiceConfigured));
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private string _inputText = "";
@@ -171,6 +181,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _speech = speech;
         _agents = agents;
         _memory = memory;
+        _autoSpeakEnabled = settings.Current.AutoSpeakReplies;
 
         Modes = new[]
         {
@@ -392,6 +403,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedModeChanged(ModeOption value) =>
         OnPropertyChanged(nameof(SelectedSearchMode));
 
+    partial void OnAutoSpeakEnabledChanged(bool value)
+    {
+        _settings.Current.AutoSpeakReplies = value;
+        _settings.Save();
+    }
+
     private void SetMode(AppMode mode)
     {
         var option = Modes.FirstOrDefault(o => o.Mode == mode);
@@ -402,6 +419,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Called once after the view loads: connect and load the model list.</summary>
     public async Task InitializeAsync()
     {
+        RefreshVoiceAvailability(); // reflect a previously-installed voice in the composer toggle
         await RefreshAsync().ConfigureAwait(true);
     }
 
@@ -529,6 +547,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             {
                 StatusText = "Thinking of next steps…";
                 await GenerateSuggestionsAsync(client, model, prompt, assistant, ct);
+            }
+
+            // Auto-read the finished reply aloud when enabled and a voice is configured (fire-and-forget).
+            if (AutoSpeakEnabled && _speech.IsConfigured && !ct.IsCancellationRequested
+                && assistant.Text.Length > 0 && assistant.Text != "_(no response)_")
+            {
+                SpeakMessageCommand.Execute(assistant);
             }
         }
         catch (OperationCanceledException)

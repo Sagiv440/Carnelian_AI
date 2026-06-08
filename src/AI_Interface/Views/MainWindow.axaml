@@ -8,7 +8,7 @@
         mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
         x:Class="AI_Interface.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/app-logo.ico"
         Width="1000" Height="700"
         MinWidth="780" MinHeight="520"
         Title="AI Interface — Local AI">
@@ -572,6 +572,13 @@
                                       IsChecked="{Binding ThinkingEnabled}"
                                       Content="🧠 Thinking"
                                       ToolTip.Tip="Make the AI plan what it needs to do before answering (effort set in Settings)"/>
+
+                        <!-- Auto-read: speak every reply aloud. Shown only when a voice is set up. -->
+                        <ToggleButton Grid.Column="3" Classes="toolToggle" HorizontalAlignment="Right" Margin="8,0,8,0"
+                                      IsChecked="{Binding AutoSpeakEnabled}"
+                                      IsVisible="{Binding IsVoiceConfigured}"
+                                      Content="🔊 Auto-read"
+                                      ToolTip.Tip="Read each reply aloud automatically, in the voice that matches its language"/>
 
                         <Button Grid.Column="4" Classes="cta" Content="Send" MinWidth="96"
                                 Command="{Binding SendCommand}"

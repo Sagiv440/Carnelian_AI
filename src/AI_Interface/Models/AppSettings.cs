@@ -102,6 +102,9 @@ public sealed class AppSettings
     /// <summary>Path to a Piper voice model (<c>.onnx</c>); its <c>.onnx.json</c> sits beside it.</summary>
     public string PiperModelPath { get; set; } = "";
 
+    /// <summary>When on, each assistant reply is read aloud automatically (composer 🔊 toggle).</summary>
+    public bool AutoSpeakReplies { get; set; } = false;
+
     // --- Web search ---
 
     /// <summary>Which web search backend to use. Defaults to keyless DuckDuckGo.</summary>

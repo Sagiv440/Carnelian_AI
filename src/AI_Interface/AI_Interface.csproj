@@ -7,7 +7,7 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <ApplicationIcon>Assets/avalonia-logo.ico</ApplicationIcon>
+    <ApplicationIcon>Assets/app-logo.ico</ApplicationIcon>
     <AssemblyName>AI_Interface</AssemblyName>
     <RootNamespace>AI_Interface</RootNamespace>
     <!-- Trimming is disabled: it breaks reflection-based XAML/JSON. Enable selectively if needed. -->

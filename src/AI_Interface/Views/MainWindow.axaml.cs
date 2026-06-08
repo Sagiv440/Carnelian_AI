@@ -139,6 +139,8 @@ public partial class MainWindow : Window
 
         // Reload the top-bar agent picker once, so persona edits / new / deleted agents are reflected.
         _vm?.LoadAgents();
+        // Voice may have been installed/changed in Settings — refresh the composer's Auto-read toggle.
+        _vm?.RefreshVoiceAvailability();
         settingsVm.ConnectRequested -= OnConnect;
     }
 
