@@ -21,7 +21,11 @@ public sealed class Agent
     /// <summary>Avatar/emoji shown in the picker and transcript header.</summary>
     public string Glyph { get; set; } = "🤖";
 
-    /// <summary>Personality / system-prompt text (tone, expertise) injected into every mode's system prompt.</summary>
+    /// <summary>Short "when to use this agent" summary (the Markdown frontmatter <c>description</c>; optional).</summary>
+    public string Description { get; set; } = "";
+
+    /// <summary>Personality / system-prompt text (tone, expertise) injected into every mode's system prompt.
+    /// Stored as the Markdown <b>body</b> of the agent file.</summary>
     public string Persona { get; set; } = "";
 
     /// <summary>Optional preferred model "{provider}:{id}"; just pre-selects one — agent and model stay independent.</summary>

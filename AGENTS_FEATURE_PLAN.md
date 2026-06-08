@@ -59,7 +59,8 @@ Phases ship independently; each builds clean and is usable on its own.
 
 ### 4.1 New Models (`Models/`)
 
-- **`Agent.cs`** — the agent profile (serialized to JSON):
+- **`Agent.cs`** — the agent profile (serialized as a Claude-Code-style Markdown file — frontmatter +
+  persona body; see §4.2). Also carries an optional `Description`:
   ```csharp
   public sealed class Agent
   {
@@ -99,9 +100,15 @@ Phases ship independently; each builds clean and is usable on its own.
   }
   ```
   Built-ins are embedded (a static seed list); global customs live in
-  `%APPDATA%/AI_Interface/agents/*.json` (`~/.config/AI_Interface/agents` on Linux); project customs in
-  `<project>/.AI/agents/*.json`. Reuses the best-effort JSON-store pattern of `SettingsService` /
-  `ChatHistoryService`.
+  `%APPDATA%/AI_Interface/agents/*.md` (`~/.config/AI_Interface/agents` on Linux); project customs in
+  `<project>/.AI/agents/*.md`. Best-effort file store (mirrors `SettingsService` / `ChatHistoryService`).
+
+  **Agent file format — Claude-Code-style Markdown** (`AgentMarkdown`, so agents are portable between
+  tools): YAML-ish frontmatter between `---` fences (`name`, `description`, `glyph`, `model`, `tools`,
+  `skills`, `autonomy`, `memory`, `proactive`) followed by the **persona as the Markdown body**. A plain
+  `.md` with no frontmatter loads with its whole text as the persona; unknown keys are ignored; the
+  `tools` list maps common Claude-Code tool names (Read/Write/Edit/Bash → read/write/run). Legacy `*.json`
+  agents are auto-migrated to `*.md` on load.
 - **`IMemoryService` / `MemoryService`** *(Phase 4)* — `Load(scope)`, `Append(scope, entry)`,
   `Clear(scope)`; global memory in app-data, per-project in `<project>/.AI/memory.json`. Produces a
   compact "What you know about the user / this project" block for the system prompt.
@@ -219,7 +226,8 @@ model id moves to a tooltip). Suggestion chips render under proactive replies (P
 
 **New (Phase 1):**
 - `Models/Agent.cs`, `Models/AgentTools.cs`, `Models/AutonomyLevel.cs`, `Models/AgentScope.cs`
-- `Services/IAgentService.cs`, `Services/AgentService.cs` (built-in seed + global/project JSON stores)
+- `Services/IAgentService.cs`, `Services/AgentService.cs` (built-in seed + global/project Markdown stores),
+  `Services/AgentMarkdown.cs` (Claude-Code frontmatter + persona-body (de)serializer)
 - `Services/AgentPromptBuilder.cs` (compose system prompt from persona + skills + memory)
 - `ViewModels/AgentsViewModel.cs` (Agents settings panel) + agent-picker state on `MainWindowViewModel`
 
@@ -257,7 +265,7 @@ model id moves to a tooltip). Suggestion chips render under proactive replies (P
 1. ✅ `Agent` + enums + `IAgentService`/`AgentService` (built-in seed + global/project JSON) + DI + design stub.
 2. ✅ `AgentPromptBuilder`; route Chat/Web/Deep/Project system prompts through it (persona only).
 3. ✅ Settings: grouped **Editor/AI** left nav + **Agents** panel (list/create/edit/delete); top-bar agent picker; transcript header glyph.
-4. ⬜ Phase 2: per-agent skills (built-in packs + project `SKILL.md`) + tool allow-list → `ProjectAgentService`.
+4. ✅ Phase 2: per-agent skills (built-in packs + project `SKILL.md`) + tool allow-list → `ProjectAgentService`.
 5. ⬜ Phase 3: `AutonomyLevel` → approval/steps/planning mapping.
 6. ⬜ Phase 4: `IMemoryService` + prompt injection + `remember` tool + memory management UI.
 7. ⬜ Phase 5: proactive suggestion chips.
@@ -278,7 +286,8 @@ model id moves to a tooltip). Suggestion chips render under proactive replies (P
 
 **New:** `Models/Agent.cs`, `Models/AgentTools.cs`, `Models/AutonomyLevel.cs`, `Models/AgentScope.cs`,
 `Services/IAgentService.cs` + `AgentService.cs` (embedded seed `assistant`/`researcher`/`code-buddy`/`autopilot`;
-global customs in `<app-data>/AI_Interface/agents/*.json`, project customs in `<project>/.AI/agents/*.json`),
+global customs in `<app-data>/AI_Interface/agents/*.md`, project customs in `<project>/.AI/agents/*.md`,
+Claude-Code-style frontmatter + persona body via `AgentMarkdown`),
 `Services/AgentPromptBuilder.cs`, `ViewModels/AgentsViewModel.cs`, `ViewModels/SettingsCategory.cs`.
 
 **Edited:** `Models/AppSettings.cs` (`ActiveAgentId`), `App.axaml.cs` (DI), `ViewModels/DesignTimeServices.cs`
@@ -301,3 +310,36 @@ persisted into a session turn yet). The master list refreshes agent name/glyph o
 **To try it:** pick an agent in the top-bar picker (left of the model dropdown) → reply tone shifts and the
 transcript header shows its glyph/name. Settings → AI Features → **Agents**: Duplicate a built-in, edit its
 persona, restart → it persists. Open a project, add a per-project agent → it shows only with that project open.
+
+---
+
+## ✅ Phase 2 status — IMPLEMENTED (builds clean: 0 warnings, 0 errors)
+
+**New:** `Models/SkillCatalog.cs` (`SkillPack(Id, Name, Content)` + the built-in packs `cited-research` /
+`concise` / `careful-coding` / `step-by-step`); `AgentToolGroup` enum + `Allows`/`Restrict` on
+`Models/AgentTools.cs`; `ViewModels/AgentsViewModel.SkillChoice` (skills-checklist row).
+
+**Edited:** `Services/ProjectAgentService.cs` (+ `IProjectAgentService` + `DesignProjectAgentService`):
+`RunAsync` takes `AgentTools allowedTools`; `BuildTools` advertises only permitted groups; `ExecuteAsync`
+refuses a disallowed tool (defense in depth). `Services/AgentPromptBuilder.cs` (built-in skill packs appended
+in every mode via `SkillsBlock`/`PersonaPrefix`/`Compose`). `Services/AgentService.cs` (seed agents now set
+explicit `Tools` + default `Skills`). `ViewModels/MainWindowViewModel.cs` (passes `SelectedAgent.Tools` to
+the agent; `ProjectSkillsContext` filters project skills by the agent's selection). `ViewModels/AgentsViewModel.cs`
++ `Views/SettingsWindow.axaml` (tool-permission checkbox row + skills checklist). `CLAUDE.md`.
+
+**`AgentTools` unrestricted-vs-explicit representation:** `AllowAll` (defaults `true`). An un-customized
+agent — including the built-in Assistant if its tools weren't explicitly set — is unrestricted (full toolset,
+behaviour unchanged). The Agents editor calls `Restrict()` on the first permission toggle, snapshotting today's
+all-on state, then the per-tool booleans are authoritative. `install_software` is double-gated: agent
+`InstallSoftware=true` AND global `SoftwareInstallPermission != Never`.
+
+**Where the wiring lives:** tool filter — `ProjectAgentService.BuildTools` (advertise) + `ExecuteAsync`
+(refuse) keyed by `ToolGroupOf`/`AgentTools.Allows`. Built-in skills — `AgentPromptBuilder.SkillsBlock`
+(all modes). Project skills filter — `MainWindowViewModel.ProjectSkillsContext`.
+
+**Known Phase-2 limitations (by design):** Autonomy/Memory/Proactive still persist-only (Phases 3–5).
+
+**To try it:** Duplicate Code Buddy, uncheck **Write** under Tool permissions → in Project mode it can
+list/read but not write/create (the tool is absent and refused if forced). Pick an agent with the `concise`
+skill pack → replies get terser. With a project open, the agent's **Skills** checklist also lists the
+project's `SKILL.md` names; checking specific ones narrows what's loaded in Project mode.

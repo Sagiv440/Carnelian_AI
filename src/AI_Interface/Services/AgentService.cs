@@ -15,8 +15,6 @@ namespace AI_Interface.Services;
 /// </summary>
 public sealed class AgentService : IAgentService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-
     private readonly string _globalDir;
 
     /// <summary>Embedded, read-only roster (never written to disk).</summary>
@@ -77,7 +75,8 @@ public sealed class AgentService : IAgentService
         try
         {
             Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, agent.Id + ".json"), JsonSerializer.Serialize(agent, JsonOptions));
+            File.WriteAllText(Path.Combine(dir, agent.Id + AgentMarkdown.Extension), AgentMarkdown.Serialize(agent));
+            TryDelete(Path.Combine(dir, agent.Id + ".json")); // drop any legacy JSON for this id
         }
         catch
         {
@@ -90,9 +89,13 @@ public sealed class AgentService : IAgentService
         if (string.IsNullOrWhiteSpace(id) || IsBuiltInId(id))
             return; // built-ins are read-only
 
+        TryDelete(Path.Combine(_globalDir, id + AgentMarkdown.Extension));
         TryDelete(Path.Combine(_globalDir, id + ".json"));
         if (!string.IsNullOrWhiteSpace(projectDir))
+        {
+            TryDelete(Path.Combine(ProjectDir(projectDir), id + AgentMarkdown.Extension));
             TryDelete(Path.Combine(ProjectDir(projectDir), id + ".json"));
+        }
     }
 
     // ---- storage helpers -------------------------------------------------------------------
@@ -110,12 +113,13 @@ public sealed class AgentService : IAgentService
             if (!Directory.Exists(dir))
                 return agents;
 
-            foreach (var file in Directory.EnumerateFiles(dir, "*.json"))
+            // Primary format: Markdown (Claude-Code-style frontmatter + persona body), one file per agent.
+            foreach (var file in Directory.EnumerateFiles(dir, "*" + AgentMarkdown.Extension))
             {
                 try
                 {
-                    var agent = JsonSerializer.Deserialize<Agent>(File.ReadAllText(file));
-                    if (agent is null || string.IsNullOrWhiteSpace(agent.Id))
+                    var agent = AgentMarkdown.Parse(File.ReadAllText(file), Path.GetFileNameWithoutExtension(file));
+                    if (string.IsNullOrWhiteSpace(agent.Id))
                         continue;
                     agent.IsBuiltIn = false;
                     agent.Scope = scope; // the folder it sits in is authoritative
@@ -124,6 +128,32 @@ public sealed class AgentService : IAgentService
                 catch
                 {
                     // Skip a single unreadable/corrupt agent file rather than failing the whole load.
+                }
+            }
+
+            // One-time migration: convert any legacy *.json agents to *.md, then remove the JSON.
+            foreach (var file in Directory.EnumerateFiles(dir, "*.json"))
+            {
+                try
+                {
+                    var agent = JsonSerializer.Deserialize<Agent>(File.ReadAllText(file));
+                    if (agent is null || string.IsNullOrWhiteSpace(agent.Id))
+                        continue;
+                    // A .md already won for this id → the .json is stale; just drop it.
+                    if (agents.Any(a => string.Equals(a.Id, agent.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        TryDelete(file);
+                        continue;
+                    }
+                    agent.IsBuiltIn = false;
+                    agent.Scope = scope;
+                    File.WriteAllText(Path.Combine(dir, agent.Id + AgentMarkdown.Extension), AgentMarkdown.Serialize(agent));
+                    TryDelete(file);
+                    agents.Add(agent);
+                }
+                catch
+                {
+                    // Skip a corrupt/locked legacy file rather than failing the whole load.
                 }
             }
         }
@@ -152,6 +182,8 @@ public sealed class AgentService : IAgentService
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
             Autonomy = AutonomyLevel.Guided,
+            // Read-only in Project mode: a neutral helper inspects but doesn't change the project.
+            Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false },
             Persona =
                 "You are a helpful, neutral general-purpose assistant. Be accurate, clear, and concise. " +
                 "Give direct answers, admit uncertainty, and keep a friendly, professional tone."
@@ -164,6 +196,9 @@ public sealed class AgentService : IAgentService
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
             Autonomy = AutonomyLevel.Guided,
+            // Read-only: a research assistant inspects and cites, it doesn't mutate the project.
+            Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false },
+            Skills = new List<string> { "cited-research" },
             Persona =
                 "You are a meticulous research assistant. Favour evidence over speculation, prefer up-to-date " +
                 "web sources when a question is factual or time-sensitive, and cite claims inline with bracketed " +
@@ -177,6 +212,9 @@ public sealed class AgentService : IAgentService
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
             Autonomy = AutonomyLevel.Guided,
+            // Full file + command tools, but no machine-wide installs (kept off by default).
+            Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = false },
+            Skills = new List<string> { "careful-coding" },
             Persona =
                 "You are a careful senior software engineer. Read before you change, make the smallest correct " +
                 "change, and explain your reasoning briefly. Prefer idiomatic, well-tested code; flag risks, edge " +
@@ -190,6 +228,9 @@ public sealed class AgentService : IAgentService
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
             Autonomy = AutonomyLevel.Autonomous,
+            // The full toolset, including installs (still independently gated by SoftwareInstallPermission).
+            Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = true },
+            Skills = new List<string> { "step-by-step" },
             Persona =
                 "You are an autonomous builder. Take a goal, break it into steps, and drive it to completion with " +
                 "minimal back-and-forth. Be decisive and bias toward action, but never destroy work you can't " +

@@ -167,8 +167,8 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
 {
     public Task RunAsync(
         IChatClient client, Project project, string model, IReadOnlyList<ChatMessage> conversation,
-        AgentApprovalMode approvalMode, string personaPrefix, string thinkingDirective, string projectSkills,
-        SoftwareInstallPermission installPermission, IProgress<string> status,
+        AgentApprovalMode approvalMode, AgentTools allowedTools, string personaPrefix, string thinkingDirective,
+        string projectSkills, SoftwareInstallPermission installPermission, IProgress<string> status,
         Action<string> onActivity, Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {

@@ -553,6 +553,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // Activity (the 🔧 action log) goes to the collapsible "work" block; the final reply to the answer.
         await _agent.RunAsync(
             client, ActiveProject, model, conversation, _settings.Current.AgentApproval,
+            SelectedAgent?.Tools ?? new AgentTools(),
             PersonaPrefix(), ThinkingDirective(), ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
             activity => Dispatcher.UIThread.Post(() =>
             {
@@ -799,17 +800,34 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _history.Save(ChatLog.ToList());
     }
 
-    /// <summary>Combined skill text appended to the agent's system prompt (empty when no skills).</summary>
+    /// <summary>
+    /// Combined project SKILL.md text appended to the agent's system prompt (empty when none). If the
+    /// active agent selected specific project skills (by name, in its <see cref="Agent.Skills"/> list),
+    /// only those are included; if it selected none, all discovered project skills are included for
+    /// back-compat (built-in skill packs are handled independently by <see cref="AgentPromptBuilder"/>).
+    /// </summary>
     private string ProjectSkillsContext()
     {
         if (_projectSkills.Count == 0)
+            return "";
+
+        // The agent's project-skill selection = the entries that aren't built-in pack ids.
+        var selectedNames = (SelectedAgent?.Skills ?? new List<string>())
+            .Where(id => !SkillCatalog.IsBuiltInId(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var skills = selectedNames.Count == 0
+            ? _projectSkills
+            : _projectSkills.Where(s => selectedNames.Contains(s.Name)).ToList();
+
+        if (skills.Count == 0)
             return "";
 
         var sb = new StringBuilder();
         sb.AppendLine();
         sb.AppendLine();
         sb.AppendLine("The user has added project skills. Treat them as authoritative guidance for this project:");
-        foreach (var skill in _projectSkills)
+        foreach (var skill in skills)
         {
             sb.AppendLine();
             sb.AppendLine($"--- skill: {skill.Name} ---");

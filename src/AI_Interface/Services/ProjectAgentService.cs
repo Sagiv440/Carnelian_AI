@@ -33,6 +33,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         string model,
         IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode,
+        AgentTools allowedTools,
         string personaPrefix,
         string thinkingDirective,
         string projectSkills,
@@ -43,7 +44,9 @@ public sealed class ProjectAgentService : IProjectAgentService
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct)
     {
-        var tools = BuildTools(installPermission);
+        // A null allow-list (e.g. an agent with no tool profile) is treated as unrestricted.
+        allowedTools ??= new AgentTools();
+        var tools = BuildTools(allowedTools, installPermission);
 
         var messages = new List<ChatMessage>
         {
@@ -76,7 +79,7 @@ public sealed class ProjectAgentService : IProjectAgentService
             {
                 ct.ThrowIfCancellationRequested();
                 var result = await ExecuteAsync(
-                    project, call, approvalMode, installPermission, status, onActivity, approve, ct)
+                    project, call, approvalMode, allowedTools, installPermission, status, onActivity, approve, ct)
                     .ConfigureAwait(false);
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
@@ -89,7 +92,7 @@ public sealed class ProjectAgentService : IProjectAgentService
 
     private async Task<string> ExecuteAsync(
         Project project, AgentToolCall call, AgentApprovalMode approvalMode,
-        SoftwareInstallPermission installPermission,
+        AgentTools allowedTools, SoftwareInstallPermission installPermission,
         IProgress<string> status, Action<string> onActivity,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
@@ -97,6 +100,15 @@ public sealed class ProjectAgentService : IProjectAgentService
         var (summary, detail, destructive) = Describe(project, call, path);
 
         onActivity($"\n🔧 {summary}{(string.IsNullOrEmpty(detail) ? "" : $"  `{detail}`")}\n");
+
+        // Defense in depth: even though disallowed tools aren't advertised, refuse one if the model calls
+        // it anyway (e.g. it hallucinated a tool name) rather than silently running it.
+        if (ToolGroupOf(call.Name) is { } group && !allowedTools.Allows(group))
+        {
+            onActivity($"   ⛔ blocked — this agent isn't allowed to {PermissionLabel(group)}\n");
+            return $"This agent is not permitted to {PermissionLabel(group)}. The user can enable this in " +
+                   "Settings → AI Features → Agents (Tool permissions) for a custom agent, then retry.";
+        }
 
         // Is this a machine-wide software install (the install tool, or a run_command that looks like one)?
         var isInstallAction = call.Name == "install_software" ||
@@ -208,6 +220,27 @@ public sealed class ProjectAgentService : IProjectAgentService
 
     private static bool WouldOverwrite(Project project, string? path) =>
         TryResolve(project.Directory, path, out var full, out _) && File.Exists(full);
+
+    /// <summary>Maps a tool name to the <see cref="AgentToolGroup"/> that gates it (null = always allowed).</summary>
+    private static AgentToolGroup? ToolGroupOf(string toolName) => toolName switch
+    {
+        "list_directory" or "read_file"     => AgentToolGroup.ReadFiles,
+        "write_file" or "create_folder"     => AgentToolGroup.WriteFiles,
+        "delete_file" or "delete_folder"    => AgentToolGroup.DeleteFiles,
+        "run_command"                       => AgentToolGroup.RunCommands,
+        "install_software"                  => AgentToolGroup.InstallSoftware,
+        _                                   => null
+    };
+
+    private static string PermissionLabel(AgentToolGroup group) => group switch
+    {
+        AgentToolGroup.ReadFiles       => "read files or list directories",
+        AgentToolGroup.WriteFiles      => "create or write files and folders",
+        AgentToolGroup.DeleteFiles     => "delete files or folders",
+        AgentToolGroup.RunCommands     => "run terminal commands",
+        AgentToolGroup.InstallSoftware => "install software",
+        _                              => "use that tool"
+    };
 
     // ---- tools (all confined to the project directory) -------------------------------------
 
@@ -432,7 +465,14 @@ public sealed class ProjectAgentService : IProjectAgentService
         """;
     }
 
-    private static IReadOnlyList<AgentTool> BuildTools(SoftwareInstallPermission installPermission)
+    /// <summary>
+    /// Advertises only the tools the active agent is permitted to use. Each tool group is gated by the
+    /// agent's <see cref="AgentTools"/> allow-list; <c>install_software</c> additionally requires the global
+    /// <see cref="SoftwareInstallPermission"/> to not be <see cref="SoftwareInstallPermission.Never"/> (both
+    /// gates must allow). An unrestricted agent (the default) offers the full set, so behaviour is unchanged
+    /// when the user hasn't restricted anything.
+    /// </summary>
+    private static IReadOnlyList<AgentTool> BuildTools(AgentTools allowed, SoftwareInstallPermission installPermission)
     {
         static JsonElement Schema(object o) => JsonSerializer.SerializeToElement(o);
 
@@ -450,19 +490,23 @@ public sealed class ProjectAgentService : IProjectAgentService
             required = new[] { "command" }
         });
 
-        var tools = new List<AgentTool>
+        var tools = new List<AgentTool>();
+
+        if (allowed.Allows(AgentToolGroup.ReadFiles))
         {
-            new("list_directory",
+            tools.Add(new("list_directory",
                 "List the files and sub-folders of a directory in the project (path defaults to the root).",
                 Schema(new
                 {
                     type = "object",
                     properties = new { path = new { type = "string", description = "Directory path relative to the project root. Omit or \".\" for the root." } }
-                })),
+                })));
+            tools.Add(new("read_file", "Read and return the full text of a file in the project.", pathOnly));
+        }
 
-            new("read_file", "Read and return the full text of a file in the project.", pathOnly),
-
-            new("write_file",
+        if (allowed.Allows(AgentToolGroup.WriteFiles))
+        {
+            tools.Add(new("write_file",
                 "Create a file or overwrite an existing one with the given text content.",
                 Schema(new
                 {
@@ -473,19 +517,25 @@ public sealed class ProjectAgentService : IProjectAgentService
                         content = new { type = "string", description = "Full text to write to the file." }
                     },
                     required = new[] { "path", "content" }
-                })),
+                })));
+            tools.Add(new("create_folder", "Create a folder (and any missing parents) in the project.", pathOnly));
+        }
 
-            new("create_folder", "Create a folder (and any missing parents) in the project.", pathOnly),
-            new("delete_file", "Delete a file in the project.", pathOnly),
-            new("delete_folder", "Delete a folder in the project and everything inside it.", pathOnly),
+        if (allowed.Allows(AgentToolGroup.DeleteFiles))
+        {
+            tools.Add(new("delete_file", "Delete a file in the project.", pathOnly));
+            tools.Add(new("delete_folder", "Delete a folder in the project and everything inside it.", pathOnly));
+        }
 
-            new("run_command",
+        if (allowed.Allows(AgentToolGroup.RunCommands))
+        {
+            tools.Add(new("run_command",
                 "Run a terminal command with the project root as the working directory; returns its exit code and output.",
-                commandSchema)
-        };
+                commandSchema));
+        }
 
-        // Offered only when the project permits machine-wide software installation (Ask or Allow).
-        if (installPermission != SoftwareInstallPermission.Never)
+        // install_software needs BOTH the agent's permission AND the project's software-install setting.
+        if (allowed.Allows(AgentToolGroup.InstallSoftware) && installPermission != SoftwareInstallPermission.Never)
         {
             tools.Add(new AgentTool("install_software",
                 "Install software/tooling machine-wide (e.g. a runtime, SDK, CLI, or package-manager package) " +

@@ -99,6 +99,12 @@ same name when re-serialising the running conversation. Gemini has no system rol
 requests → feed each result back as a `ChatRole.Tool` message → repeat until the model replies in plain
 text (`MaxSteps` cap). Tools: `list_directory`, `read_file`, `write_file`, `create_folder`,
 `delete_file`, `delete_folder`, `run_command`, and `install_software` (offered only when permitted).
+- **Per-agent tool allow-list (Phase 2).** `RunAsync` takes the active agent's `AgentTools`; `BuildTools`
+  advertises **only the permitted groups** (ReadFiles→list/read, WriteFiles→write/create, DeleteFiles→
+  delete, RunCommands→run_command, InstallSoftware→install_software). `ExecuteAsync` refuses a disallowed
+  tool if the model calls it anyway (defense in depth). `install_software` needs **both** the agent's
+  `InstallSoftware=true` **and** `SoftwareInstallPermission != Never`. An **unrestricted** `AgentTools`
+  (`AllowAll=true`, the default for an un-customized agent) offers the full set, so behaviour is unchanged.
 - **Sandbox.** File ops are confined to the project directory (`TryResolve` rejects paths outside it);
   commands run with the project root as the working directory.
 - **Approval.** `AgentApprovalMode` (Settings → Project): `AutoRun` / `ConfirmDestructive` /
@@ -117,11 +123,14 @@ text (`MaxSteps` cap). Tools: `list_directory`, `read_file`, `write_file`, `crea
   through `SaveLog()` / `LoadLog()`.
 - **Project skills.** On activation `IProjectSkillService` scans the project for skill files (`SKILL.md`,
   `*.skill.md`, or markdown under a `skills` folder; bounded, skipping `.AI`/`.git`/`node_modules`/…)
-  and their text is appended to the agent's system prompt.
+  and their text is appended to the agent's system prompt. **Phase 2:** if the active agent's `Skills`
+  list names specific project skills (`MainWindowViewModel.ProjectSkillsContext`), only those are included;
+  if it names none, **all** discovered project skills are included (back-compat).
 
-**Agents — selectable persona** (`IAgentService`/`AgentService`, `AgentPromptBuilder`). An *agent is data*
-(`Models/Agent.cs`): Id/Name/Glyph/**Persona** + forward-compat fields (Skills/Tools/Autonomy/MemoryEnabled/
-Proactive) that are **persisted-only** today — Phase 1 wires **only Persona** into behaviour. The registry
+**Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
+An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (wired into
+behaviour, Phase 2) + still-forward-compat fields (Autonomy/MemoryEnabled/Proactive, persisted-only). The
+registry
 de-dupes three sources by id with **project overriding global overriding built-in**: an embedded read-only
 seed (`assistant`/`researcher`/`code-buddy`/`autopilot`, `IsBuiltIn=true`), global customs in
 `<app-data>/AI_Interface/agents/*.json`, and per-project customs in `<project>/.AI/agents/*.json`
@@ -129,13 +138,23 @@ seed (`assistant`/`researcher`/`code-buddy`/`autopilot`, `IsBuiltIn=true`), glob
 `AppSettings.ActiveAgentId`. `MainWindowViewModel` holds the `Agents` collection + `SelectedAgent` (top-bar
 picker beside the model dropdown — agent and model are independent) and reloads on project enter/exit.
 `AgentPromptBuilder.Compose(agent, baseInstructions, thinkingDirective)` builds the streaming modes' system
-prompt (persona → base → Thinking), and `PersonaPrefix(agent)` is threaded into `DeepResearchService.RunAsync`
-and `ProjectAgentService.RunAsync` so the persona applies in **all four modes**. The assistant
-`MessageViewModel` carries `AgentGlyph`/`AgentName`; the transcript header shows the agent's glyph + name
-(model id moves to a tooltip). Settings → AI Features → **Agents** is a master/detail panel (`AgentsViewModel`):
-list with a built-in badge, **＋ New** / **Duplicate** (always a global custom) / **Delete** (disabled for
-built-ins), editing Name / Glyph / Persona / Default model (the provider-aware picker). The main window calls
+prompt (persona → base → **built-in skill packs** → Thinking), and `PersonaPrefix(agent)` (now persona +
+skills) is threaded into `DeepResearchService.RunAsync` and `ProjectAgentService.RunAsync` so persona +
+skills apply in **all four modes**. The assistant `MessageViewModel` carries `AgentGlyph`/`AgentName`; the
+transcript header shows the agent's glyph + name (model id moves to a tooltip). Settings → AI Features →
+**Agents** is a master/detail panel (`AgentsViewModel`): list with a built-in badge, **＋ New** / **Duplicate**
+(always a global custom) / **Delete** (disabled for built-ins), editing Name / Glyph / Persona / Default model
+/ **Tool permissions** (checkboxes) / **Skills** (checklist; built-in + project). The main window calls
 `AgentsPanel.Initialize(projectDir)` before opening Settings and `vm.LoadAgents()` after it closes.
+
+**Skills (Phase 2).** Two kinds: **built-in skill packs** (`Models/SkillCatalog.cs` — `cited-research`,
+`concise`, `careful-coding`, `step-by-step`; `SkillPack(Id, Name, Content)`) and **project `SKILL.md`**
+files. `Agent.Skills` stores a mix of built-in pack **ids** and project-skill **names**. `AgentPromptBuilder`
+appends selected packs' content in every mode; project skills are resolved (and filtered by selection) only
+in Project mode. **`AgentTools` "unrestricted vs explicit":** `AllowAll` defaults to `true` (un-customized
+agents are unrestricted — full toolset, unchanged behaviour); the Agents editor calls `Restrict()` on the
+first checkbox toggle to switch to explicit per-tool flags. Built-in seed agents set explicit allow-lists
+(Assistant/Researcher = read-only, Code Buddy = file+command, Autopilot = +install) so they differ.
 
 **Model Config — hardware-aware recommender.** `IHardwareService` scans CPU/RAM and GPU/VRAM
 (nvidia-smi first, best-effort cross-platform). `ModelCatalog` (in `Models/ModelCatalog.cs`) ranks a

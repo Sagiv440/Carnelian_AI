@@ -417,6 +417,46 @@
                                             </DataTemplate>
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
+
+                                    <!-- Tool permissions (Project mode) -->
+                                    <TextBlock Classes="label" Text="Tool permissions (Project mode)"/>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
+                                               Margin="0,0,0,4"
+                                               Text="Which project-agent tools this agent may use. Disabled tools aren't offered to the model (and are refused if it tries anyway). Installs are also gated by Settings → Autonomy &amp; Memory."/>
+                                    <WrapPanel Orientation="Horizontal" MaxWidth="440" HorizontalAlignment="Left">
+                                        <CheckBox Content="Read" IsChecked="{Binding ToolReadFiles}" Margin="0,0,12,0"
+                                                  ToolTip.Tip="list_directory, read_file"/>
+                                        <CheckBox Content="Write" IsChecked="{Binding ToolWriteFiles}" Margin="0,0,12,0"
+                                                  ToolTip.Tip="write_file, create_folder"/>
+                                        <CheckBox Content="Delete" IsChecked="{Binding ToolDeleteFiles}" Margin="0,0,12,0"
+                                                  ToolTip.Tip="delete_file, delete_folder"/>
+                                        <CheckBox Content="Run commands" IsChecked="{Binding ToolRunCommands}" Margin="0,0,12,0"
+                                                  ToolTip.Tip="run_command"/>
+                                        <CheckBox Content="Install software" IsChecked="{Binding ToolInstallSoftware}"
+                                                  ToolTip.Tip="install_software (still requires the global software-install permission)"/>
+                                    </WrapPanel>
+
+                                    <!-- Skills -->
+                                    <TextBlock Classes="label" Text="Skills"/>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
+                                               Margin="0,0,0,4"
+                                               Text="Built-in packs apply in every mode; project skills (from this project's SKILL.md files) apply only in Project mode. Open a project to see its skills here."/>
+                                    <ItemsControl ItemsSource="{Binding Skills}" MaxWidth="440" HorizontalAlignment="Left">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:SkillChoice">
+                                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
+                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
+                                                              Content="{Binding Name}" VerticalAlignment="Center"/>
+                                                    <Border Grid.Column="2" Background="#33808080" CornerRadius="3"
+                                                            Padding="5,1" VerticalAlignment="Center"
+                                                            IsVisible="{Binding IsProject}">
+                                                        <TextBlock Text="project" FontSize="10"
+                                                                   Foreground="{DynamicResource AppTextSecondary}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                             </ScrollViewer>
                         </Grid>
