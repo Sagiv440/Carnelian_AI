@@ -100,8 +100,9 @@ same name when re-serialising the running conversation. Gemini has no system rol
 requests → feed each result back as a `ChatRole.Tool` message → repeat until the model replies in plain
 text (step-budget cap — a `maxSteps` arg to `RunAsync`, set by the active agent's autonomy; `≤0` falls back
 to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `create_folder`,
-`delete_file`, `delete_folder`, `run_command`, `install_software` (offered only when permitted), and
-`remember` (offered only when memory is on — see **Memory**).
+`delete_file`, `delete_folder`, `run_command`, `install_software` (offered only when permitted),
+`remember` (offered only when memory is on — see **Memory**), and `create_skill` (always offered —
+see **Project skills**).
 - **Per-agent tool allow-list (Phase 2).** `RunAsync` takes the active agent's `AgentTools`; `BuildTools`
   advertises **only the permitted groups** (ReadFiles→list/read, WriteFiles→write/create, DeleteFiles→
   delete, RunCommands→run_command, InstallSoftware→install_software). `ExecuteAsync` refuses a disallowed
@@ -140,10 +141,18 @@ to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `c
   exiting restores the global log (`%APPDATA%/AI_Interface/chats.json`). The VM routes every save/load
   through `SaveLog()` / `LoadLog()`.
 - **Project skills.** On activation `IProjectSkillService` scans the project for skill files (`SKILL.md`,
-  `*.skill.md`, or markdown under a `skills` folder; bounded, skipping `.AI`/`.git`/`node_modules`/…)
-  and their text is appended to the agent's system prompt. **Phase 2:** if the active agent's `Skills`
-  list names specific project skills (`MainWindowViewModel.ProjectSkillsContext`), only those are included;
-  if it names none, **all** discovered project skills are included (back-compat).
+  `*.skill.md`, or any markdown under a `skills` folder; bounded, skipping `.AI`/`.git`/`node_modules`/…)
+  and their text is appended to the agent's system prompt. The project's own **`.AI/skills/`** folder is
+  scanned **explicitly** (the general walk skips `.AI`), so any `*.md` dropped there loads as guidance.
+  **Phase 2:** if the active agent's `Skills` list names specific project skills
+  (`MainWindowViewModel.ProjectSkillsContext`), only those are included; if it names none, **all** discovered
+  project skills are included (back-compat). After every project-agent turn the VM re-scans
+  (`LoadProjectSkillsAsync`) so a freshly created skill loads on the next turn.
+- **`create_skill` tool.** Always offered in Project mode (writes only under `.AI/skills/`, so it isn't
+  gated by the `AgentTools` allow-list). `ProjectAgentService.CreateSkill` writes
+  `.AI/skills/<slug>.skill.md` (frontmatter `name`/`description` + the model-authored Markdown body); the
+  path is computed from a slugified name so the model can't write outside the skills folder. Intended for
+  "create a skill for &lt;subject&gt;" — the model authors thorough, structured guidance and the tool persists it.
 
 **Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
 An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2) +

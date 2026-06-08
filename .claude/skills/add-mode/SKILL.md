@@ -79,12 +79,29 @@ handed the resolved `IChatClient`):
   `<project>/.AI/chats` (via `IChatHistoryService.LoadFrom/SaveTo`), and skill files found in the project
   (`IProjectSkillService`) are appended to the agent's system prompt. `MainWindowViewModel` routes chat
   save/load through `SaveLog()` / `LoadLog()` depending on whether a project is active.
+- **Project skills & `create_skill`.** `IProjectSkillService` scans `SKILL.md` / `*.skill.md` / any `*.md`
+  under a `skills/` folder, **and explicitly `<project>/.AI/skills/`** (the general walk skips `.AI`). The
+  agent also has an always-on `create_skill` tool (`ProjectAgentService.CreateSkill`) that writes
+  `.AI/skills/<slug>.skill.md` — use this shape (a meta tool writing only to a fixed, slugified path) for
+  any "author a project file" tool. After each agent turn the VM re-scans (`LoadProjectSkillsAsync`).
+- **Memory & a `remember` tool.** When memory is active (`MainWindowViewModel.MemoryActive()`), the agent
+  gets a `remember` tool and `MemoryBlock()` is woven into the prompt. A new tool that isn't a file/command
+  op (like `remember`/`create_skill`) returns `null` from `ToolGroupOf`, so it bypasses the `AgentTools`
+  allow-list — gate it by its own flag instead, and mark it non-destructive in `Describe`.
 
 ## Opening a dialog from a mode (the Project / Settings window pattern)
 Views are mostly data-templated, but dialogs are opened imperatively: the VM raises an event
 (`ProjectRequested`, `SettingsRequested`), the code-behind resolves the dialog's VM from the static
 `App.Services` and `ShowDialog`s it, then calls back into the VM with the result (e.g. `ActivateProject`).
 Reuse this — never `new` a window or service inside a VM.
+
+## Persona, skills & memory (cross-cutting, not a mode)
+Every mode's system prompt carries the active **agent's** persona + built-in skill packs + persistent
+**memory**, built by `AgentPromptBuilder`. For a streaming mode, compose the system prompt with
+`AgentPromptBuilder.Compose(SelectedAgent, baseInstructions, ThinkingDirective(), MemoryBlock())` (as Chat
+does); for a service-owned prompt, prepend `PersonaPrefix()` (which the VM now builds with `MemoryBlock()`,
+as Web / Deep / Project do). Do this so your mode speaks in the chosen agent's voice and recalls memory —
+don't hand-roll a bare system prompt. Memory is gated by `MemoryActive()` (global switch + agent opt-in).
 
 ## Thinking toggle (cross-cutting, not a mode)
 The composer's 🧠 Thinking toggle (`MainWindowViewModel.ThinkingEnabled`) appends a planning instruction,

@@ -170,6 +170,8 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "install_software" => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
                                         .ConfigureAwait(false),
                 "remember"       => Remember(project, GetString(call.Arguments, "text"), GetString(call.Arguments, "scope")),
+                "create_skill"   => CreateSkill(project, GetString(call.Arguments, "name"),
+                                        GetString(call.Arguments, "content"), GetString(call.Arguments, "description")),
                 _ => $"Unknown tool '{call.Name}'."
             };
         }
@@ -207,6 +209,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "run_command"    => ("Run command", GetString(call.Arguments, "command") ?? "", true),
         "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
         "remember"       => ("Remember a note", GetString(call.Arguments, "text") ?? "", false),
+        "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
         _ => (call.Name, "", true)
     };
 
@@ -225,6 +228,45 @@ public sealed class ProjectAgentService : IProjectAgentService
 
         _memory.Add(MemoryScope.Project, text, "project-agent", project.Directory);
         return $"Remembered (this project): {text}";
+    }
+
+    /// <summary>
+    /// Writes a reusable project skill to <c>&lt;project&gt;/.AI/skills/&lt;slug&gt;.skill.md</c> (frontmatter +
+    /// the model-authored body). The path is computed here from a slugified name, so the model can't write
+    /// outside the skills folder. Files here load as project guidance the next time the project is opened.
+    /// </summary>
+    private static string CreateSkill(Project project, string? name, string? content, string? description)
+    {
+        name = (name ?? "").Trim();
+        content = (content ?? "").Trim();
+        if (name.Length == 0 || content.Length == 0)
+            return "Provide both a skill 'name' and 'content'.";
+
+        var dir = Path.Combine(project.Directory, ".AI", "skills");
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, Slugify(name) + ".skill.md");
+
+        var sb = new StringBuilder();
+        sb.Append("---\n");
+        sb.Append("name: ").Append(name.Replace('\n', ' ').Replace('\r', ' ')).Append('\n');
+        if (!string.IsNullOrWhiteSpace(description))
+            sb.Append("description: ").Append(description!.Replace('\n', ' ').Replace('\r', ' ').Trim()).Append('\n');
+        sb.Append("---\n\n");
+        sb.Append(content).Append('\n');
+        File.WriteAllText(file, sb.ToString());
+
+        return $"Created skill '{name}' at {Rel(project, file)} ({content.Length} chars). " +
+               "It loads as project guidance the next time this project is opened.";
+    }
+
+    /// <summary>Lowercases a name and reduces it to a safe filename slug (letters/digits → '-' runs collapsed).</summary>
+    private static string Slugify(string s)
+    {
+        var slug = new string(s.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        while (slug.Contains("--"))
+            slug = slug.Replace("--", "-");
+        slug = slug.Trim('-');
+        return slug.Length == 0 ? "skill" : slug;
     }
 
     private static readonly string[] SystemInstallSignatures =
@@ -571,6 +613,25 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "'apt-get install -y ...', 'brew install ...').",
                 commandSchema));
         }
+
+        // create_skill: a meta tool that writes a reusable guidance file under .AI/skills/. Always offered
+        // (it only writes to that controlled location), so "create a skill for X" works with any agent.
+        tools.Add(new AgentTool("create_skill",
+            "Create a reusable project skill file under .AI/skills/ that captures how to work in this project " +
+            "(purpose, conventions, architecture, workflow steps, do/don't rules, examples). Use this when the " +
+            "user asks to \"create a skill for <subject>\". Write thorough, well-structured Markdown in 'content' " +
+            "with clear section headings so future sessions load it as authoritative project guidance.",
+            Schema(new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string", description = "Short skill title, e.g. \"API conventions\"." },
+                    description = new { type = "string", description = "One-line summary of what the skill covers." },
+                    content = new { type = "string", description = "The full skill guidance as structured Markdown (sections, do/don't, examples)." }
+                },
+                required = new[] { "name", "content" }
+            })));
 
         // remember: not a file/command tool, so it isn't gated by the allow-list — only by the memory switch.
         if (memoryEnabled)

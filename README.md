@@ -136,6 +136,17 @@ software-install permission allows it *and* the agent's tools include installs.
 the composer to edit and send. Toggle it per agent in the Agents editor — the built-in **Autopilot** is
 proactive out of the box.
 
+### Project skills
+
+Drop Markdown guidance files in a project's **`.AI/skills/`** folder (any `*.md`) — when you open the
+project, the agent reads them as authoritative "how to work here" guidance (conventions, architecture,
+do/don't rules). Files named `SKILL.md` / `*.skill.md` and anything under a `skills/` folder
+(e.g. `.claude/skills/`) are picked up too.
+
+You can also have the agent **write one for you**: in a project, ask *"create a skill for our API
+conventions"* and it uses its `create_skill` tool to author a structured skill file under `.AI/skills/`.
+The new skill loads as guidance on the next turn.
+
 **Custom agents** are stored as portable **Markdown files** (Claude-Code-style frontmatter + a persona
 body), so you can move them between tools:
 

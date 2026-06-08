@@ -704,6 +704,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             }),
             RequestToolApprovalAsync,
             ct);
+
+        // The turn may have created/edited project skills (create_skill, or write_file under .AI/skills) —
+        // re-scan so they load on the next turn and the sidebar's "N skills" count stays current.
+        if (ActiveProject is not null)
+            await LoadProjectSkillsAsync(ActiveProject);
     }
 
     /// <summary>Asks the view to confirm a tool call (raised on a background thread, marshalled to the UI).</summary>

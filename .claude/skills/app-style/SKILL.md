@@ -54,6 +54,11 @@ near-flat red-orange) only for backward compatibility; prefer the solid `AppAcce
 - `Border.card` — flat surface panel: `AppSurfaceBrush` + 1px `AppSurfaceBorderBrush`, 4px radius, no shadow.
 - `TextBlock.brand` — the product/title text: `AppTextPrimary`, SemiBold (plain, not gradient-filled).
 - `TextBlock.muted` — secondary 12px text in `AppTextSecondary`.
+- `Button.nav` / `Button.nav.active` — left-rail entries (shared by the sidebar chat log **and** the
+  Settings category nav); `.active` gets a translucent-accent fill. `TextBlock.navheader` — the muted
+  group headers above them. Reuse these for any left-rail list.
+- `Button.suggestion` — proactive next-step chips below an assistant answer (rounded ~13px accent-outlined
+  pill, accent text, translucent-accent hover); defined locally in `MainWindow.axaml`.
 - Class-toggled state from data: `Classes.user="{Binding IsUser}"`, `Classes.online="{Binding IsConnected}"`.
 
 ## Conventions
@@ -72,18 +77,20 @@ near-flat red-orange) only for backward compatibility; prefer the solid `AppAcce
   sitting at the old default are changed).
 
 ## Composer toggles & dialogs
-- **Per-prompt toolbar toggles** (Web search, Thinking) are `ToggleButton`s with the local `toolToggle`
-  pill style in `MainWindow.axaml` — the `:checked` state tints with a translucent accent (`#33F2542D`) +
-  accent border. Add new composer toggles the same way so they read as a set.
+- **Per-prompt toolbar toggles** (Thinking) are `ToggleButton`s with the local `toolToggle` pill style in
+  `MainWindow.axaml` — the `:checked` state tints with a translucent accent (`#33F2542D`) + accent border.
+  Add new composer toggles the same way so they read as a set. (Search scope — Local/Web/Deep — is a
+  `ComboBox` beside them, not a toggle.)
 - **Dialogs** (Settings, Project, tool approval, Model Config) are plain `Window`s whose content is
   wrapped in a `Border.card`, using `Button.cta` for the primary action and `Button.ghost` for
   Cancel/secondary. Match this for any new dialog instead of styling a bare window.
-- **Settings layout — left category rail.** `SettingsWindow` puts its top-level categories in a left
-  sidebar: a `TabControl` with `Classes="settings"` + `TabStripPlacement="Left"`. The strip uses the
-  lighter `AppSurfaceBrush` tone; content renders on the right over `AppWindowBackground` with a hairline
-  divider. The selected entry gets a translucent-accent fill plus the Fluent selection bar
-  (`Border#PART_SelectedPipe`) recolored to the accent. Reuse this for any tabbed dialog with several
-  categories.
+- **Settings layout — grouped left nav + content host.** `SettingsWindow` is **not** a `TabControl` (a
+  flat one can't show non-clickable group headers). It's a left rail of muted `TextBlock.navheader` group
+  headers (**EDITOR FEATURES** / **AI FEATURES**) with `Button.nav` entries under each, beside a right
+  `Panel` whose category panels toggle by `IsVisible` bound to per-category bools on `SettingsViewModel`
+  (`SelectCategoryCommand` + the `SettingsCategory` enum). The selected entry uses `Button.nav.active`.
+  Reuse this grouped-nav shape (not a TabControl) for any dialog that needs section headers; the *Models*
+  category nests a small inner `TabControl` only for its Local AI / Web Models sub-tabs.
 - **Sidebar tabs** (Chat Log / Files, shown only with a project) use the local `Button.tab` /
   `Button.tab.active` style in `MainWindow.axaml`; the Files tab hosts a `TreeView.files`. Reuse those
   classes for any new sidebar tab rather than restyling from scratch.

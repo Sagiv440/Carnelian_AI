@@ -447,3 +447,25 @@ Non-proactive agents behave exactly as before (no extra call).
 
 **Roadmap complete:** all five phases (segmentation → skills/tools → autonomy → memory → proactive) are
 implemented; `Agent` has no persisted-but-unwired fields left.
+
+---
+
+## ✅ Post-roadmap — Project skills (`.AI/skills/`) + `create_skill` (builds clean: 0/0)
+
+A follow-on to the skills work, so a project can teach the agent how to work in it:
+
+- **`.AI/skills/` is now read on open.** `ProjectSkillService` previously skipped the whole `.AI` folder,
+  so `.AI/skills/` never loaded (despite the doc claiming otherwise). It now scans that folder
+  **explicitly** (in addition to `SKILL.md` / `*.skill.md` / any `*.md` under a `skills/` folder elsewhere).
+  Any `*.md` dropped in `.AI/skills/` loads as authoritative project guidance; with a default/built-in
+  agent, all discovered skills are included (`ProjectSkillsContext`).
+- **`create_skill` tool.** Always offered in Project mode (writes only under `.AI/skills/`, so it isn't
+  gated by the tool allow-list). `ProjectAgentService.CreateSkill` writes `.AI/skills/<slug>.skill.md`
+  (frontmatter `name`/`description` + the model-authored body); the slugified path keeps writes inside the
+  skills folder. Intended for "create a skill for &lt;subject&gt;".
+- **Auto-reload.** After every project-agent turn the VM re-scans (`LoadProjectSkillsAsync`), so a freshly
+  created/edited skill loads on the next turn and the sidebar's "N skills" count stays current.
+
+**To try it:** drop a `.md` in `<project>/.AI/skills/`, open the project → the agent treats it as guidance
+(card shows the count). Or, in a project, ask "create a skill for our API conventions" → it writes one
+there (needs a tool-calling model).

@@ -9,8 +9,10 @@ namespace AI_Interface.Services;
 /// <summary>
 /// Default <see cref="IProjectSkillService"/>. Walks the project tree (bounded in depth, file count and
 /// size, skipping heavy build/VCS folders) collecting skill files. A file counts as a skill when it is
-/// named <c>SKILL.md</c>, ends with <c>.skill.md</c>, or is a markdown file inside a folder named
-/// "skills" (so both this app's <c>.AI/skills</c> and the <c>.claude/skills</c> convention are picked up).
+/// named <c>SKILL.md</c>, ends with <c>.skill.md</c>, or is any markdown file inside a folder named
+/// "skills" (so the <c>.claude/skills</c> convention is picked up). The project's own
+/// <c>.AI/skills</c> folder is scanned <b>explicitly</b> (the general walk skips <c>.AI</c>, which also
+/// holds chats/agents/memory), so any <c>*.md</c> dropped there loads as project guidance.
 /// </summary>
 public sealed class ProjectSkillService : IProjectSkillService
 {
@@ -30,7 +32,15 @@ public sealed class ProjectSkillService : IProjectSkillService
         try
         {
             if (!string.IsNullOrWhiteSpace(projectDirectory) && Directory.Exists(projectDirectory))
+            {
+                // Scan the dedicated .AI/skills folder first — the general walk skips .AI (it also holds
+                // chats/agents/memory), but these are the project's own "how to work here" guides.
+                var aiSkills = Path.Combine(projectDirectory, ".AI", "skills");
+                if (Directory.Exists(aiSkills))
+                    Walk(aiSkills, 0, skills);
+
                 Walk(projectDirectory, 0, skills);
+            }
         }
         catch
         {
