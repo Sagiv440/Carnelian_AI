@@ -27,6 +27,8 @@ public partial class SettingsWindow : Window
         {
             _vm.ModelConfigRequested -= OnModelConfigRequested;
             _vm.VoiceBrowserRequested -= OnVoiceBrowserRequested;
+            _vm.InstallPiperConfirmationRequested -= OnInstallPiperConfirmationRequested;
+            _vm.InstallOllamaConfirmationRequested -= OnInstallOllamaConfirmationRequested;
         }
 
         _vm = DataContext as SettingsViewModel;
@@ -35,6 +37,8 @@ public partial class SettingsWindow : Window
         {
             _vm.ModelConfigRequested += OnModelConfigRequested;
             _vm.VoiceBrowserRequested += OnVoiceBrowserRequested;
+            _vm.InstallPiperConfirmationRequested += OnInstallPiperConfirmationRequested;
+            _vm.InstallOllamaConfirmationRequested += OnInstallOllamaConfirmationRequested;
         }
     }
 
@@ -65,6 +69,25 @@ public partial class SettingsWindow : Window
             DataContext = App.Services.GetRequiredService<VoiceBrowserViewModel>()
         };
         await window.ShowDialog(this);
+    }
+
+    private async void OnInstallPiperConfirmationRequested(object? sender, TaskCompletionSource<bool> completion)
+    {
+        var dialog = new ConfirmWindow(
+            "Install additional software?",
+            "Additional software (the Piper text-to-speech engine) will be downloaded and " +
+            "installed on your computer. Click Accept to continue, or Exit to cancel.");
+        var accepted = await dialog.ShowDialog<bool>(this);
+        completion.TrySetResult(accepted);
+    }
+
+    private async void OnInstallOllamaConfirmationRequested(object? sender, TaskCompletionSource<bool> completion)
+    {
+        var dialog = new ConfirmWindow(
+            "Install additional software?",
+            "Additional software (the Ollama runtime) will be downloaded and " +
+            "installed on your computer. Click Accept to continue, or Exit to cancel.");
+        completion.TrySetResult(await dialog.ShowDialog<bool>(this));
     }
 
     private async void OnBrowsePiperExe(object? sender, RoutedEventArgs e)

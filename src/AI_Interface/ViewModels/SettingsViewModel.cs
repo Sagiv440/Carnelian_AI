@@ -23,8 +23,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IAnthropicClient _anthropic;
     private readonly ISpeechService _speech;
     private readonly IPiperInstaller _piperInstaller;
+    private readonly IOllamaInstaller _ollamaInstaller;
     private readonly IMemoryService _memory;
     private readonly bool _loading;
+
+    /// <summary>The default local Ollama endpoint, used when the URL field is blank.</summary>
+    private const string DefaultOllamaUrl = "http://localhost:11434";
 
     /// <summary>The active project's directory (set by <see cref="InitializeMemory"/>), or null when none.</summary>
     private string? _memoryProjectDir;
@@ -81,6 +85,15 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ModelConfigCommand))]
     private bool _isOllamaConnected;
+
+    /// <summary>True while the one-click Ollama install is running (disables the button).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallOllamaCommand))]
+    private bool _isInstallingOllama;
+
+    /// <summary>Raised before installing Ollama so the view can confirm with the user.
+    /// The view completes the supplied source with <c>true</c> to proceed, <c>false</c> to cancel.</summary>
+    public event System.EventHandler<TaskCompletionSource<bool>>? InstallOllamaConfirmationRequested;
 
     /// <summary>Raised when the view should open the Model Config window.</summary>
     public event System.EventHandler? ModelConfigRequested;
@@ -316,6 +329,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Raised when the view should open the Voice browser window.</summary>
     public event System.EventHandler? VoiceBrowserRequested;
 
+    /// <summary>Raised before installing Piper so the view can confirm with the user.
+    /// The view completes the supplied source with <c>true</c> to proceed, <c>false</c> to cancel.</summary>
+    public event System.EventHandler<TaskCompletionSource<bool>>? InstallPiperConfirmationRequested;
+
     // Provider as mutually exclusive radio options (mirrors the appearance-mode bools).
     public bool IsVoiceOff
     {
@@ -353,7 +370,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         ISettingsService settings, IThemeService theme, IOllamaClient ollama,
         IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic,
         ISpeechService speech, AgentsViewModel agentsPanel, IMemoryService memory,
-        IPiperInstaller piperInstaller)
+        IPiperInstaller piperInstaller, IOllamaInstaller ollamaInstaller)
     {
         _settings = settings;
         _theme = theme;
@@ -364,6 +381,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _speech = speech;
         _memory = memory;
         _piperInstaller = piperInstaller;
+        _ollamaInstaller = ollamaInstaller;
         AgentsPanel = agentsPanel;
 
         _loading = true;
@@ -402,7 +420,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         new DesignSettingsService(), new ThemeService(), new DesignOllamaClient(),
         new DesignCloudClient(AiProvider.OpenAI), new DesignCloudClient(AiProvider.Gemini),
         new DesignCloudClient(AiProvider.Anthropic), new DesignSpeechService(), new AgentsViewModel(),
-        new DesignMemoryService(), new DesignPiperInstaller())
+        new DesignMemoryService(), new DesignPiperInstaller(), new DesignOllamaInstaller())
     {
     }
 
@@ -534,6 +552,15 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanInstallPiper))]
     private async Task InstallPiper()
     {
+        // Confirm first — this downloads and installs additional software onto the user's machine.
+        if (InstallPiperConfirmationRequested is not null)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            InstallPiperConfirmationRequested.Invoke(this, tcs);
+            if (!await tcs.Task)
+                return;
+        }
+
         IsInstallingPiper = true;
         VoiceStatusColor = BusyColor;
         VoiceStatus = "Downloading Piper…";
@@ -651,7 +678,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanProbe))]
     private async Task QuickSetup()
     {
-        const string local = "http://localhost:11434";
+        const string local = DefaultOllamaUrl;
         IsTestingConnection = true;
         ConnectionTestColor = BusyColor;
         ConnectionTestMessage = "Scanning localhost:11434…";
@@ -685,7 +712,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanProbe))]
     private async Task TestConnection()
     {
-        var url = string.IsNullOrWhiteSpace(OllamaBaseUrl) ? "http://localhost:11434" : OllamaBaseUrl.Trim();
+        var url = string.IsNullOrWhiteSpace(OllamaBaseUrl) ? DefaultOllamaUrl : OllamaBaseUrl.Trim();
         IsTestingConnection = true;
         ConnectionTestColor = BusyColor;
         ConnectionTestMessage = "Testing…";
@@ -726,10 +753,57 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     private bool CanProbe => !IsTestingConnection;
 
+    private bool CanInstallOllama => !IsInstallingOllama;
+
+    /// <summary>Download and install the local Ollama runtime, then re-probe so the model list refreshes.</summary>
+    [RelayCommand(CanExecute = nameof(CanInstallOllama))]
+    private async Task InstallOllama()
+    {
+        // Confirm first — this downloads and installs additional software onto the user's machine.
+        if (InstallOllamaConfirmationRequested is not null)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            InstallOllamaConfirmationRequested.Invoke(this, tcs);
+            if (!await tcs.Task)
+                return;
+        }
+
+        IsInstallingOllama = true;
+        ConnectionTestColor = BusyColor;
+        var progress = new Progress<string>(s => ConnectionTestMessage = s);
+        try
+        {
+            // Idempotent: when Ollama is already present, InstallAsync skips the download/installer and
+            // just starts the server (so we don't re-download on every click). Reflect that in the status.
+            ConnectionTestMessage = _ollamaInstaller.IsOllamaInstalled
+                ? "Ollama is already installed — connecting…"
+                : "Downloading Ollama…";
+            await _ollamaInstaller.InstallAsync(progress, System.Threading.CancellationToken.None);
+
+            // The fresh server normally comes up on localhost; point the URL there if it's blank, then
+            // reuse the connect flow so the main window reloads its model list and the probe shows green.
+            if (string.IsNullOrWhiteSpace(OllamaBaseUrl))
+                OllamaBaseUrl = DefaultOllamaUrl;
+
+            ConnectionTestColor = OkColor;
+            ConnectionTestMessage = "Connecting…";
+            await Connect();
+        }
+        catch (Exception ex)
+        {
+            ConnectionTestColor = ErrColor;
+            ConnectionTestMessage = $"Install failed: {ex.Message}";
+        }
+        finally
+        {
+            IsInstallingOllama = false;
+        }
+    }
+
     /// <summary>Silent connectivity check (no status message) so Model Config reflects reality on open.</summary>
     public async Task RefreshConnectionAsync()
     {
-        var url = string.IsNullOrWhiteSpace(OllamaBaseUrl) ? "http://localhost:11434" : OllamaBaseUrl.Trim();
+        var url = string.IsNullOrWhiteSpace(OllamaBaseUrl) ? DefaultOllamaUrl : OllamaBaseUrl.Trim();
         try { IsOllamaConnected = await _ollama.PingAsync(url); }
         catch { IsOllamaConnected = false; }
     }

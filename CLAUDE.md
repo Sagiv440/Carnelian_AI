@@ -97,6 +97,16 @@ same name when re-serialising the running conversation. Gemini has no system rol
   domain abstractions (`AgentTool`/`AgentToolCall`/`AgentTurn`) in `Models/AgentModels.cs`.
 - *Model management* — `PingAsync` (reachability probe with a short fail-fast timeout), `PullModelAsync`
   (`POST /api/pull`, streamed progress), `DeleteModelAsync` (`DELETE /api/delete`), `ListModelsAsync`.
+- *One-click install* — `IOllamaInstaller`/`OllamaInstaller` mirrors `PiperInstaller`: one confirmed click
+  in Settings → Models → Local AI downloads and runs the official installer for this OS, then best-effort
+  starts the server. **Windows:** downloads `OllamaSetup.exe` via `HttpDownloads.ToFileAsync` and runs it
+  silently (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`; an Inno Setup installer — it may show a UAC prompt
+  itself, which is expected); binary lands at `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`. **Linux:** runs
+  `curl -fsSL https://ollama.com/install.sh | sh` via `/bin/bash -c` (needs `curl`, maybe sudo). **macOS:**
+  not auto-installed — throws a graceful "install from ollama.com" message. Per-OS asset/path/URL selection
+  is in small `internal static` pure helpers (`CandidateExecutablePaths`, `InstallSourceUrl`) for testability;
+  the download URLs are fixed `https` constants (no shell interpolation of untrusted input). Registered via
+  `AddHttpClient<IOllamaInstaller, OllamaInstaller>` (20-min timeout). The button is on the Local AI tab.
 
 **Project mode — the agent** (`ProjectAgentService`). Loop: advertise tools → run the tools the model
 requests → feed each result back as a `ChatRole.Tool` message → repeat until the model replies in plain
@@ -267,9 +277,10 @@ entries, and a right `Panel` whose category panels toggle by `IsVisible` bound t
 `SettingsViewModel` (`SelectCategoryCommand` + `SettingsCategory` enum). Panels are moved **verbatim** under:
 - **EDITOR FEATURES** — *Appearance* (light/dark + accent/bubble colors), *Typography* (font + size),
   *Layout* (placeholder).
-- **AI FEATURES** — *Models* (Local AI: Ollama URL, *Quick setup*, *Test connection*, *Model_Config*; and
-  Web Models: per-provider API key + Connect, which persists the key, probes, and raises `ConnectRequested`
-  so the main window reloads the dropdown), **Agents** (the agent roster master/detail), *Autonomy & Memory*
+- **AI FEATURES** — *Models* (Local AI: Ollama URL, *Quick setup*, **Download & install Ollama** — the
+  one-click `IOllamaInstaller` flow, confirmed via `ConfirmWindow` then auto-connects, *Test connection*,
+  *Model_Config*; and Web Models: per-provider API key + Connect, which persists the key, probes, and raises
+  `ConnectRequested` so the main window reloads the dropdown), **Agents** (the agent roster master/detail), *Autonomy & Memory*
   (agent approval mode + software-install permission + **persistent-memory** toggle and per-scope fact
   lists, Phase 4), *Web Search* (provider + keys), *Voice* (Piper: *Download & install Piper* + *Browse
   voices* + a manual-paths Advanced expander; raises `VoiceBrowserRequested` to open `VoiceBrowserWindow`),

@@ -142,6 +142,12 @@ internal sealed class DesignPiperInstaller : IPiperInstaller
         Task.FromResult("");
 }
 
+internal sealed class DesignOllamaInstaller : IOllamaInstaller
+{
+    public bool IsOllamaInstalled => false;
+    public Task InstallAsync(IProgress<string>? progress, CancellationToken ct) => Task.CompletedTask;
+}
+
 internal sealed class DesignPiperVoiceCatalog : IPiperVoiceCatalog
 {
     public Task<IReadOnlyList<PiperVoiceInfo>> ListAvailableAsync(CancellationToken ct) =>

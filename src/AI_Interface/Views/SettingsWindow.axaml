@@ -248,6 +248,15 @@
                                         <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
                                                    Text="Quick setup scans localhost:11434 for a running Ollama server and fills in the URL."/>
 
+                                        <!-- One-click install: download &amp; set up the Ollama runtime locally -->
+                                        <Button Classes="cta" Content="⬇  Download &amp; install Ollama" Margin="0,14,0,0"
+                                                HorizontalAlignment="Left" MinWidth="210"
+                                                IsEnabled="{Binding !IsInstallingOllama}"
+                                                Command="{Binding InstallOllamaCommand}"
+                                                ToolTip.Tip="Download and install Ollama on this computer, then connect"/>
+                                        <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
+                                                   Text="Installs the Ollama runtime locally (no separate download needed), then starts it and connects."/>
+
                                         <!-- Model Config: enabled only when Ollama is connected -->
                                         <Button Classes="ghost" Content="Model_Config" Margin="0,14,0,0"
                                                 HorizontalAlignment="Left" MinWidth="150"

@@ -56,6 +56,12 @@ Built with [Avalonia UI](https://avaloniaui.net) on .NET 9, so the same code bui
    ollama serve            # starts the local server on http://localhost:11434
    ollama pull llama3      # pull at least one model
    ```
+   Don't have it yet? You can install it from inside the app with one click — open **Settings → AI
+   Features → Models → Local AI** and press **⬇ Download & install Ollama** (it downloads the official
+   installer, runs it, then connects). On Windows the installer may show a permission (UAC) prompt; on
+   Linux it uses the official `curl … | sh` script (needs `curl`, may ask for your password). On macOS,
+   install manually from https://ollama.com/download.
+
    For **Project** mode, pull a tool-calling-capable model (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`).
    For the **Thinking** block to populate, use a reasoning model (e.g. `qwen3`, `deepseek-r1`).
 3. **(Optional) Cloud API keys** — to use OpenAI, Gemini or Anthropic models instead of (or alongside)
@@ -72,8 +78,9 @@ dotnet run --project src/AI_Interface
 The app connects to `http://localhost:11434` by default and loads your installed models into the
 **model picker at the top-right** (each entry is tagged with its provider). To point it at a different
 Ollama instance, open **Settings → AI Features → Models → Local AI**, set the server URL (or use *Quick
-setup*), and click **Connect** (or *Test connection* to just probe it). Cloud models appear in the same
-picker once you add a key under **Web Models**.
+setup*), and click **Connect** (or *Test connection* to just probe it). If Ollama isn't installed yet,
+**⬇ Download & install Ollama** on the same tab fetches and sets it up for you, then connects. Cloud
+models appear in the same picker once you add a key under **Web Models**.
 
 ## Build a distributable app
 

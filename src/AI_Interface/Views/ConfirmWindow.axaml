@@ -1,0 +1,27 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="200"
+        x:Class="AI_Interface.Views.ConfirmWindow"
+        Width="440" SizeToContent="Height"
+        MinWidth="380"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="Confirm">
+
+    <Border Classes="card" CornerRadius="4" Margin="16" Padding="22">
+        <StackPanel Spacing="6">
+            <TextBlock x:Name="TitleText" Classes="brand" Text="Confirm"/>
+            <TextBlock x:Name="MessageText" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Foreground="{DynamicResource AppTextPrimary}" FontSize="14"/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        Spacing="10" Margin="0,16,0,0">
+                <Button Classes="ghost" Content="Exit" MinWidth="100" Click="OnExit"/>
+                <Button Classes="cta" Content="Accept" MinWidth="110" Click="OnAccept"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+
+</Window>

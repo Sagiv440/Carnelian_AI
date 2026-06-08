@@ -73,6 +73,14 @@ public partial class App : Application
         // Routes a chosen ChatModel to the right provider client and aggregates the model list.
         services.AddSingleton<IModelRouter, ChatRouter>();
 
+        // One-click local Ollama install (downloads the official installer/script for this OS).
+        // Long timeout: the Windows installer download is sizeable.
+        services.AddHttpClient<IOllamaInstaller, OllamaInstaller>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(20);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("AI_Interface");
+        });
+
         // Typed HttpClient for web search/page fetching with a desktop User-Agent.
         services.AddHttpClient<IWebSearchService, WebSearchService>(client =>
         {
