@@ -24,7 +24,9 @@ public partial class MainWindow : Window
 
         Loaded += OnLoaded;
         DataContextChanged += OnDataContextChanged;
-        InputBox.KeyDown += OnInputKeyDown;
+        // Tunnel route: we must see Enter before TextBox's own bubble-phase handler inserts a
+        // newline (AcceptsReturn="True") and marks the event handled, which would skip us.
+        InputBox.AddHandler(InputElement.KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
