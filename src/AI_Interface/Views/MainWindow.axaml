@@ -415,7 +415,7 @@
 
                                         <!-- Final answer: prose flows as text, code/commands render as bubbles -->
                                         <ItemsControl ItemsSource="{Binding Segments}"
-                                                      MaxWidth="900" HorizontalAlignment="Left">
+                                                      HorizontalAlignment="Stretch">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
@@ -439,14 +439,15 @@
                                                                                 ToolTip.Tip="Copy code" Click="OnCopyCode"/>
                                                                     </Grid>
                                                                 </Border>
-                                                                <ScrollViewer Grid.Row="1" Padding="12,8"
-                                                                              HorizontalScrollBarVisibility="Auto"
-                                                                              VerticalScrollBarVisibility="Disabled">
-                                                                    <SelectableTextBlock Text="{Binding Text}"
-                                                                                         FontFamily="Cascadia Code,Consolas,monospace"
-                                                                                         FontSize="12.5"
-                                                                                         Foreground="{DynamicResource AppTextPrimary}"/>
-                                                                </ScrollViewer>
+                                                                <!-- No inner ScrollViewer: the bubble sizes exactly to the wrapped
+                                                                     code so the last lines can never be clipped (a ScrollViewer
+                                                                     under-measured the text height). Long code just makes a taller
+                                                                     message; the transcript scrolls. -->
+                                                                <SelectableTextBlock Grid.Row="1" Text="{Binding Text}" TextWrapping="Wrap"
+                                                                                     Margin="12,8,12,10"
+                                                                                     FontFamily="Cascadia Code,Consolas,monospace"
+                                                                                     FontSize="12.5"
+                                                                                     Foreground="{DynamicResource AppTextPrimary}"/>
                                                             </Grid>
                                                         </Border>
                                                     </Panel>

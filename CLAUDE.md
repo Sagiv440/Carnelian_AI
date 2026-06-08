@@ -319,9 +319,13 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
 - **Code/command bubbles.** The transcript renders an assistant reply from `MessageViewModel.Segments`
   (not the raw `Text`): `MarkdownSegmenter` (in `ViewModels/MessageSegment.cs`) splits the text into prose
   vs. fenced ```` ``` ```` code parts, and `RebuildSegments` reconciles them **in place** on every streamed
-  delta (so a streaming code block grows without recreating its container). Prose renders as wrapped text;
-  code renders as a monospace `Border.codeBubble` with a language header + per-block 📋 copy (`OnCopyCode`).
-  The raw `Text` is still the source of truth for copy/persist/speak. Inline single-backtick spans stay literal.
+  delta (so a streaming code block grows without recreating its container). The answer `ItemsControl`
+  spans the **full transcript width** (`HorizontalAlignment="Stretch"`, no `MaxWidth`). Prose renders as
+  wrapped text; code renders as a monospace `Border.codeBubble` with a language header + per-block 📋 copy
+  (`OnCopyCode`). The code body is a wrapping `SelectableTextBlock` that **sizes to its content** — no inner
+  `ScrollViewer` (one under-measured the text height and clipped the last lines); long code just makes a
+  taller message and the transcript scrolls. The raw `Text` is still the source of truth for
+  copy/persist/speak. Inline single-backtick spans stay literal.
 - **Design-time stubs** in `ViewModels/DesignTimeServices.cs` back the parameterless VM constructors so
   the XAML previewer works. If you add a service dependency to a container-resolved VM, add a matching
   stub (and update the VM's design-time constructor).

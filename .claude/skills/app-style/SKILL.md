@@ -61,8 +61,10 @@ near-flat red-orange) only for backward compatibility; prefer the solid `AppAcce
   pill, accent text, translucent-accent hover); defined locally in `MainWindow.axaml`.
 - `Border.codeBubble` / `Border.codeHeader` — a code/command block in a reply: `AppInputBackground` body +
   `AppSurfaceBrush` header bar (with the language label + a `Button.copy` 📋), 5px radius, hairline border;
-  the body is a monospace `SelectableTextBlock` (`Cascadia Code,Consolas,monospace`) in a horizontal
-  `ScrollViewer`. Defined locally in `MainWindow.axaml`; reuse for any code/preformatted block.
+  the body is a wrapping monospace `SelectableTextBlock` (`Cascadia Code,Consolas,monospace`) that **sizes
+  to its content** — no inner `ScrollViewer` (one under-measured the text height and clipped the last
+  lines), so long code makes a taller message and the transcript scrolls. Defined locally in
+  `MainWindow.axaml`; reuse for any code/preformatted block.
 - Class-toggled state from data: `Classes.user="{Binding IsUser}"`, `Classes.online="{Binding IsConnected}"`.
 
 ## Conventions
