@@ -73,6 +73,15 @@ public sealed class AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public SoftwareInstallPermission SoftwareInstall { get; set; } = SoftwareInstallPermission.Never;
 
+    // --- Memory ---
+
+    /// <summary>
+    /// Master switch for persistent memory (Settings → Autonomy &amp; Memory). When off, no memory block
+    /// is injected into prompts and the <c>remember</c> tool is withheld. Per-agent
+    /// <see cref="Agent.MemoryEnabled"/> can still opt an individual agent out while this is on.
+    /// </summary>
+    public bool GlobalMemoryEnabled { get; set; } = true;
+
     // --- Thinking ---
 
     /// <summary>

@@ -522,6 +522,67 @@
                                 <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
                                            Text="Installs follow the tool-approval setting above (Auto-run installs without asking)."/>
                             </StackPanel>
+
+                            <!-- Persistent memory -->
+                            <TextBlock Classes="section" Text="Memory"/>
+                            <TextBlock Classes="label" TextWrapping="Wrap"
+                                       Text="Lets the assistant remember facts about you and your projects across sessions. Facts are stored as editable Markdown (memory.md) — globally in the app-data folder, and per-project under .AI/memory.md."/>
+                            <CheckBox Margin="0,8,0,0" Content="Enable persistent memory"
+                                      IsChecked="{Binding GlobalMemoryEnabled}"/>
+                            <TextBlock Classes="label" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       Text="When on, remembered facts are added to the prompt and the project agent gets a “remember” tool. Tip: start a chat message with “remember …” to save a fact yourself. Individual agents can opt out in Settings → AI Features → Agents."/>
+
+                            <!-- About you (global scope) -->
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+                                <TextBlock Grid.Column="0" Text="About you" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Classes="ghost" Content="Clear all"
+                                        IsVisible="{Binding HasGlobalMemories}"
+                                        Command="{Binding ClearGlobalMemoryCommand}"/>
+                            </Grid>
+                            <TextBlock Classes="label" Text="Nothing remembered yet."
+                                       IsVisible="{Binding !HasGlobalMemories}"/>
+                            <ItemsControl ItemsSource="{Binding GlobalMemories}" Margin="0,4,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <Border Classes="card" CornerRadius="3" Padding="8,5" Margin="0,2">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Classes="ghost" Content="✕" ToolTip.Tip="Forget this"
+                                                        CommandParameter="{Binding}"
+                                                        Command="{Binding DataContext.DeleteGlobalMemoryCommand,
+                                                                   RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- About this project (only when a project is open) -->
+                            <StackPanel IsVisible="{Binding HasProjectMemoryScope}">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+                                    <TextBlock Grid.Column="0" Text="About this project" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Classes="ghost" Content="Clear all"
+                                            IsVisible="{Binding HasProjectMemories}"
+                                            Command="{Binding ClearProjectMemoryCommand}"/>
+                                </Grid>
+                                <TextBlock Classes="label" Text="Nothing remembered yet."
+                                           IsVisible="{Binding !HasProjectMemories}"/>
+                                <ItemsControl ItemsSource="{Binding ProjectMemories}" Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False">
+                                            <Border Classes="card" CornerRadius="3" Padding="8,5" Margin="0,2">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                    <Button Grid.Column="1" Classes="ghost" Content="✕" ToolTip.Tip="Forget this"
+                                                            CommandParameter="{Binding}"
+                                                            Command="{Binding DataContext.DeleteProjectMemoryCommand,
+                                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
 

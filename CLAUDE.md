@@ -15,8 +15,9 @@ Four operating modes (`AppMode`), chosen from the sidebar / composer rather than
 - **Project** — a tool-using **agent** scoped to a project directory (create/open a project to enter it).
 
 Cross-cutting extras: a per-prompt 🧠 **Thinking** toggle (plan-before-answer, depth set by an *Effort*
-slider in Settings), a hardware-aware **Model Config** tool for choosing/downloading Ollama models, and
-**Agents** — a selectable persona (top-bar picker) whose voice is layered into every mode's system prompt.
+slider in Settings), a hardware-aware **Model Config** tool for choosing/downloading Ollama models,
+**Agents** — a selectable persona (top-bar picker) whose voice is layered into every mode's system prompt,
+and **Memory** — persistent facts (global + per-project, stored as Markdown) injected into every mode.
 
 ## Commands
 
@@ -99,7 +100,8 @@ same name when re-serialising the running conversation. Gemini has no system rol
 requests → feed each result back as a `ChatRole.Tool` message → repeat until the model replies in plain
 text (step-budget cap — a `maxSteps` arg to `RunAsync`, set by the active agent's autonomy; `≤0` falls back
 to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `create_folder`,
-`delete_file`, `delete_folder`, `run_command`, and `install_software` (offered only when permitted).
+`delete_file`, `delete_folder`, `run_command`, `install_software` (offered only when permitted), and
+`remember` (offered only when memory is on — see **Memory**).
 - **Per-agent tool allow-list (Phase 2).** `RunAsync` takes the active agent's `AgentTools`; `BuildTools`
   advertises **only the permitted groups** (ReadFiles→list/read, WriteFiles→write/create, DeleteFiles→
   delete, RunCommands→run_command, InstallSoftware→install_software). `ExecuteAsync` refuses a disallowed
@@ -127,6 +129,9 @@ to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `c
   `Never` / `Ask` / `Allow`). Under `Never`, `install_software` is withheld and `run_command` refuses
   machine-wide package-manager installs (winget/apt/brew/`npm -g`/…) while still allowing project-local
   deps. `Ask` permits installs but confirms each one even under `AutoRun`; `Allow` follows the approval mode.
+- **`remember` tool (Phase 4).** When memory is active for the run (the VM passes `memoryEnabled`), the
+  agent is offered a `remember` tool; `scope:"user"` writes a fact to global memory, anything else (default)
+  to the project's memory. It isn't gated by the `AgentTools` allow-list (it's not a file/command tool).
 - **Active project** is single and in-memory (`Project` = Name + Directory). Entered via the sidebar
   **Project** button → `ProjectWindow` (New tab creates `<location>/<name>/` + a `.AI` folder; Open tab
   uses an existing folder, name = folder name). The code-behind calls `vm.ActivateProjectAsync`.
@@ -142,12 +147,14 @@ to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `c
 
 **Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
 An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2) +
-**Autonomy** (Phase 3 — wired into the project-agent run; see *Autonomy* above) + still-forward-compat
-fields (MemoryEnabled/Proactive, persisted-only). The registry
+**Autonomy** (Phase 3 — wired into the project-agent run; see *Autonomy* above) + **MemoryEnabled**
+(Phase 4 — per-agent opt-out for persistent memory; see *Memory* below) + still-forward-compat
+`Proactive` (persisted-only, Phase 5). The registry
 de-dupes three sources by id with **project overriding global overriding built-in**: an embedded read-only
 seed (`assistant`/`researcher`/`code-buddy`/`autopilot`, `IsBuiltIn=true`), global customs in
-`<app-data>/AI_Interface/agents/*.json`, and per-project customs in `<project>/.AI/agents/*.json`
-(best-effort JSON store; `SaveCustom`/`DeleteCustom` refuse built-in ids). The active agent's id persists in
+`<app-data>/AI_Interface/agents/*.md`, and per-project customs in `<project>/.AI/agents/*.md` (portable
+Claude-Code-style Markdown via `AgentMarkdown`; legacy `*.json` is auto-migrated to `*.md` on load;
+`SaveCustom`/`DeleteCustom` refuse built-in ids). The active agent's id persists in
 `AppSettings.ActiveAgentId`. `MainWindowViewModel` holds the `Agents` collection + `SelectedAgent` (top-bar
 picker beside the model dropdown — agent and model are independent) and reloads on project enter/exit.
 `AgentPromptBuilder.Compose(agent, baseInstructions, thinkingDirective)` builds the streaming modes' system
@@ -169,6 +176,22 @@ in Project mode. **`AgentTools` "unrestricted vs explicit":** `AllowAll` default
 agents are unrestricted — full toolset, unchanged behaviour); the Agents editor calls `Restrict()` on the
 first checkbox toggle to switch to explicit per-tool flags. Built-in seed agents set explicit allow-lists
 (Assistant/Researcher = read-only, Code Buddy = file+command, Autopilot = +install) so they differ.
+
+**Memory (Phase 4).** Persistent facts the assistant recalls across sessions, in **two scopes**:
+**global** (about the user, `<app-data>/AI_Interface/memory.md`) and **project** (`<project>/.AI/memory.md`).
+Stored as **portable Markdown** (`MemoryMarkdown` — a `# Memory` heading + one `- ` bullet per fact, with
+optional `<!-- source · date -->` metadata; mirrors `AgentMarkdown`'s portability goal). `IMemoryService`/
+`MemoryService` exposes `Load`/`Add`(dedups exact text)/`Remove`/`Clear` and `BuildContextBlock(projectDir)`
+(a compact "About the user / About this project" block). The VM gates injection on
+`AppSettings.GlobalMemoryEnabled` (master switch) **and** the active agent's `Agent.MemoryEnabled`
+(per-agent opt-out) via `MemoryActive()`; when active, the block is threaded into **all four modes**
+through `AgentPromptBuilder.Compose`/`PersonaPrefix` (new `memoryBlock` arg). Two write paths:
+the project agent's `remember` **tool** (see Project mode), and an explicit chat trigger —
+`MainWindowViewModel.MaybeRememberFromPrompt` captures a prompt starting with "remember …" and stores it
+(project scope when a project is active, else global). The **Autonomy & Memory** settings panel manages it:
+an *Enable persistent memory* toggle plus per-scope lists with per-item ✕ and *Clear all*
+(`SettingsViewModel.InitializeMemory(projectDir)` is called by the main window before the dialog opens,
+like `AgentsPanel.Initialize`). `Agent.Proactive` remains the only persisted-but-unwired field (Phase 5).
 
 **Model Config — hardware-aware recommender.** `IHardwareService` scans CPU/RAM and GPU/VRAM
 (nvidia-smi first, best-effort cross-platform). `ModelCatalog` (in `Models/ModelCatalog.cs`) ranks a
@@ -200,7 +223,8 @@ entries, and a right `Panel` whose category panels toggle by `IsVisible` bound t
 - **AI FEATURES** — *Models* (Local AI: Ollama URL, *Quick setup*, *Test connection*, *Model_Config*; and
   Web Models: per-provider API key + Connect, which persists the key, probes, and raises `ConnectRequested`
   so the main window reloads the dropdown), **Agents** (the agent roster master/detail), *Autonomy & Memory*
-  (agent approval mode + software-install permission), *Web Search* (provider + keys), *Voice*,
+  (agent approval mode + software-install permission + **persistent-memory** toggle and per-scope fact
+  lists, Phase 4), *Web Search* (provider + keys), *Voice*,
   *Research & Thinking* (research depth + Thinking *Effort*).
 
 **Theming & design system** (`ThemeService` + `SettingsWindow` + `Styles/ControlStyles.axaml`): a flat

@@ -16,9 +16,10 @@ public static class AgentPromptBuilder
 {
     /// <summary>
     /// Builds a Chat-style system prompt: the agent's persona (if any) on top, then the mode's base
-    /// instructions, then the agent's built-in skill packs, then the Thinking directive. Any piece may be empty.
+    /// instructions, then the agent's built-in skill packs, then the persistent-memory block, then the
+    /// Thinking directive. Any piece may be empty.
     /// </summary>
-    public static string Compose(Agent? agent, string baseInstructions, string thinkingDirective = "")
+    public static string Compose(Agent? agent, string baseInstructions, string thinkingDirective = "", string memoryBlock = "")
     {
         var sb = new StringBuilder();
 
@@ -35,6 +36,12 @@ public static class AgentPromptBuilder
 
         sb.Append(SkillsBlock(agent)); // already prefixed with its own blank line (or empty)
 
+        if (!string.IsNullOrWhiteSpace(memoryBlock))
+        {
+            sb.Append("\n\n");
+            sb.Append(memoryBlock.Trim());
+        }
+
         if (!string.IsNullOrEmpty(thinkingDirective))
             sb.Append(thinkingDirective); // already prefixed with its own blank line
 
@@ -42,10 +49,11 @@ public static class AgentPromptBuilder
     }
 
     /// <summary>
-    /// The agent persona + built-in skills block prepended to a service-owned system prompt (Web / Deep /
-    /// Project modes). Empty when the agent has neither a persona nor selected built-in packs.
+    /// The agent persona + built-in skills + persistent-memory block prepended to a service-owned system
+    /// prompt (Web / Deep / Project modes). Empty when the agent has no persona, no selected built-in
+    /// packs, and there's nothing to remember.
     /// </summary>
-    public static string PersonaPrefix(Agent? agent)
+    public static string PersonaPrefix(Agent? agent, string memoryBlock = "")
     {
         var sb = new StringBuilder();
 
@@ -56,6 +64,13 @@ public static class AgentPromptBuilder
         var skills = SkillsBlock(agent);
         if (skills.Length > 0)
             sb.Append(skills); // leads with its own blank line
+
+        if (!string.IsNullOrWhiteSpace(memoryBlock))
+        {
+            if (sb.Length > 0)
+                sb.Append("\n\n");
+            sb.Append(memoryBlock.Trim());
+        }
 
         return sb.Length == 0 ? "" : sb.ToString() + "\n\n";
     }

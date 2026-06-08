@@ -169,12 +169,21 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
         IChatClient client, Project project, string model, IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode, int maxSteps, AgentTools allowedTools, string personaPrefix,
         string thinkingDirective, string projectSkills, SoftwareInstallPermission installPermission,
-        IProgress<string> status, Action<string> onActivity, Action<string> onAnswer,
+        bool memoryEnabled, IProgress<string> status, Action<string> onActivity, Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         onAnswer("Design-time project agent response.");
         return Task.CompletedTask;
     }
+}
+
+internal sealed class DesignMemoryService : IMemoryService
+{
+    public IReadOnlyList<MemoryEntry> Load(MemoryScope scope, string? projectDir) => Array.Empty<MemoryEntry>();
+    public void Add(MemoryScope scope, string text, string source, string? projectDir) { }
+    public void Remove(MemoryScope scope, string text, string? projectDir) { }
+    public void Clear(MemoryScope scope, string? projectDir) { }
+    public string BuildContextBlock(string? projectDir) => "";
 }
 
 internal sealed class DesignAgentService : IAgentService

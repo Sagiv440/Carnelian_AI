@@ -26,6 +26,7 @@ public interface IProjectAgentService
     /// <param name="thinkingDirective">Extra planning instruction appended to the system prompt (empty = off).</param>
     /// <param name="projectSkills">Project skill files appended to the system prompt (empty = none).</param>
     /// <param name="installPermission">Whether/how the agent may install software machine-wide.</param>
+    /// <param name="memoryEnabled">When true, the <c>remember</c> tool is offered so the agent can persist a fact.</param>
     /// <param name="status">Step progress (constructed on the UI thread, so it auto-marshals).</param>
     /// <param name="onActivity">Receives the action log / intermediate reasoning (the "work"). Must marshal to the UI thread.</param>
     /// <param name="onAnswer">Receives the final plain-text answer. Must marshal to the UI thread.</param>
@@ -42,6 +43,7 @@ public interface IProjectAgentService
         string thinkingDirective,
         string projectSkills,
         SoftwareInstallPermission installPermission,
+        bool memoryEnabled,
         IProgress<string> status,
         Action<string> onActivity,
         Action<string> onAnswer,

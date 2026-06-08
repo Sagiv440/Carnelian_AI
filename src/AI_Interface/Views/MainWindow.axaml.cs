@@ -129,8 +129,10 @@ public partial class MainWindow : Window
         void OnConnect(object? s, EventArgs args) => _vm?.RefreshCommand.Execute(null);
         settingsVm.ConnectRequested += OnConnect;
 
-        // Scope the Agents panel to the active project so its custom agents appear in the editor.
-        settingsVm.AgentsPanel.Initialize(_vm?.ActiveProjectDirectory is { Length: > 0 } dir ? dir : null);
+        // Scope the Agents panel + memory lists to the active project so its customs/facts appear.
+        var projectDir = _vm?.ActiveProjectDirectory is { Length: > 0 } dir ? dir : null;
+        settingsVm.AgentsPanel.Initialize(projectDir);
+        settingsVm.InitializeMemory(projectDir);
 
         var settings = new SettingsWindow { DataContext = settingsVm };
         await settings.ShowDialog(this);

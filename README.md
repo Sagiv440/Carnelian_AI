@@ -22,6 +22,10 @@ Cross-cutting extras:
   Each agent bundles a personality, a set of **skills**, a **tool allow-list**, and an **autonomy
   level**. Four are built in (Assistant, Researcher, Code Buddy, Autopilot) and you can create your own,
   globally or per-project. See [Agents](#agents) below.
+- **🧩 Memory** — persistent facts the assistant recalls across sessions, in two scopes: **global**
+  (about you) and **per-project**. Stored as editable Markdown (`memory.md`) so it's portable. Say
+  *"remember …"* in chat, let the Project agent's `remember` tool save a note, and manage/forget facts in
+  Settings → AI Features → Autonomy & Memory.
 - **🧠 Thinking** — a per-prompt toggle that turns on the model's native reasoning (Ollama models). The
   chain-of-thought is shown in a collapsible **"Thinking"** block above each answer (works with reasoning
   models such as `qwen3` / `deepseek-r1`); its depth is set by an *Effort* slider in Settings.
@@ -143,6 +147,9 @@ autonomy, software-install permission, …) are stored as JSON at:
 
 - **Windows:** `%APPDATA%\AI_Interface\settings.json`
 - **Linux:** `~/.config/AI_Interface/settings.json`
+
+Custom agents and global memory live beside it as portable Markdown (`agents/*.md`, `memory.md`);
+per-project agents, chats, skills and memory live under the project's own `.AI/` folder.
 
 ## Project layout
 

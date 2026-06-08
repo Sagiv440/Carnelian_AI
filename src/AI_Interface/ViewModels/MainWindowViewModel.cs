@@ -32,6 +32,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IProjectSkillService _skills;
     private readonly ISpeechService _speech;
     private readonly IAgentService _agents;
+    private readonly IMemoryService _memory;
 
     /// <summary>Skill files loaded from the active project (empty when not in a project).</summary>
     private IReadOnlyList<ProjectSkill> _projectSkills = Array.Empty<ProjectSkill>();
@@ -156,7 +157,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IProjectAgentService agent,
         IProjectSkillService skills,
         ISpeechService speech,
-        IAgentService agents)
+        IAgentService agents,
+        IMemoryService memory)
     {
         _router = router;
         _search = search;
@@ -168,6 +170,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _skills = skills;
         _speech = speech;
         _agents = agents;
+        _memory = memory;
 
         Modes = new[]
         {
@@ -198,7 +201,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                new DesignDeepResearchService(), new DesignSettingsService(),
                new DesignAttachmentService(), new DesignChatHistoryService(),
                new DesignProjectAgentService(), new DesignProjectSkillService(),
-               new DesignSpeechService(), new DesignAgentService())
+               new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService())
     {
     }
 
@@ -225,8 +228,51 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    /// <summary>The active agent's persona block, prepended to every mode's system prompt (empty = none).</summary>
-    private string PersonaPrefix() => AgentPromptBuilder.PersonaPrefix(SelectedAgent);
+    /// <summary>The active agent's persona + skills + memory block, prepended to every mode's system prompt (empty = none).</summary>
+    private string PersonaPrefix() => AgentPromptBuilder.PersonaPrefix(SelectedAgent, MemoryBlock());
+
+    /// <summary>True when persistent memory should apply this turn: the global switch on AND the active agent opted in.</summary>
+    private bool MemoryActive() =>
+        _settings.Current.GlobalMemoryEnabled && (SelectedAgent?.MemoryEnabled ?? true);
+
+    /// <summary>The persistent-memory block for the current turn (global + active-project facts), or "" when off/empty.</summary>
+    private string MemoryBlock() =>
+        MemoryActive() ? _memory.BuildContextBlock(ActiveProject?.Directory) : "";
+
+    /// <summary>
+    /// If memory is on and the prompt is an explicit "remember …" instruction, persists the fact before the
+    /// turn runs (so the model sees it and can acknowledge it). Project facts go to project memory when a
+    /// project is active; otherwise to global (about the user). Returns silently when it's not a remember.
+    /// </summary>
+    private void MaybeRememberFromPrompt(string prompt)
+    {
+        if (!MemoryActive())
+            return;
+        var fact = ExtractRememberFact(prompt);
+        if (string.IsNullOrEmpty(fact))
+            return;
+        var scope = ActiveProject is not null ? MemoryScope.Project : MemoryScope.Global;
+        _memory.Add(scope, fact, "you", ActiveProject?.Directory);
+    }
+
+    /// <summary>Extracts the fact from an explicit "remember …" prompt, or null if the prompt isn't one.</summary>
+    private static string? ExtractRememberFact(string prompt)
+    {
+        var p = prompt.Trim();
+        if (p.StartsWith("please ", StringComparison.OrdinalIgnoreCase))
+            p = p[7..].TrimStart();
+        if (!p.StartsWith("remember", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var rest = p["remember".Length..].TrimStart();
+        if (rest.StartsWith("that ", StringComparison.OrdinalIgnoreCase))
+            rest = rest[5..];
+        else if (rest.StartsWith(":") || rest.StartsWith(","))
+            rest = rest[1..];
+        rest = rest.Trim().TrimEnd('.', '!', ' ');
+
+        return rest.Length >= 3 ? rest : null; // ignore a bare "remember"
+    }
 
     /// <summary>
     /// Rebuilds the agent picker from the registry (built-in + global + the active project's customs)
@@ -350,6 +396,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var client = _router.For(selected.Provider);
         var model = selected.Id;
         InputText = "";
+
+        // Explicit "remember …" prompts persist a fact before the turn runs, so the reply can acknowledge it.
+        MaybeRememberFromPrompt(prompt);
 
         // Snapshot and clear the staged attachments.
         var attachments = Attachments.ToList();
@@ -563,7 +612,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         await _agent.RunAsync(
             client, ActiveProject, model, conversation, approval, maxSteps,
             SelectedAgent?.Tools ?? new AgentTools(),
-            PersonaPrefix(), directives, ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
+            PersonaPrefix(), directives, ProjectSkillsContext(), _settings.Current.SoftwareInstall, MemoryActive(), progress,
             activity => Dispatcher.UIThread.Post(() =>
             {
                 assistant.AppendWork(activity);
@@ -640,8 +689,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private List<ChatMessage> BuildChatHistory(MessageViewModel pendingAssistant)
     {
-        // System prompt = active agent's persona → base chat instructions → Thinking directive.
-        var systemPrompt = AgentPromptBuilder.Compose(SelectedAgent, ChatBaseInstructions, ThinkingDirective());
+        // System prompt = active agent's persona → base chat instructions → skills → memory → Thinking directive.
+        var systemPrompt = AgentPromptBuilder.Compose(SelectedAgent, ChatBaseInstructions, ThinkingDirective(), MemoryBlock());
         var history = new List<ChatMessage> { ChatMessage.System(systemPrompt) };
         foreach (var m in Messages)
         {

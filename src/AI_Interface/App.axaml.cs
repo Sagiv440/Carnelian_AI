@@ -97,6 +97,7 @@ public partial class App : Application
         services.AddSingleton<IProjectSkillService, ProjectSkillService>();
         services.AddSingleton<IHardwareService, HardwareService>();
         services.AddSingleton<IAgentService, AgentService>();
+        services.AddSingleton<IMemoryService, MemoryService>();
 
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<SettingsViewModel>();

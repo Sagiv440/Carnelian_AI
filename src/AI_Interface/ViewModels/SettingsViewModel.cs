@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using AI_Interface.Models;
 using AI_Interface.Services;
@@ -21,7 +22,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IGeminiClient _gemini;
     private readonly IAnthropicClient _anthropic;
     private readonly ISpeechService _speech;
+    private readonly IMemoryService _memory;
     private readonly bool _loading;
+
+    /// <summary>The active project's directory (set by <see cref="InitializeMemory"/>), or null when none.</summary>
+    private string? _memoryProjectDir;
 
     /// <summary>The Agents (AI Features) master/detail panel.</summary>
     public AgentsViewModel AgentsPanel { get; }
@@ -177,6 +182,88 @@ public sealed partial class SettingsViewModel : ViewModelBase
         set { if (value) SoftwareInstall = SoftwareInstallPermission.Allow; }
     }
 
+    // --- Memory (Autonomy & Memory) ---
+
+    /// <summary>Master switch for persistent memory; mirrors <see cref="AppSettings.GlobalMemoryEnabled"/>.</summary>
+    [ObservableProperty] private bool _globalMemoryEnabled;
+
+    /// <summary>Facts remembered about the user (global scope).</summary>
+    public ObservableCollection<MemoryEntry> GlobalMemories { get; } = new();
+
+    /// <summary>Facts remembered about the active project (populated only when a project is open).</summary>
+    public ObservableCollection<MemoryEntry> ProjectMemories { get; } = new();
+
+    /// <summary>True when a project is active, so the project-memory section is shown.</summary>
+    [ObservableProperty] private bool _hasProjectMemoryScope;
+
+    public bool HasGlobalMemories => GlobalMemories.Count > 0;
+    public bool HasProjectMemories => ProjectMemories.Count > 0;
+
+    /// <summary>Loads the memory lists for the Autonomy &amp; Memory panel. Called before the window opens.</summary>
+    public void InitializeMemory(string? projectDir)
+    {
+        _memoryProjectDir = string.IsNullOrWhiteSpace(projectDir) ? null : projectDir;
+        HasProjectMemoryScope = _memoryProjectDir is not null;
+        ReloadMemories();
+    }
+
+    private void ReloadMemories()
+    {
+        GlobalMemories.Clear();
+        foreach (var e in _memory.Load(MemoryScope.Global, null))
+            GlobalMemories.Add(e);
+
+        ProjectMemories.Clear();
+        if (_memoryProjectDir is not null)
+            foreach (var e in _memory.Load(MemoryScope.Project, _memoryProjectDir))
+                ProjectMemories.Add(e);
+
+        OnPropertyChanged(nameof(HasGlobalMemories));
+        OnPropertyChanged(nameof(HasProjectMemories));
+    }
+
+    partial void OnGlobalMemoryEnabledChanged(bool value)
+    {
+        if (_loading)
+            return;
+        _settings.Current.GlobalMemoryEnabled = value;
+        _settings.Save();
+    }
+
+    [RelayCommand]
+    private void DeleteGlobalMemory(MemoryEntry? entry)
+    {
+        if (entry is null)
+            return;
+        _memory.Remove(MemoryScope.Global, entry.Text, null);
+        ReloadMemories();
+    }
+
+    [RelayCommand]
+    private void DeleteProjectMemory(MemoryEntry? entry)
+    {
+        if (entry is null || _memoryProjectDir is null)
+            return;
+        _memory.Remove(MemoryScope.Project, entry.Text, _memoryProjectDir);
+        ReloadMemories();
+    }
+
+    [RelayCommand]
+    private void ClearGlobalMemory()
+    {
+        _memory.Clear(MemoryScope.Global, null);
+        ReloadMemories();
+    }
+
+    [RelayCommand]
+    private void ClearProjectMemory()
+    {
+        if (_memoryProjectDir is null)
+            return;
+        _memory.Clear(MemoryScope.Project, _memoryProjectDir);
+        ReloadMemories();
+    }
+
     // --- Web search ---
 
     [ObservableProperty] private SearchProvider _searchProvider;
@@ -257,7 +344,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public SettingsViewModel(
         ISettingsService settings, IThemeService theme, IOllamaClient ollama,
         IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic,
-        ISpeechService speech, AgentsViewModel agentsPanel)
+        ISpeechService speech, AgentsViewModel agentsPanel, IMemoryService memory)
     {
         _settings = settings;
         _theme = theme;
@@ -266,6 +353,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _gemini = gemini;
         _anthropic = anthropic;
         _speech = speech;
+        _memory = memory;
         AgentsPanel = agentsPanel;
 
         _loading = true;
@@ -283,6 +371,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _thinkingEffort = s.ThinkingEffort;
         _agentApproval = s.AgentApproval;
         _softwareInstall = s.SoftwareInstall;
+        _globalMemoryEnabled = s.GlobalMemoryEnabled;
         _searchProvider = s.SearchProvider;
         _searxngUrl = s.SearxngUrl;
         _braveApiKey = s.BraveApiKey;
@@ -302,7 +391,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public SettingsViewModel() : this(
         new DesignSettingsService(), new ThemeService(), new DesignOllamaClient(),
         new DesignCloudClient(AiProvider.OpenAI), new DesignCloudClient(AiProvider.Gemini),
-        new DesignCloudClient(AiProvider.Anthropic), new DesignSpeechService(), new AgentsViewModel())
+        new DesignCloudClient(AiProvider.Anthropic), new DesignSpeechService(), new AgentsViewModel(),
+        new DesignMemoryService())
     {
     }
 

@@ -27,6 +27,10 @@ public sealed class ProjectAgentService : IProjectAgentService
     /// <summary>Wall-clock limit for a single terminal command.</summary>
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(2);
 
+    private readonly IMemoryService _memory;
+
+    public ProjectAgentService(IMemoryService memory) => _memory = memory;
+
     public async Task RunAsync(
         IChatClient client,
         Project project,
@@ -39,6 +43,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         string thinkingDirective,
         string projectSkills,
         SoftwareInstallPermission installPermission,
+        bool memoryEnabled,
         IProgress<string> status,
         Action<string> onActivity,
         Action<string> onAnswer,
@@ -50,7 +55,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         // The step budget is set by the active agent's autonomy level; fall back to the Guided default.
         if (maxSteps <= 0)
             maxSteps = DefaultMaxSteps;
-        var tools = BuildTools(allowedTools, installPermission);
+        var tools = BuildTools(allowedTools, installPermission, memoryEnabled);
 
         var messages = new List<ChatMessage>
         {
@@ -164,6 +169,7 @@ public sealed class ProjectAgentService : IProjectAgentService
                                         .ConfigureAwait(false),
                 "install_software" => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
                                         .ConfigureAwait(false),
+                "remember"       => Remember(project, GetString(call.Arguments, "text"), GetString(call.Arguments, "scope")),
                 _ => $"Unknown tool '{call.Name}'."
             };
         }
@@ -200,8 +206,26 @@ public sealed class ProjectAgentService : IProjectAgentService
         "delete_folder"  => ("Delete folder", path ?? "", true),
         "run_command"    => ("Run command", GetString(call.Arguments, "command") ?? "", true),
         "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
+        "remember"       => ("Remember a note", GetString(call.Arguments, "text") ?? "", false),
         _ => (call.Name, "", true)
     };
+
+    /// <summary>Persists a fact to memory. <c>scope</c> "user" → global; anything else (default) → this project.</summary>
+    private string Remember(Project project, string? text, string? scope)
+    {
+        text = (text ?? "").Trim();
+        if (text.Length == 0)
+            return "Nothing to remember (no text was provided).";
+
+        if (string.Equals(scope?.Trim(), "user", StringComparison.OrdinalIgnoreCase))
+        {
+            _memory.Add(MemoryScope.Global, text, "project-agent", project.Directory);
+            return $"Remembered (about the user): {text}";
+        }
+
+        _memory.Add(MemoryScope.Project, text, "project-agent", project.Directory);
+        return $"Remembered (this project): {text}";
+    }
 
     private static readonly string[] SystemInstallSignatures =
     {
@@ -476,7 +500,7 @@ public sealed class ProjectAgentService : IProjectAgentService
     /// gates must allow). An unrestricted agent (the default) offers the full set, so behaviour is unchanged
     /// when the user hasn't restricted anything.
     /// </summary>
-    private static IReadOnlyList<AgentTool> BuildTools(AgentTools allowed, SoftwareInstallPermission installPermission)
+    private static IReadOnlyList<AgentTool> BuildTools(AgentTools allowed, SoftwareInstallPermission installPermission, bool memoryEnabled)
     {
         static JsonElement Schema(object o) => JsonSerializer.SerializeToElement(o);
 
@@ -546,6 +570,25 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "needed to run or build the project. Provide the full install command (e.g. 'winget install ...', " +
                 "'apt-get install -y ...', 'brew install ...').",
                 commandSchema));
+        }
+
+        // remember: not a file/command tool, so it isn't gated by the allow-list — only by the memory switch.
+        if (memoryEnabled)
+        {
+            tools.Add(new AgentTool("remember",
+                "Save a short, durable fact to recall in future sessions (a user preference or a key detail " +
+                "about this project). Use scope 'project' (default) for facts about this project, 'user' for " +
+                "facts about the user. Only remember stable, useful facts — never transient or sensitive details.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        text = new { type = "string", description = "The fact to remember, as one short sentence." },
+                        scope = new { type = "string", description = "'project' (default) or 'user'." }
+                    },
+                    required = new[] { "text" }
+                })));
         }
 
         return tools;

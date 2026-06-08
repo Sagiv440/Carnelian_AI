@@ -267,7 +267,7 @@ model id moves to a tooltip). Suggestion chips render under proactive replies (P
 3. ✅ Settings: grouped **Editor/AI** left nav + **Agents** panel (list/create/edit/delete); top-bar agent picker; transcript header glyph.
 4. ✅ Phase 2: per-agent skills (built-in packs + project `SKILL.md`) + tool allow-list → `ProjectAgentService`.
 5. ✅ Phase 3: `AutonomyLevel` → approval/steps/planning mapping.
-6. ⬜ Phase 4: `IMemoryService` + prompt injection + `remember` tool + memory management UI.
+6. ✅ Phase 4: `IMemoryService` (Markdown store) + prompt injection + `remember` tool + memory management UI.
 7. ⬜ Phase 5: proactive suggestion chips.
 
 ---
@@ -384,3 +384,36 @@ Project mode it auto-runs multi-step (within its tool allow-list + sandbox) and 
 numbered plan. *Ask* prompts before every tool call; *Guided* (the default) is unchanged (confirm-destructive,
 24 steps). With `SoftwareInstall = No permission`, an Autonomous agent allowed Install software still can't
 install (the tool is withheld and system-install commands refused).
+
+---
+
+## ✅ Phase 4 status — IMPLEMENTED (builds clean: 0 warnings, 0 errors)
+
+**Persistent memory in two scopes, stored as portable Markdown (changed from the planned JSON):**
+**global** facts about the user in `<app-data>/AI_Interface/memory.md` and **project** facts in
+`<project>/.AI/memory.md`. Format = a `# Memory` heading + one `- ` bullet per fact, with optional
+`<!-- source · date -->` metadata — safe to hand-edit and move between tools (mirrors `AgentMarkdown`).
+
+**New:** `Models/MemoryEntry.cs` (`record MemoryEntry(Text, Source, CreatedAtIso)` + `MemoryScope` enum),
+`Services/MemoryMarkdown.cs` (Serialize/Parse), `Services/IMemoryService.cs` + `MemoryService.cs`
+(`Load`/`Add`(dedups exact text)/`Remove`/`Clear`/`BuildContextBlock`), DI registration, `DesignMemoryService` stub.
+
+**Injection (all four modes):** `AgentPromptBuilder.Compose`/`PersonaPrefix` gained a `memoryBlock` arg;
+`MainWindowViewModel.MemoryBlock()` builds it when `MemoryActive()` (global `GlobalMemoryEnabled` **and** the
+active agent's `Agent.MemoryEnabled`). Two write paths: the project agent's **`remember` tool**
+(`ProjectAgentService` now ctor-injects `IMemoryService`; offered only when `memoryEnabled`; `scope:"user"`→
+global, else project) and an **explicit chat trigger** (`MaybeRememberFromPrompt` stores a prompt starting
+with "remember …" — project scope when a project is open, else global).
+
+**Settings UI:** Autonomy & Memory panel gained an *Enable persistent memory* toggle
+(`AppSettings.GlobalMemoryEnabled`) + per-scope fact lists with per-item ✕ and *Clear all*
+(`SettingsViewModel.InitializeMemory(projectDir)`, called by the main window before the dialog opens).
+
+**Known Phase-4 limitations (by design):** only *explicit* capture (the `remember` tool + the "remember …"
+chat trigger) — no silent auto-extraction of facts from every message (deferred, per §11). `Proactive`
+remains the only persist-only field (Phase 5).
+
+**To try it:** type `remember I prefer tabs over spaces` in chat → it's saved to *About you*; start a **new**
+chat and ask "what do you know about me?" → the fact is in the prompt. In a project, ask the agent to note
+something and it can call `remember` (scope project). Manage/forget facts in Settings → AI Features →
+Autonomy & Memory. Turn off *Enable persistent memory* → nothing is injected and the tool is withheld.
