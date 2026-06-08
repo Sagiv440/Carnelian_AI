@@ -22,6 +22,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IGeminiClient _gemini;
     private readonly IAnthropicClient _anthropic;
     private readonly ISpeechService _speech;
+    private readonly IPiperInstaller _piperInstaller;
     private readonly IMemoryService _memory;
     private readonly bool _loading;
 
@@ -308,6 +309,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(TestVoiceCommand))]
     private bool _isTestingVoice;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallPiperCommand))]
+    private bool _isInstallingPiper;
+
+    /// <summary>Raised when the view should open the Voice browser window.</summary>
+    public event System.EventHandler? VoiceBrowserRequested;
+
     // Provider as mutually exclusive radio options (mirrors the appearance-mode bools).
     public bool IsVoiceOff
     {
@@ -344,7 +352,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public SettingsViewModel(
         ISettingsService settings, IThemeService theme, IOllamaClient ollama,
         IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic,
-        ISpeechService speech, AgentsViewModel agentsPanel, IMemoryService memory)
+        ISpeechService speech, AgentsViewModel agentsPanel, IMemoryService memory,
+        IPiperInstaller piperInstaller)
     {
         _settings = settings;
         _theme = theme;
@@ -354,6 +363,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _anthropic = anthropic;
         _speech = speech;
         _memory = memory;
+        _piperInstaller = piperInstaller;
         AgentsPanel = agentsPanel;
 
         _loading = true;
@@ -392,7 +402,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         new DesignSettingsService(), new ThemeService(), new DesignOllamaClient(),
         new DesignCloudClient(AiProvider.OpenAI), new DesignCloudClient(AiProvider.Gemini),
         new DesignCloudClient(AiProvider.Anthropic), new DesignSpeechService(), new AgentsViewModel(),
-        new DesignMemoryService())
+        new DesignMemoryService(), new DesignPiperInstaller())
     {
     }
 
@@ -517,6 +527,39 @@ public sealed partial class SettingsViewModel : ViewModelBase
             IsTestingVoice = false;
         }
     }
+
+    private bool CanInstallPiper => !IsInstallingPiper;
+
+    /// <summary>Download and install the Piper engine, then switch the voice provider on.</summary>
+    [RelayCommand(CanExecute = nameof(CanInstallPiper))]
+    private async Task InstallPiper()
+    {
+        IsInstallingPiper = true;
+        VoiceStatusColor = BusyColor;
+        VoiceStatus = "Downloading Piper…";
+        var progress = new Progress<string>(s => VoiceStatus = s);
+        try
+        {
+            var exe = await _piperInstaller.InstallEngineAsync(progress, System.Threading.CancellationToken.None);
+            PiperExecutablePath = exe; // updates the field + persists via OnPiperExecutablePathChanged
+            IsVoicePiper = true;       // turn voice on now that the engine is present
+            VoiceStatusColor = OkColor;
+            VoiceStatus = "Piper installed. Click “Browse voices” to add a voice.";
+        }
+        catch (Exception ex)
+        {
+            VoiceStatusColor = ErrColor;
+            VoiceStatus = $"Install failed: {ex.Message}";
+        }
+        finally
+        {
+            IsInstallingPiper = false;
+        }
+    }
+
+    /// <summary>Open the Voice browser to download voices for different languages.</summary>
+    [RelayCommand]
+    private void BrowseVoices() => VoiceBrowserRequested?.Invoke(this, System.EventArgs.Empty);
 
     /// <summary>Persist the cloud API keys (called as each field changes, like the web-search keys).</summary>
     private void SaveCloudKeys()

@@ -658,25 +658,41 @@
                                              IsChecked="{Binding IsVoicePiper}"/>
                             </StackPanel>
 
-                            <!-- Piper configuration -->
-                            <StackPanel IsVisible="{Binding IsVoicePiper}" Margin="0,4,0,0">
-                                <TextBlock Classes="label" Text="Piper executable"/>
-                                <Grid ColumnDefinitions="*,Auto" Width="460" HorizontalAlignment="Left">
-                                    <TextBox Grid.Column="0" Text="{Binding PiperExecutablePath}"
-                                             PlaceholderText="path to piper(.exe)"/>
-                                    <Button Grid.Column="1" Classes="ghost" Content="Browse…" Margin="8,0,0,0"
-                                            Click="OnBrowsePiperExe"/>
-                                </Grid>
-
-                                <TextBlock Classes="label" Text="Voice model (.onnx)"/>
-                                <Grid ColumnDefinitions="*,Auto" Width="460" HorizontalAlignment="Left">
-                                    <TextBox Grid.Column="0" Text="{Binding PiperModelPath}"
-                                             PlaceholderText="path to a *.onnx voice"/>
-                                    <Button Grid.Column="1" Classes="ghost" Content="Browse…" Margin="8,0,0,0"
-                                            Click="OnBrowsePiperModel"/>
-                                </Grid>
+                            <!-- Piper: one-click install + voice browser -->
+                            <StackPanel IsVisible="{Binding IsVoicePiper}" Margin="0,8,0,0" Spacing="8">
                                 <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="460" HorizontalAlignment="Left"
-                                           Text="Get the binary from github.com/rhasspy/piper and voices from huggingface.co/rhasspy/piper-voices. Keep each voice's .onnx.json next to its .onnx."/>
+                                           Text="Install the engine once, then download voices for the languages you use. The app reads each reply with a downloaded voice that matches its language."/>
+
+                                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
+                                    <Button Classes="cta" Content="⬇  Download &amp; install Piper" MinWidth="210"
+                                            IsEnabled="{Binding !IsInstallingPiper}"
+                                            Command="{Binding InstallPiperCommand}"/>
+                                    <Button Classes="ghost" Content="🎙  Browse voices…" MinWidth="160"
+                                            Command="{Binding BrowseVoicesCommand}"/>
+                                </StackPanel>
+
+                                <!-- Advanced: point at an existing Piper / voice manually -->
+                                <Expander Header="Advanced — use my own Piper" Margin="0,4,0,0">
+                                    <StackPanel Margin="0,6,0,0">
+                                        <TextBlock Classes="label" Text="Piper executable"/>
+                                        <Grid ColumnDefinitions="*,Auto" Width="460" HorizontalAlignment="Left">
+                                            <TextBox Grid.Column="0" Text="{Binding PiperExecutablePath}"
+                                                     PlaceholderText="path to piper(.exe)"/>
+                                            <Button Grid.Column="1" Classes="ghost" Content="Browse…" Margin="8,0,0,0"
+                                                    Click="OnBrowsePiperExe"/>
+                                        </Grid>
+
+                                        <TextBlock Classes="label" Text="Default voice model (.onnx)"/>
+                                        <Grid ColumnDefinitions="*,Auto" Width="460" HorizontalAlignment="Left">
+                                            <TextBox Grid.Column="0" Text="{Binding PiperModelPath}"
+                                                     PlaceholderText="fallback voice when no language match"/>
+                                            <Button Grid.Column="1" Classes="ghost" Content="Browse…" Margin="8,0,0,0"
+                                                    Click="OnBrowsePiperModel"/>
+                                        </Grid>
+                                        <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="460" HorizontalAlignment="Left"
+                                                   Text="Used only if you'd rather manage Piper yourself. Keep each voice's .onnx.json next to its .onnx."/>
+                                    </StackPanel>
+                                </Expander>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,16,0,8" HorizontalAlignment="Left">

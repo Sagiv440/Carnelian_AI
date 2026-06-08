@@ -1,0 +1,147 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AI_Interface.ViewModels"
+        xmlns:models="using:AI_Interface.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="680" d:DesignHeight="660"
+        x:Class="AI_Interface.Views.VoiceBrowserWindow"
+        x:DataType="vm:VoiceBrowserViewModel"
+        Width="680" Height="670"
+        MinWidth="580" MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        Title="Voices">
+
+    <Design.DataContext>
+        <vm:VoiceBrowserViewModel/>
+    </Design.DataContext>
+
+    <Window.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style Selector="TextBlock.colhead">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style Selector="Button.rowaction">
+            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="MinWidth" Value="96"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+        </Style>
+        <Style Selector="ListBox.voices">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.voices ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+    </Window.Styles>
+
+    <Border Classes="card" CornerRadius="4" Margin="14" Padding="18">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="10">
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0">
+                <TextBlock Classes="brand" Text="Voices"/>
+                <TextBlock Classes="muted" TextWrapping="Wrap"
+                           Text="Download Piper voices for the languages you use. The app reads each reply with a downloaded voice that matches the language it's written in."/>
+            </StackPanel>
+
+            <!-- Filters: language + downloaded-only -->
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" >
+                <StackPanel Grid.Column="0">
+                    <TextBlock Classes="label" Text="Language"/>
+                    <ComboBox Width="220" ItemsSource="{Binding Languages}"
+                              SelectedItem="{Binding SelectedLanguage}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:LanguageOption">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <CheckBox Grid.Column="2" Content="Downloaded only" VerticalAlignment="Bottom"
+                          IsChecked="{Binding DownloadedOnly}"/>
+            </Grid>
+
+            <!-- Voice list -->
+            <Border Grid.Row="2" Classes="card" CornerRadius="4" Padding="0" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,82,120" Margin="14,10,14,8">
+                        <TextBlock Grid.Column="0" Classes="colhead" Text="Voice"/>
+                        <TextBlock Grid.Column="1" Classes="colhead" Text="Size"/>
+                        <TextBlock Grid.Column="2" Classes="colhead" Text=""/>
+                    </Grid>
+                    <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom"
+                            Background="{DynamicResource AppSurfaceBorderBrush}"/>
+
+                    <ListBox Grid.Row="1" Classes="voices" ItemsSource="{Binding Voices}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:PiperVoiceInfo" x:CompileBindings="False">
+                                <Border Padding="14,7">
+                                    <Grid ColumnDefinitions="*,82,120" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="0" Spacing="1">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           Foreground="{DynamicResource AppTextPrimary}"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Text="✓ downloaded" Classes="muted" FontSize="11"
+                                                           VerticalAlignment="Center"
+                                                           IsVisible="{Binding IsDownloaded}"/>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding LanguageName}" Classes="muted" FontSize="12"/>
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="1" Text="{Binding SizeDisplay}" Classes="muted"
+                                                   VerticalAlignment="Center"/>
+
+                                        <!-- Action on the selected row: Download or Remove by state -->
+                                        <Panel Grid.Column="2"
+                                               IsVisible="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}">
+                                            <Button Classes="cta rowaction" Content="Download"
+                                                    IsVisible="{Binding !IsDownloaded}"
+                                                    Command="{Binding DataContext.DownloadVoiceCommand,
+                                                               RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Classes="ghost rowaction" Content="Remove"
+                                                    IsVisible="{Binding IsDownloaded}"
+                                                    Command="{Binding DataContext.RemoveVoiceCommand,
+                                                               RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Panel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Empty / loading hint -->
+                    <TextBlock Grid.Row="1" Classes="muted" IsVisible="{Binding IsEmpty}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Text="No voices to show."/>
+                </Grid>
+            </Border>
+
+            <!-- Status / progress -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="10"
+                        IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                             IsVisible="{Binding IsBusy}"/>
+                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                             IsVisible="{Binding IsLoading}"/>
+                <TextBlock Text="{Binding StatusMessage}" Classes="muted" VerticalAlignment="Center"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <Button Grid.Row="4" Classes="cta" Content="Close" Click="OnClose"
+                    HorizontalAlignment="Right" MinWidth="100"/>
+        </Grid>
+    </Border>
+
+</Window>

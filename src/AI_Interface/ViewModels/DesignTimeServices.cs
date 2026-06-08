@@ -132,6 +132,38 @@ internal sealed class DesignSpeechService : ISpeechService
     public Task StopAsync() => Task.CompletedTask;
 }
 
+internal sealed class DesignPiperInstaller : IPiperInstaller
+{
+    public string EngineDirectory => "";
+    public string VoicesDirectory => "";
+    public string? ResolvedExecutablePath => null;
+    public bool IsEngineInstalled => false;
+    public Task<string> InstallEngineAsync(IProgress<string>? progress, CancellationToken ct) =>
+        Task.FromResult("");
+}
+
+internal sealed class DesignPiperVoiceCatalog : IPiperVoiceCatalog
+{
+    public Task<IReadOnlyList<PiperVoiceInfo>> ListAvailableAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<PiperVoiceInfo>>(new[]
+        {
+            new PiperVoiceInfo
+            {
+                Key = "en_US-amy-medium", LanguageCode = "en_US", LanguageFamily = "en",
+                LanguageName = "English (United States)", Name = "amy", Quality = "medium",
+                OnnxRepoPath = "", OnnxJsonRepoPath = "", SizeBytes = 63_000_000
+            }
+        });
+
+    public Task DownloadAsync(PiperVoiceInfo voice, IProgress<string>? progress, CancellationToken ct) =>
+        Task.CompletedTask;
+
+    public void Delete(PiperVoiceInfo voice) { }
+    public bool IsDownloaded(PiperVoiceInfo voice) => false;
+    public string? ResolveModelPathForLanguage(string languageFamily) => null;
+    public string? AnyInstalledModelPath() => null;
+}
+
 internal sealed class DesignAttachmentService : IAttachmentService
 {
     public Task<string> ExtractTextAsync(string path, int maxChars, CancellationToken ct = default) =>

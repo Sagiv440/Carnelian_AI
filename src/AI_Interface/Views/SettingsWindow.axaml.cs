@@ -24,12 +24,18 @@ public partial class SettingsWindow : Window
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_vm is not null)
+        {
             _vm.ModelConfigRequested -= OnModelConfigRequested;
+            _vm.VoiceBrowserRequested -= OnVoiceBrowserRequested;
+        }
 
         _vm = DataContext as SettingsViewModel;
 
         if (_vm is not null)
+        {
             _vm.ModelConfigRequested += OnModelConfigRequested;
+            _vm.VoiceBrowserRequested += OnVoiceBrowserRequested;
+        }
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
@@ -48,6 +54,15 @@ public partial class SettingsWindow : Window
         var window = new ModelConfigWindow
         {
             DataContext = App.Services.GetRequiredService<ModelConfigViewModel>()
+        };
+        await window.ShowDialog(this);
+    }
+
+    private async void OnVoiceBrowserRequested(object? sender, EventArgs e)
+    {
+        var window = new VoiceBrowserWindow
+        {
+            DataContext = App.Services.GetRequiredService<VoiceBrowserViewModel>()
         };
         await window.ShowDialog(this);
     }

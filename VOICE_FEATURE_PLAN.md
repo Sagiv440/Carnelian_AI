@@ -227,3 +227,32 @@ streaming (where `IsStreaming` flips to false at the end of `SendAsync`).
 
 **To try it:** Settings → **Voice** → pick **Piper**, point it at a `piper` binary + a `.onnx` voice
 (see links in the tab), **Test voice**, then click 🔈 on any reply.
+
+---
+
+## ✅ Phase 2 status — IMPLEMENTED (builds clean: 0 warnings, 0 errors)
+
+One-click setup, a voice catalog browser, and automatic language-aware voice selection.
+
+**Auto-install.** Settings → Voice → **Download & install Piper** fetches the correct release for the
+OS/arch into `%LOCALAPPDATA%/AI_Interface/piper`, extracts it (zip on Windows, tar.gz on Linux/macOS),
+marks the binary executable, and wires the path in — no manual browsing. (`IPiperInstaller`.)
+
+**Voice browser.** Settings → Voice → **Browse voices…** opens a window listing the published Piper
+catalog (`voices.json`) with a **language dropdown**, a **Downloaded-only** toggle, and inline
+**Download/Remove** per voice — modelled on the Ollama Model Config window. Voices download into the
+managed `…/piper/voices` folder. (`IPiperVoiceCatalog` + `VoiceBrowserWindow`/`VoiceBrowserViewModel`.)
+
+**Language-aware playback.** Each reply's language is detected (`ILanguageDetector` — script + stop-word
+heuristics) and `PiperSpeechService` picks a downloaded voice for that language (falling back to the
+default/any installed voice). So a Spanish reply is read by a Spanish voice when one is installed.
+
+**New files:** `Models/PiperVoiceInfo.cs`, `Models/LanguageOption.cs`, `Services/ILanguageDetector.cs`
++ `LanguageDetector.cs`, `Services/IPiperInstaller.cs` + `PiperInstaller.cs`,
+`Services/IPiperVoiceCatalog.cs` + `PiperVoiceCatalog.cs`, `Services/HttpDownloads.cs`,
+`ViewModels/VoiceBrowserViewModel.cs`, `Views/VoiceBrowserWindow.axaml(.cs)`.
+**Edited:** `App.axaml.cs` (DI), `Services/PiperSpeechService.cs` (language selection + Linux libs),
+`ViewModels/DesignTimeServices.cs`, `ViewModels/SettingsViewModel.cs`, `Views/SettingsWindow.axaml(.cs)`.
+
+**To try it:** Settings → **Voice** → **Piper** → **Download & install Piper** → **Browse voices…**,
+download a voice or two (e.g. English + your other language), close, then 🔈 a reply.

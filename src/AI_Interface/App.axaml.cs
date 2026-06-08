@@ -85,7 +85,20 @@ public partial class App : Application
         services.AddTransient<IDeepResearchService, DeepResearchService>();
 
         // Voice (text-to-speech): the Piper engine + a cross-platform audio player, behind the
-        // provider-agnostic ISpeechService (SpeechRouter picks the engine from settings).
+        // provider-agnostic ISpeechService (SpeechRouter picks the engine from settings). The engine
+        // is auto-installed and voices are downloaded from the Piper catalog; the voice for each reply
+        // is chosen from its detected language.
+        services.AddSingleton<ILanguageDetector, LanguageDetector>();
+        services.AddHttpClient<IPiperInstaller, PiperInstaller>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(20); // large engine/voice downloads
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("AI_Interface");
+        });
+        services.AddHttpClient<IPiperVoiceCatalog, PiperVoiceCatalog>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(20);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("AI_Interface");
+        });
         services.AddSingleton<IAudioPlayer, AudioPlayer>();
         services.AddSingleton<IPiperSpeechService, PiperSpeechService>();
         services.AddSingleton<ISpeechService, SpeechRouter>();
@@ -104,6 +117,7 @@ public partial class App : Application
         services.AddTransient<AgentsViewModel>();
         services.AddTransient<ProjectViewModel>();
         services.AddTransient<ModelConfigViewModel>();
+        services.AddTransient<VoiceBrowserViewModel>();
 
         return services.BuildServiceProvider();
     }
