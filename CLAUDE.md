@@ -17,7 +17,9 @@ Four operating modes (`AppMode`), chosen from the sidebar / composer rather than
 Cross-cutting extras: a per-prompt 🧠 **Thinking** toggle (plan-before-answer, depth set by an *Effort*
 slider in Settings), a hardware-aware **Model Config** tool for choosing/downloading Ollama models,
 **Agents** — a selectable persona (top-bar picker) whose voice is layered into every mode's system prompt,
-and **Memory** — persistent facts (global + per-project, stored as Markdown) injected into every mode.
+**Memory** — persistent facts (global + per-project, stored as Markdown) injected into every mode, and
+**Voice** — read replies aloud with a local **Piper** TTS engine (one-click install, a voice-catalog
+browser, and automatic language-matched voice selection; composer 🔊 *Auto-read* toggle).
 
 ## Commands
 
@@ -233,6 +235,31 @@ unwraps `//duckduckgo.com/l/?uddg=…` links. The injected `HttpClient` has a de
 (PDF via PdfPig, DOCX/ODT via their zip XML, everything else read as plain text), injected into the
 prompt as `[Attached documents]`. The composer's 📎 menu offers *Photos* and *Documents & text*.
 
+**Voice — text-to-speech.** Reads replies aloud, behind a provider-agnostic surface that mirrors chat
+routing. `ISpeechService` (`SpeakAsync`/`StopAsync`/`IsConfigured`) is implemented by `SpeechRouter`,
+which picks the engine from `AppSettings.SpeechProvider` (`SpeechProvider.None`/`Piper`), synthesizes via
+the chosen `ITtsEngine`, and plays through one shared `IAudioPlayer` (so a single cancellation/stop path).
+- *Engine* — `PiperSpeechService` (`IPiperSpeechService : ITtsEngine`) runs the local **Piper** binary
+  (`piper --model <voice.onnx> --output_file <tmp.wav>`, text on stdin) from the executable's own folder
+  (so it finds `espeak-ng-data`; otherwise it crashes, e.g. `0xC0000409`) and sets `LD_LIBRARY_PATH` on Linux.
+- *Playback* — `AudioPlayer` shells to the OS player (Windows `System.Media.SoundPlayer` via PowerShell;
+  Linux `paplay`→`aplay`→`ffplay`; macOS `afplay`); `Stop` kills the player process. Zero NuGet deps.
+- *Install* — `IPiperInstaller`/`PiperInstaller` downloads the per-OS/arch Piper release into
+  `%LOCALAPPDATA%/AI_Interface/piper`, extracts it (zip on Windows, `.tar.gz` via `System.Formats.Tar`),
+  chmod+x on Unix, and writes the resolved path to settings. Pinned to release tag `2023.11.14-2`.
+- *Voices* — `IPiperVoiceCatalog`/`PiperVoiceCatalog` reads the published `voices.json`, downloads a
+  voice's `.onnx` + `.onnx.json` into `…/piper/voices`, and resolves a downloaded voice **by language
+  family** for the speech path. `VoiceBrowserWindow`/`VoiceBrowserViewModel` (a Model-Config-style window)
+  lists the catalog with a language dropdown, a Downloaded-only toggle, and inline download/remove.
+- *Language-aware* — `PiperSpeechService` detects each reply's language (`ILanguageDetector` —
+  script ranges + stop-word scoring) and picks the matching downloaded voice, falling back to the default
+  (`AppSettings.PiperModelPath`) / any installed voice.
+- *UI* — a per-message 🔈 button (`MessageViewModel.IsSpeaking`/`SpeakGlyph`, `SpeakMessageCommand`) and a
+  composer **🔊 Auto-read** `ToggleButton` (`AutoSpeakEnabled`, persisted to `AppSettings.AutoSpeakReplies`,
+  shown only when `IsVoiceConfigured`) that speaks each completed reply. Settings → AI Features → **Voice**
+  has the *Download & install Piper* + *Browse voices* buttons and a manual-paths Advanced expander.
+  `HttpDownloads` is the shared streamed-download-with-progress helper for the installer + catalog.
+
 **Settings** (`SettingsService`): JSON under the per-user app-data folder; all reads/writes best-effort.
 `SettingsWindow` is a **grouped left nav + content host** (not a flat `TabControl` — a flat one can't show
 non-clickable group headers): a left rail with two muted headers (`TextBlock.navheader`) and `Button.nav`
@@ -244,13 +271,16 @@ entries, and a right `Panel` whose category panels toggle by `IsVisible` bound t
   Web Models: per-provider API key + Connect, which persists the key, probes, and raises `ConnectRequested`
   so the main window reloads the dropdown), **Agents** (the agent roster master/detail), *Autonomy & Memory*
   (agent approval mode + software-install permission + **persistent-memory** toggle and per-scope fact
-  lists, Phase 4), *Web Search* (provider + keys), *Voice*,
+  lists, Phase 4), *Web Search* (provider + keys), *Voice* (Piper: *Download & install Piper* + *Browse
+  voices* + a manual-paths Advanced expander; raises `VoiceBrowserRequested` to open `VoiceBrowserWindow`),
   *Research & Thinking* (research depth + Thinking *Effort*).
 
 **Theming & design system** (`ThemeService` + `SettingsWindow` + `Styles/ControlStyles.axaml`): a flat
 "IDE" look modelled on VS Code / Photoshop — the system UI font (Poppins still embedded in `Assets/Fonts`
 and selectable by name), a red-orange accent (`#F2542D`), neutral dark-gray surfaces, sharp 3–5px corners,
 hairline borders, flat (no gradients/glass/shadows). **Read the `app-style` skill before UI work.**
+The app/window icon is `Assets/app-logo.ico` (a multi-size icon generated from `Assets/app-logo.png`),
+referenced by `<ApplicationIcon>` in the csproj and `Window.Icon` in `MainWindow.axaml`.
 - Design tokens in `App.axaml`: shared brushes (`AppAccentBrush`, `UserBubbleBrush`, `AssistantBubbleBrush`,
   plus a near-flat compat `AccentGradientBrush`), font tokens `AppFont` + `AppFontSize` (**DynamicResource**
   so the font family/size can change live), plus **theme-variant-aware** structural tokens in the
@@ -286,6 +316,12 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   than the window's `x:DataType`.
 - **Message bubble styling** uses Avalonia style classes toggled from data: `Classes.user="{Binding
   IsUser}"` plus `Border.bubble` / `Border.bubble.user` selectors. No value converters.
+- **Code/command bubbles.** The transcript renders an assistant reply from `MessageViewModel.Segments`
+  (not the raw `Text`): `MarkdownSegmenter` (in `ViewModels/MessageSegment.cs`) splits the text into prose
+  vs. fenced ```` ``` ```` code parts, and `RebuildSegments` reconciles them **in place** on every streamed
+  delta (so a streaming code block grows without recreating its container). Prose renders as wrapped text;
+  code renders as a monospace `Border.codeBubble` with a language header + per-block 📋 copy (`OnCopyCode`).
+  The raw `Text` is still the source of truth for copy/persist/speak. Inline single-backtick spans stay literal.
 - **Design-time stubs** in `ViewModels/DesignTimeServices.cs` back the parameterless VM constructors so
   the XAML previewer works. If you add a service dependency to a container-resolved VM, add a matching
   stub (and update the VM's design-time constructor).

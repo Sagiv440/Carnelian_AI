@@ -29,6 +29,11 @@ Cross-cutting extras:
 - **🧠 Thinking** — a per-prompt toggle that turns on the model's native reasoning (Ollama models). The
   chain-of-thought is shown in a collapsible **"Thinking"** block above each answer (works with reasoning
   models such as `qwen3` / `deepseek-r1`); its depth is set by an *Effort* slider in Settings.
+- **🔊 Voice** — read replies aloud with a free, **offline** local TTS engine ([Piper](https://github.com/rhasspy/piper)).
+  Install it in one click from **Settings → AI Features → Voice**, then **Browse voices** to download
+  voices for the languages you use. Each reply plays in a voice that matches **its language** automatically.
+  Use the per-message 🔈 button, or the composer's **🔊 Auto-read** toggle to speak every reply. No key,
+  no cloud — the text never leaves your machine.
 - **Attachments** — the composer's 📎 menu attaches images (for vision models) or documents; text is
   extracted from PDF, DOCX, ODT and plain-text/code files and folded into the prompt.
 - **Model Config** — a hardware-aware recommender (Settings → AI Features → Models) that scans your

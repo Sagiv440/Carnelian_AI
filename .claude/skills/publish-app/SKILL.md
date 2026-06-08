@@ -31,3 +31,11 @@ output is large (~100 MB) because it embeds the runtime — this is expected.
 
 To support a new platform/architecture (e.g. `linux-arm64`, `osx-arm64`), copy one of the scripts in
 `build/` and change the `-r <rid>` and output path. Avalonia supports macOS too if a target is needed.
+
+## Not bundled: the Piper voice engine
+
+The **Voice** (text-to-speech) feature is **not** packaged into the distributable. Piper and its voices are
+downloaded on demand at runtime — from **Settings → AI Features → Voice → Download & install Piper** — into
+the user's `%LOCALAPPDATA%/AI_Interface/piper` (the install URL is pinned to release tag `2023.11.14-2` in
+`PiperInstaller`). So the single-file output stays the same size whether or not voice is used, and the app
+ships without any TTS binaries; the first install needs internet, after which voice runs offline.

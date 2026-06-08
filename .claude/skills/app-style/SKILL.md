@@ -59,6 +59,10 @@ near-flat red-orange) only for backward compatibility; prefer the solid `AppAcce
   group headers above them. Reuse these for any left-rail list.
 - `Button.suggestion` — proactive next-step chips below an assistant answer (rounded ~13px accent-outlined
   pill, accent text, translucent-accent hover); defined locally in `MainWindow.axaml`.
+- `Border.codeBubble` / `Border.codeHeader` — a code/command block in a reply: `AppInputBackground` body +
+  `AppSurfaceBrush` header bar (with the language label + a `Button.copy` 📋), 5px radius, hairline border;
+  the body is a monospace `SelectableTextBlock` (`Cascadia Code,Consolas,monospace`) in a horizontal
+  `ScrollViewer`. Defined locally in `MainWindow.axaml`; reuse for any code/preformatted block.
 - Class-toggled state from data: `Classes.user="{Binding IsUser}"`, `Classes.online="{Binding IsConnected}"`.
 
 ## Conventions
@@ -77,10 +81,11 @@ near-flat red-orange) only for backward compatibility; prefer the solid `AppAcce
   sitting at the old default are changed).
 
 ## Composer toggles & dialogs
-- **Per-prompt toolbar toggles** (Thinking) are `ToggleButton`s with the local `toolToggle` pill style in
-  `MainWindow.axaml` — the `:checked` state tints with a translucent accent (`#33F2542D`) + accent border.
-  Add new composer toggles the same way so they read as a set. (Search scope — Local/Web/Deep — is a
-  `ComboBox` beside them, not a toggle.)
+- **Per-prompt toolbar toggles** (🧠 Thinking, 🔊 Auto-read) are `ToggleButton`s with the local `toolToggle`
+  pill style in `MainWindow.axaml` — the `:checked` state tints with a translucent accent (`#33F2542D`) +
+  accent border. Add new composer toggles the same way so they read as a set. (Search scope — Local/Web/Deep
+  — is a `ComboBox` beside them, not a toggle. **🔊 Auto-read** is shown only when a voice is configured,
+  via `IsVisible="{Binding IsVoiceConfigured}"`.)
 - **Dialogs** (Settings, Project, tool approval, Model Config) are plain `Window`s whose content is
   wrapped in a `Border.card`, using `Button.cta` for the primary action and `Button.ghost` for
   Cancel/secondary. Match this for any new dialog instead of styling a bare window.

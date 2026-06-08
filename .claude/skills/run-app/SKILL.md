@@ -46,3 +46,7 @@ Cloud models (ChatGPT / Gemini / Claude) also appear in the picker once you add 
 - On Windows a running instance locks `AI_Interface.exe`, so a rebuild fails at the copy step while the
   app is open. Stop it first: `Stop-Process -Name AI_Interface -Force`.
 - Web Search and Deep Research additionally require internet access (DuckDuckGo + page fetches).
+- **Voice** (read replies aloud) is optional and off by default. It's set up in **Settings → AI Features →
+  Voice → Download & install Piper**, which fetches the local Piper engine into
+  `%LOCALAPPDATA%/AI_Interface/piper` (one-time internet); voices are downloaded from **Browse voices**.
+  Once installed it runs fully offline. No Ollama/cloud model is needed for TTS.
