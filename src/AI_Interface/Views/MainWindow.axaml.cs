@@ -129,9 +129,14 @@ public partial class MainWindow : Window
         void OnConnect(object? s, EventArgs args) => _vm?.RefreshCommand.Execute(null);
         settingsVm.ConnectRequested += OnConnect;
 
+        // Scope the Agents panel to the active project so its custom agents appear in the editor.
+        settingsVm.AgentsPanel.Initialize(_vm?.ActiveProjectDirectory is { Length: > 0 } dir ? dir : null);
+
         var settings = new SettingsWindow { DataContext = settingsVm };
         await settings.ShowDialog(this);
 
+        // Reload the top-bar agent picker once, so persona edits / new / deleted agents are reflected.
+        _vm?.LoadAgents();
         settingsVm.ConnectRequested -= OnConnect;
     }
 
@@ -145,6 +150,12 @@ public partial class MainWindow : Window
     {
         if (sender is Button { DataContext: MessageViewModel message } && _vm is not null)
             _vm.RerunPromptCommand.Execute(message);
+    }
+
+    private void OnSpeakMessage(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: MessageViewModel message } && _vm is not null)
+            _vm.SpeakMessageCommand.Execute(message);
     }
 
     private void OnScrollToEndRequested(object? sender, EventArgs e)

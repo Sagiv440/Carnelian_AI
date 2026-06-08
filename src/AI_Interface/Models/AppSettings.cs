@@ -43,6 +43,9 @@ public sealed class AppSettings
     /// <summary>Model selected last time, restored on startup if still installed.</summary>
     public string? DefaultModel { get; set; }
 
+    /// <summary>The agent selected last time (its <c>Id</c>), restored on startup. Defaults to the built-in "assistant".</summary>
+    public string ActiveAgentId { get; set; } = "assistant";
+
     /// <summary>Results requested per web search query.</summary>
     public int SearchResultsPerQuery { get; set; } = 5;
 
@@ -77,6 +80,18 @@ public sealed class AppSettings
     /// (0 = minimal, 100 = maximum effort).
     /// </summary>
     public int ThinkingEffort { get; set; } = 50;
+
+    // --- Voice (text-to-speech) ---
+
+    /// <summary>Which engine reads replies aloud. <see cref="SpeechProvider.None"/> = voice off.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public SpeechProvider SpeechProvider { get; set; } = SpeechProvider.None;
+
+    /// <summary>Path to the Piper executable (used when <see cref="SpeechProvider"/> is Piper).</summary>
+    public string PiperExecutablePath { get; set; } = "";
+
+    /// <summary>Path to a Piper voice model (<c>.onnx</c>); its <c>.onnx.json</c> sits beside it.</summary>
+    public string PiperModelPath { get; set; } = "";
 
     // --- Web search ---
 

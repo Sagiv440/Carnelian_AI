@@ -33,6 +33,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         string model,
         IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode,
+        string personaPrefix,
         string thinkingDirective,
         string projectSkills,
         SoftwareInstallPermission installPermission,
@@ -46,7 +47,8 @@ public sealed class ProjectAgentService : IProjectAgentService
 
         var messages = new List<ChatMessage>
         {
-            ChatMessage.System(SystemPrompt(project, installPermission) + thinkingDirective + projectSkills)
+            // The active agent's persona sits on top of the service-owned sandbox prompt.
+            ChatMessage.System(personaPrefix + SystemPrompt(project, installPermission) + thinkingDirective + projectSkills)
         };
         messages.AddRange(conversation);
 

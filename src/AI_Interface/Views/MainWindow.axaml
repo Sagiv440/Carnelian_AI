@@ -23,29 +23,7 @@
     </Window.Resources>
 
     <Window.Styles>
-        <!-- Sidebar nav tabs -->
-        <Style Selector="Button.nav">
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Padding" Value="10,6"/>
-            <Setter Property="Margin" Value="0,1"/>
-            <Setter Property="CornerRadius" Value="3"/>
-            <Setter Property="FontWeight" Value="Normal"/>
-            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
-        </Style>
-        <Style Selector="Button.nav /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
-        </Style>
-        <Style Selector="Button.nav.active">
-            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-        <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#33F2542D"/>
-        </Style>
+        <!-- Sidebar nav tabs (Button.nav / .active) live in Styles/ControlStyles.axaml (shared with Settings) -->
 
         <!-- Sidebar Chat Log / Files tabs -->
         <Style Selector="Button.tab">
@@ -227,7 +205,7 @@
 
         <!-- ===================== SIDEBAR ===================== -->
         <Border Grid.Column="0" Classes="card" CornerRadius="4" Margin="10" Padding="12" Width="240">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
                 <TextBlock Grid.Row="0" Classes="brand" Text="AI Interface" Margin="4,2,0,12"/>
 
                 <!-- New Chat -->
@@ -297,15 +275,8 @@
                     </TreeView>
                 </ScrollViewer>
 
-                <!-- Deep Research tab (toggles deep-research mode) -->
-                <ToggleButton Grid.Row="5" Classes="toolToggle" Margin="0,8,0,0"
-                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                              IsChecked="{Binding DeepResearchEnabled}"
-                              Content="🔎  Deep Research"
-                              ToolTip.Tip="Plan queries, read pages, synthesize a cited report"/>
-
                 <!-- Active project card (shown only in project mode) -->
-                <Border Grid.Row="6" Classes="card" CornerRadius="4" Padding="12,10" Margin="0,10,0,0"
+                <Border Grid.Row="5" Classes="card" CornerRadius="4" Padding="12,10" Margin="0,10,0,0"
                         IsVisible="{Binding HasActiveProject}">
                     <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="📁 PROJECT" Classes="muted"/>
@@ -328,9 +299,26 @@
         <!-- ===================== MAIN AREA ===================== -->
         <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto" Margin="0,10,10,10">
 
-            <!-- Top bar: model picker + connection dot + settings -->
+            <!-- Top bar: agent picker + model picker + connection dot + settings -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8"
                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,6">
+
+                <!-- Agent picker: the persona applied to every mode. Independent of the model. -->
+                <ComboBox MinWidth="160" MaxDropDownHeight="320" VerticalAlignment="Center"
+                          ItemsSource="{Binding Agents}"
+                          SelectedItem="{Binding SelectedAgent}"
+                          PlaceholderText="Agent"
+                          ToolTip.Tip="The agent (persona) answering — manage agents in Settings → Agents">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="models:Agent">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding Glyph}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
                 <Ellipse Classes="status" Classes.online="{Binding IsConnected}" VerticalAlignment="Center"
                          ToolTip.Tip="{Binding ConnectionStatus}"/>
                 <ComboBox MinWidth="200" MaxDropDownHeight="320" VerticalAlignment="Center"
@@ -368,7 +356,8 @@
                                     <Panel Grid.Column="1">
                                     <StackPanel Spacing="3">
                                         <TextBlock Text="{Binding Header}" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource AppTextPrimary}"/>
+                                                   Foreground="{DynamicResource AppTextPrimary}"
+                                                   ToolTip.Tip="{Binding ModelName}"/>
 
                                         <!-- Collapsible reasoning / action log ("how it got to the answer") -->
                                         <StackPanel IsVisible="{Binding HasWork}" Margin="0,1">
@@ -449,6 +438,9 @@
                                         <Button Classes="copy" Click="OnRerunMessage" Content="↻"
                                                 ToolTip.Tip="Rerun this prompt"
                                                 IsVisible="{Binding IsUser}"/>
+                                        <Button Classes="copy" Click="OnSpeakMessage" Content="{Binding SpeakGlyph}"
+                                                ToolTip.Tip="Read aloud"
+                                                IsVisible="{Binding !IsUser}"/>
                                         <Button Classes="copy" Click="OnCopyMessage" Content="📋"
                                                 ToolTip.Tip="Copy message"/>
                                     </StackPanel>
@@ -517,7 +509,7 @@
                              MaxHeight="160"
                              PlaceholderText="Type a message…  (Enter to send, Shift+Enter for a new line)"/>
 
-                    <!-- Toolbar: attach + web-search + thinking toggles (left), send/stop (right) -->
+                    <!-- Toolbar: attach + search-scope dropdown + thinking toggle (left), send/stop (right) -->
                     <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
                         <Button Grid.Column="0" Classes="ghost" Content="📎" FontSize="15"
                                 ToolTip.Tip="Attach files">
@@ -529,10 +521,18 @@
                             </Button.Flyout>
                         </Button>
 
-                        <ToggleButton Grid.Column="1" Classes="toolToggle" Margin="8,0,0,0"
-                                      IsChecked="{Binding WebSearchEnabled}"
-                                      Content="🌐 Web search"
-                                      ToolTip.Tip="Search the web for this prompt"/>
+                        <!-- Search scope: Local / Web / Deep (hidden while a project is active) -->
+                        <ComboBox Grid.Column="1" Margin="8,0,0,0" MinWidth="150" VerticalAlignment="Center"
+                                  ItemsSource="{Binding SearchModes}"
+                                  SelectedItem="{Binding SelectedSearchMode}"
+                                  IsVisible="{Binding !HasActiveProject}"
+                                  ToolTip.Tip="Choose how this prompt is answered">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ModeOption">
+                                    <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Description}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <ToggleButton Grid.Column="2" Classes="toolToggle" Margin="8,0,0,0"
                                       IsChecked="{Binding ThinkingEnabled}"

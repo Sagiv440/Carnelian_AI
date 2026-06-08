@@ -15,7 +15,8 @@ Four operating modes (`AppMode`), chosen from the sidebar / composer rather than
 - **Project** — a tool-using **agent** scoped to a project directory (create/open a project to enter it).
 
 Cross-cutting extras: a per-prompt 🧠 **Thinking** toggle (plan-before-answer, depth set by an *Effort*
-slider in Settings), and a hardware-aware **Model Config** tool for choosing/downloading Ollama models.
+slider in Settings), a hardware-aware **Model Config** tool for choosing/downloading Ollama models, and
+**Agents** — a selectable persona (top-bar picker) whose voice is layered into every mode's system prompt.
 
 ## Commands
 
@@ -50,7 +51,8 @@ There is no test project yet. To run the app end-to-end you need Ollama running 
 interfaces) → `ViewModels` (MVVM, no Avalonia UI types) → `Views` (XAML + thin code-behind).
 Services are registered in `App.ConfigureServices()` and constructor-injected; view models resolved
 from the container are `MainWindowViewModel` (the window's `DataContext`), `SettingsViewModel`,
-`ProjectViewModel`, and `ModelConfigViewModel`.
+`AgentsViewModel` (the Agents panel, nested in `SettingsViewModel.AgentsPanel`), `ProjectViewModel`, and
+`ModelConfigViewModel`.
 
 **The modes** all live in `MainWindowViewModel.SendAsync`, which switches on `AppMode`. Every mode is
 provider-agnostic: the VM resolves the chosen model's client via `_router.For(SelectedModel.Provider)`
@@ -117,6 +119,24 @@ text (`MaxSteps` cap). Tools: `list_directory`, `read_file`, `write_file`, `crea
   `*.skill.md`, or markdown under a `skills` folder; bounded, skipping `.AI`/`.git`/`node_modules`/…)
   and their text is appended to the agent's system prompt.
 
+**Agents — selectable persona** (`IAgentService`/`AgentService`, `AgentPromptBuilder`). An *agent is data*
+(`Models/Agent.cs`): Id/Name/Glyph/**Persona** + forward-compat fields (Skills/Tools/Autonomy/MemoryEnabled/
+Proactive) that are **persisted-only** today — Phase 1 wires **only Persona** into behaviour. The registry
+de-dupes three sources by id with **project overriding global overriding built-in**: an embedded read-only
+seed (`assistant`/`researcher`/`code-buddy`/`autopilot`, `IsBuiltIn=true`), global customs in
+`<app-data>/AI_Interface/agents/*.json`, and per-project customs in `<project>/.AI/agents/*.json`
+(best-effort JSON store; `SaveCustom`/`DeleteCustom` refuse built-in ids). The active agent's id persists in
+`AppSettings.ActiveAgentId`. `MainWindowViewModel` holds the `Agents` collection + `SelectedAgent` (top-bar
+picker beside the model dropdown — agent and model are independent) and reloads on project enter/exit.
+`AgentPromptBuilder.Compose(agent, baseInstructions, thinkingDirective)` builds the streaming modes' system
+prompt (persona → base → Thinking), and `PersonaPrefix(agent)` is threaded into `DeepResearchService.RunAsync`
+and `ProjectAgentService.RunAsync` so the persona applies in **all four modes**. The assistant
+`MessageViewModel` carries `AgentGlyph`/`AgentName`; the transcript header shows the agent's glyph + name
+(model id moves to a tooltip). Settings → AI Features → **Agents** is a master/detail panel (`AgentsViewModel`):
+list with a built-in badge, **＋ New** / **Duplicate** (always a global custom) / **Delete** (disabled for
+built-ins), editing Name / Glyph / Persona / Default model (the provider-aware picker). The main window calls
+`AgentsPanel.Initialize(projectDir)` before opening Settings and `vm.LoadAgents()` after it closes.
+
 **Model Config — hardware-aware recommender.** `IHardwareService` scans CPU/RAM and GPU/VRAM
 (nvidia-smi first, best-effort cross-platform). `ModelCatalog` (in `Models/ModelCatalog.cs`) ranks a
 curated model list by fit to the memory budget plus the chosen use case / quant / context. Opened from
@@ -138,15 +158,17 @@ unwraps `//duckduckgo.com/l/?uddg=…` links. The injected `HttpClient` has a de
 prompt as `[Attached documents]`. The composer's 📎 menu offers *Photos* and *Documents & text*.
 
 **Settings** (`SettingsService`): JSON under the per-user app-data folder; all reads/writes best-effort.
-`SettingsWindow` tabs:
-- **AI Model** — Local AI (Ollama URL, *Quick setup*, *Test connection*, *Model_Config*) and **Web Models**
-  (per-provider API-key field + Connect for ChatGPT / Gemini / Claude). Connect persists the key, probes the
-  provider, shows a green/red status, and raises `ConnectRequested` so the main window reloads the dropdown.
-- **Theme** — appearance (light/dark/system), accent + bubble colors, and **Typography** (font family +
-  base size).
-- **Project** — agent approval mode + *Software installation* (No permission / Ask every time / Allow).
-- **General** — research depth + Thinking *Effort*.
-- **Web Search** — provider + API keys.
+`SettingsWindow` is a **grouped left nav + content host** (not a flat `TabControl` — a flat one can't show
+non-clickable group headers): a left rail with two muted headers (`TextBlock.navheader`) and `Button.nav`
+entries, and a right `Panel` whose category panels toggle by `IsVisible` bound to per-category bools on
+`SettingsViewModel` (`SelectCategoryCommand` + `SettingsCategory` enum). Panels are moved **verbatim** under:
+- **EDITOR FEATURES** — *Appearance* (light/dark + accent/bubble colors), *Typography* (font + size),
+  *Layout* (placeholder).
+- **AI FEATURES** — *Models* (Local AI: Ollama URL, *Quick setup*, *Test connection*, *Model_Config*; and
+  Web Models: per-provider API key + Connect, which persists the key, probes, and raises `ConnectRequested`
+  so the main window reloads the dropdown), **Agents** (the agent roster master/detail), *Autonomy & Memory*
+  (agent approval mode + software-install permission), *Web Search* (provider + keys), *Voice*,
+  *Research & Thinking* (research depth + Thinking *Effort*).
 
 **Theming & design system** (`ThemeService` + `SettingsWindow` + `Styles/ControlStyles.axaml`): a flat
 "IDE" look modelled on VS Code / Photoshop — the system UI font (Poppins still embedded in `Assets/Fonts`
@@ -158,13 +180,15 @@ hairline borders, flat (no gradients/glass/shadows). **Read the `app-style` skil
   `ThemeDictionaries` (`AppWindowBackground`, `AppSurfaceBrush`, `AppSurfaceBorderBrush`, `AppInputBackground`,
   `AppTextPrimary`, `AppTextSecondary`). Reference all via `{DynamicResource ...}`.
 - Reusable style classes in `Styles/ControlStyles.axaml`: `Button.cta` (flat solid accent), `Button.ghost`,
-  `Border.card`, `TextBlock.brand`, `TextBlock.muted`.
+  `Border.card`, `TextBlock.brand`, `TextBlock.muted`, plus `Button.nav`/`.active` (left-rail entries, shared
+  by the sidebar chat log and the Settings category nav) and `TextBlock.navheader` (group headers).
 - `ThemeService.Apply` runs at startup and on every change in `SettingsViewModel` (guarded by `_loading`).
   It overrides the themeable brush keys, the appearance variant, and `AppFont` ("Poppins" maps to the
   embedded font; anything else is a system family) + `AppFontSize`. Defaults + the swatch palette + font
   list live in `Models/ThemeDefaults.cs`; `SettingsService` migrates the old purple/Poppins defaults on load.
-- `SettingsWindow` puts its top-level tabs in a **left category rail** (a `TabControl` with
-  `Classes="settings"` + `TabStripPlacement="Left"`), with the selected category's content on the right.
+- `SettingsWindow` uses a **grouped left nav** (section headers + `Button.nav` entries) with the selected
+  category's content on the right (toggled by `IsVisible`). The *Models* category nests a small inner
+  `TabControl` (Local AI / Web Models).
 
 **Sidebar.** New Chat + Project buttons, then the chat log, the Deep Research toggle, the active-project
 card, and the model/connection footer. When a project is active a **Chat Log / Files** tab strip appears:

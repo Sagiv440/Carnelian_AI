@@ -20,6 +20,7 @@ public interface IProjectAgentService
     /// <param name="model">Model id to use (must support tool calling).</param>
     /// <param name="conversation">Prior user/assistant turns; the agent prepends its own system prompt.</param>
     /// <param name="approvalMode">Whether/when to ask the user before a tool runs.</param>
+    /// <param name="personaPrefix">The active agent's persona, prepended to the system prompt (empty = none).</param>
     /// <param name="thinkingDirective">Extra planning instruction appended to the system prompt (empty = off).</param>
     /// <param name="projectSkills">Project skill files appended to the system prompt (empty = none).</param>
     /// <param name="installPermission">Whether/how the agent may install software machine-wide.</param>
@@ -33,6 +34,7 @@ public interface IProjectAgentService
         string model,
         IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode,
+        string personaPrefix,
         string thinkingDirective,
         string projectSkills,
         SoftwareInstallPermission installPermission,

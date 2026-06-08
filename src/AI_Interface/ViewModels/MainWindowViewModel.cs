@@ -15,8 +15,12 @@ namespace AI_Interface.ViewModels;
 
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
-    private const string ChatSystemPrompt =
-        "You are a helpful AI assistant running locally via Ollama. Be accurate and concise.";
+    /// <summary>
+    /// Base (mode-neutral) chat instructions. The active agent's persona is layered on top via
+    /// <see cref="AgentPromptBuilder"/>, so this is no longer the whole system prompt.
+    /// </summary>
+    private const string ChatBaseInstructions =
+        "You are running locally via Ollama. Be accurate and concise.";
 
     private readonly IModelRouter _router;
     private readonly IWebSearchService _search;
@@ -26,6 +30,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IChatHistoryService _history;
     private readonly IProjectAgentService _agent;
     private readonly IProjectSkillService _skills;
+    private readonly ISpeechService _speech;
+    private readonly IAgentService _agents;
 
     /// <summary>Skill files loaded from the active project (empty when not in a project).</summary>
     private IReadOnlyList<ProjectSkill> _projectSkills = Array.Empty<ProjectSkill>();
@@ -54,7 +60,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>Models offered in the top-bar picker, across every configured provider.</summary>
     public ObservableCollection<ChatModel> Models { get; } = new();
+
+    /// <summary>Agents offered in the top-bar picker (built-in + global + the active project's customs).</summary>
+    public ObservableCollection<Agent> Agents { get; } = new();
     public IReadOnlyList<ModeOption> Modes { get; }
+
+    /// <summary>The composer's search-scope dropdown options (Local / Web / Deep), a subset of <see cref="Modes"/>.</summary>
+    public IReadOnlyList<ModeOption> SearchModes { get; }
 
     /// <summary>Saved conversations, newest first (the sidebar "Chat Log").</summary>
     public ObservableCollection<ChatSession> ChatLog { get; } = new();
@@ -65,10 +77,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private bool _hasAttachments;
-
-    /// <summary>Per-prompt toggle: when on, a plain chat prompt is answered with a web search first.</summary>
-    [ObservableProperty]
-    private bool _webSearchEnabled;
 
     /// <summary>Per-prompt toggle: when on, the model is asked to plan before answering (depth = Effort setting).</summary>
     [ObservableProperty]
@@ -81,6 +89,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private ChatModel? _selectedModel;
+
+    /// <summary>The active agent whose persona is applied to every mode's system prompt.</summary>
+    [ObservableProperty]
+    private Agent? _selectedAgent;
 
     [ObservableProperty]
     private ModeOption _selectedMode;
@@ -142,7 +154,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IAttachmentService attachments,
         IChatHistoryService history,
         IProjectAgentService agent,
-        IProjectSkillService skills)
+        IProjectSkillService skills,
+        ISpeechService speech,
+        IAgentService agents)
     {
         _router = router;
         _search = search;
@@ -152,6 +166,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _history = history;
         _agent = agent;
         _skills = skills;
+        _speech = speech;
+        _agents = agents;
 
         Modes = new[]
         {
@@ -160,9 +176,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             new ModeOption(AppMode.DeepResearch, "Deep Research", "Plan queries, read pages, synthesize a cited report."),
             new ModeOption(AppMode.Project, "Project", "Use tools to edit files and run commands in a project directory.")
         };
+        SearchModes = new[]
+        {
+            new ModeOption(AppMode.Chat, "💬  Local search", "Answer with the selected model only — no web."),
+            new ModeOption(AppMode.WebSearch, "🌐  Web search", "Search the web once, then answer with citations."),
+            new ModeOption(AppMode.DeepResearch, "🔎  Deep search", "Plan queries, read pages, then synthesize a cited report.")
+        };
         _selectedMode = Modes[0];
         _ollamaBaseUrl = settings.Current.OllamaBaseUrl;
         // The saved selection is restored after the model list loads (see RefreshAsync).
+
+        LoadAgents(); // built-in roster + global customs (project customs join on project activation)
 
         foreach (var session in _history.Load())
             ChatLog.Add(session);
@@ -173,7 +197,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         : this(new DesignModelRouter(), new DesignWebSearchService(),
                new DesignDeepResearchService(), new DesignSettingsService(),
                new DesignAttachmentService(), new DesignChatHistoryService(),
-               new DesignProjectAgentService(), new DesignProjectSkillService())
+               new DesignProjectAgentService(), new DesignProjectSkillService(),
+               new DesignSpeechService(), new DesignAgentService())
     {
     }
 
@@ -188,6 +213,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // Persist as "{provider}:{id}" so a cloud model round-trips by provider, not just by id.
         _settings.Current.DefaultModel = value is null ? null : $"{value.Provider}:{value.Id}";
         _settings.Save();
+    }
+
+    partial void OnSelectedAgentChanged(Agent? value)
+    {
+        // Persist the chosen agent's id so it's restored next launch (like DefaultModel).
+        if (value is not null)
+        {
+            _settings.Current.ActiveAgentId = value.Id;
+            _settings.Save();
+        }
+    }
+
+    /// <summary>The active agent's persona block, prepended to every mode's system prompt (empty = none).</summary>
+    private string PersonaPrefix() => AgentPromptBuilder.PersonaPrefix(SelectedAgent);
+
+    /// <summary>
+    /// Rebuilds the agent picker from the registry (built-in + global + the active project's customs)
+    /// and restores the saved selection. Called on construction, on project enter/exit, and after the
+    /// Settings → Agents panel may have changed the roster.
+    /// </summary>
+    public void LoadAgents()
+    {
+        var previousId = SelectedAgent?.Id ?? _settings.Current.ActiveAgentId;
+
+        Agents.Clear();
+        foreach (var agent in _agents.ListAgents(ActiveProject?.Directory))
+            Agents.Add(agent);
+
+        SelectedAgent =
+            Agents.FirstOrDefault(a => string.Equals(a.Id, previousId, StringComparison.OrdinalIgnoreCase))
+            ?? Agents.FirstOrDefault(a => string.Equals(a.Id, _agents.Default.Id, StringComparison.OrdinalIgnoreCase))
+            ?? Agents.FirstOrDefault();
     }
 
     /// <summary>Parses a persisted "{provider}:{id}" selection back into a <see cref="ChatModel"/>.</summary>
@@ -208,15 +265,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         return new ChatModel(AiProvider.Ollama, saved);
     }
 
-    /// <summary>Deep Research sidebar tab: on = deep-research mode, off = plain chat.</summary>
-    public bool DeepResearchEnabled
+    /// <summary>
+    /// The composer's Local / Web / Deep search dropdown selection, mapped to the active
+    /// <see cref="AppMode"/>. (In Project mode the dropdown is hidden; the getter falls back to the first option.)
+    /// </summary>
+    public ModeOption SelectedSearchMode
     {
-        get => SelectedMode.Mode == AppMode.DeepResearch;
-        set => SetMode(value ? AppMode.DeepResearch : AppMode.Chat);
+        get => SearchModes.FirstOrDefault(o => o.Mode == SelectedMode.Mode) ?? SearchModes[0];
+        set { if (value is not null) SetMode(value.Mode); }
     }
 
     partial void OnSelectedModeChanged(ModeOption value) =>
-        OnPropertyChanged(nameof(DeepResearchEnabled));
+        OnPropertyChanged(nameof(SelectedSearchMode));
 
     private void SetMode(AppMode mode)
     {
@@ -298,13 +358,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         // The per-prompt toggle upgrades a plain chat into a web-searched answer.
         var mode = SelectedMode.Mode;
-        if (WebSearchEnabled && mode == AppMode.Chat)
-            mode = AppMode.WebSearch;
 
         var user = new MessageViewModel(ChatRole.User, prompt);
         user.SetAttachments(attachments);
         Messages.Add(user);
-        var assistant = new MessageViewModel(ChatRole.Assistant) { IsStreaming = true, ModelName = model };
+        // Stamp the reply with the active agent's identity (glyph + name show in the header; the model id
+        // moves to a tooltip). The agent's persona is layered into the system prompt for every mode below.
+        var agent = SelectedAgent;
+        var assistant = new MessageViewModel(ChatRole.Assistant)
+        {
+            IsStreaming = true,
+            ModelName = model,
+            AgentGlyph = agent?.Glyph,
+            AgentName = agent?.Name
+        };
         Messages.Add(assistant);
         RequestScroll();
 
@@ -434,7 +501,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         StatusText = $"Found {results.Count} results — answering…";
         var messages = BuildWebSearchMessages(
-            WithAttachedContext(prompt, user), results, user.Images, ThinkingDirective());
+            WithAttachedContext(prompt, user), results, user.Images, PersonaPrefix(), ThinkingDirective());
         var raw = new StringBuilder();
         await foreach (var delta in client.ChatStreamAsync(model, messages, ThinkingEnabled, ct))
         {
@@ -456,6 +523,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             client,
             WithAttachedContext(prompt, user),
             model,
+            PersonaPrefix(),
             progress,
             // The research service streams on a background thread; marshal each token to the UI.
             delta => Dispatcher.UIThread.Post(() =>
@@ -485,7 +553,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // Activity (the 🔧 action log) goes to the collapsible "work" block; the final reply to the answer.
         await _agent.RunAsync(
             client, ActiveProject, model, conversation, _settings.Current.AgentApproval,
-            ThinkingDirective(), ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
+            PersonaPrefix(), ThinkingDirective(), ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
             activity => Dispatcher.UIThread.Post(() =>
             {
                 assistant.AppendWork(activity);
@@ -562,7 +630,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private List<ChatMessage> BuildChatHistory(MessageViewModel pendingAssistant)
     {
-        var history = new List<ChatMessage> { ChatMessage.System(ChatSystemPrompt + ThinkingDirective()) };
+        // System prompt = active agent's persona → base chat instructions → Thinking directive.
+        var systemPrompt = AgentPromptBuilder.Compose(SelectedAgent, ChatBaseInstructions, ThinkingDirective());
+        var history = new List<ChatMessage> { ChatMessage.System(systemPrompt) };
         foreach (var m in Messages)
         {
             if (ReferenceEquals(m, pendingAssistant))
@@ -586,7 +656,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private static List<ChatMessage> BuildWebSearchMessages(
         string prompt, IReadOnlyList<SearchResult> results, IReadOnlyList<string> images,
-        string thinkingDirective)
+        string personaPrefix, string thinkingDirective)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Web search results:");
@@ -604,6 +674,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         return new List<ChatMessage>
         {
             ChatMessage.System(
+                personaPrefix +
                 "Answer the question using the web search results below. Cite sources inline with " +
                 "bracketed numbers like [1]. If the results are insufficient, say so." + thinkingDirective),
             new ChatMessage(ChatRole.User, sb.ToString(), images.Count > 0 ? images : null)
@@ -678,6 +749,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ShowProjectFiles = false;         // start on the Chat Log tab
         LoadLog();                        // load this project's chats into the sidebar log
         LoadFileTree();                   // build the Files tab tree
+        LoadAgents();                     // surface this project's custom agents in the picker
         await LoadProjectSkillsAsync(project);
     }
 
@@ -695,6 +767,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ShowProjectFiles = false;
         FileTree.Clear();
         LoadLog();                        // reload the global chat log
+        LoadAgents();                     // drop the project's custom agents from the picker
         SetMode(AppMode.Chat);
     }
 
@@ -826,6 +899,40 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         InputText = message.Text;
         if (SendCommand.CanExecute(null))
             SendCommand.Execute(null);
+    }
+
+    /// <summary>Read an assistant message aloud (the 🔈 button); clicking again stops it.</summary>
+    [RelayCommand]
+    private async Task SpeakMessage(MessageViewModel? message)
+    {
+        if (message is null)
+            return;
+
+        // Stop whatever is currently playing (covers both "stop this one" and "switch to another").
+        var wasSpeaking = message.IsSpeaking;
+        await _speech.StopAsync();
+        if (wasSpeaking)
+            return; // toggled off — the in-flight call clears its own IsSpeaking in its finally
+
+        if (!_speech.IsConfigured)
+        {
+            StatusText = "No voice configured — choose one in Settings → Voice.";
+            return;
+        }
+
+        message.IsSpeaking = true;
+        try
+        {
+            await _speech.SpeakAsync(message.Text);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Voice error: {ex.Message}";
+        }
+        finally
+        {
+            message.IsSpeaking = false;
+        }
     }
 
     [RelayCommand]

@@ -12,16 +12,31 @@ public sealed partial class MessageViewModel : ObservableObject
 
     public bool IsUser => Role == ChatRole.User;
 
-    /// <summary>For assistant messages, the model that generated the reply (shown as the header).</summary>
+    /// <summary>For assistant messages, the model that generated the reply (shown as a tooltip).</summary>
     public string? ModelName { get; init; }
+
+    /// <summary>For assistant messages, the agent that produced the reply (its glyph + name show in the header).</summary>
+    public string? AgentGlyph { get; init; }
+    public string? AgentName { get; init; }
 
     public string Header => Role switch
     {
         ChatRole.User => "You",
-        ChatRole.Assistant => string.IsNullOrWhiteSpace(ModelName) ? "Assistant" : ModelName,
+        ChatRole.Assistant => AssistantHeader,
         ChatRole.System => "System",
         _ => "?"
     };
+
+    /// <summary>Assistant header: the agent's glyph + name when known, else the model id, else "Assistant".</summary>
+    private string AssistantHeader
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(AgentName))
+                return string.IsNullOrWhiteSpace(AgentGlyph) ? AgentName! : $"{AgentGlyph}  {AgentName}";
+            return string.IsNullOrWhiteSpace(ModelName) ? "Assistant" : ModelName;
+        }
+    }
 
     /// <summary>Message body (the final answer). Grows in place while a reply is streaming.</summary>
     [ObservableProperty]
@@ -45,6 +60,15 @@ public sealed partial class MessageViewModel : ObservableObject
     /// <summary>True while this (assistant) message is still being generated.</summary>
     [ObservableProperty]
     private bool _isStreaming;
+
+    /// <summary>True while this message is being read aloud (drives the speak button's glyph).</summary>
+    [ObservableProperty]
+    private bool _isSpeaking;
+
+    /// <summary>Speak-button glyph: ⏹ to stop while reading, 🔈 to start otherwise.</summary>
+    public string SpeakGlyph => IsSpeaking ? "⏹" : "🔈";
+
+    partial void OnIsSpeakingChanged(bool value) => OnPropertyChanged(nameof(SpeakGlyph));
 
     /// <summary>Web sources backing this answer (web-search / deep-research modes).</summary>
     public ObservableCollection<SearchResult> Sources { get; } = new();

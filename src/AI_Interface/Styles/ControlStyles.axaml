@@ -86,4 +86,40 @@
         <Setter Property="FontSize" Value="12"/>
     </Style>
 
+    <!-- ====================================================================
+         Left-rail navigation entries (sidebar chat log, Settings categories).
+         Promoted from MainWindow so both windows share the look. Full-width,
+         left-aligned, sharp; the .active class tints with a translucent accent.
+         ==================================================================== -->
+    <Style Selector="Button.nav">
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Margin" Value="0,1"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+    </Style>
+    <Style Selector="Button.nav /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+    </Style>
+    <Style Selector="Button.nav.active">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#33F2542D"/>
+    </Style>
+
+    <!-- Group header above a set of nav entries (e.g. "EDITOR FEATURES") -->
+    <Style Selector="TextBlock.navheader">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="10,14,0,4"/>
+    </Style>
+
 </Styles>

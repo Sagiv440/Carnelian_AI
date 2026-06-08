@@ -20,7 +20,38 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IOpenAiClient _openAi;
     private readonly IGeminiClient _gemini;
     private readonly IAnthropicClient _anthropic;
+    private readonly ISpeechService _speech;
     private readonly bool _loading;
+
+    /// <summary>The Agents (AI Features) master/detail panel.</summary>
+    public AgentsViewModel AgentsPanel { get; }
+
+    // --- left-rail category navigation (Editor Features / AI Features) ---
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAppearance))]
+    [NotifyPropertyChangedFor(nameof(IsTypography))]
+    [NotifyPropertyChangedFor(nameof(IsLayout))]
+    [NotifyPropertyChangedFor(nameof(IsModels))]
+    [NotifyPropertyChangedFor(nameof(IsAgents))]
+    [NotifyPropertyChangedFor(nameof(IsAutonomyAndMemory))]
+    [NotifyPropertyChangedFor(nameof(IsWebSearch))]
+    [NotifyPropertyChangedFor(nameof(IsVoice))]
+    [NotifyPropertyChangedFor(nameof(IsResearchAndThinking))]
+    private SettingsCategory _selectedCategory = SettingsCategory.Appearance;
+
+    public bool IsAppearance => SelectedCategory == SettingsCategory.Appearance;
+    public bool IsTypography => SelectedCategory == SettingsCategory.Typography;
+    public bool IsLayout => SelectedCategory == SettingsCategory.Layout;
+    public bool IsModels => SelectedCategory == SettingsCategory.Models;
+    public bool IsAgents => SelectedCategory == SettingsCategory.Agents;
+    public bool IsAutonomyAndMemory => SelectedCategory == SettingsCategory.AutonomyAndMemory;
+    public bool IsWebSearch => SelectedCategory == SettingsCategory.WebSearch;
+    public bool IsVoice => SelectedCategory == SettingsCategory.Voice;
+    public bool IsResearchAndThinking => SelectedCategory == SettingsCategory.ResearchAndThinking;
+
+    [RelayCommand]
+    private void SelectCategory(SettingsCategory category) => SelectedCategory = category;
 
     private const string OkColor = "#3FB950";   // status OK (green)
     private const string ErrColor = "#E5534B";  // status error (red)
@@ -177,6 +208,32 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _googleApiKey;
     [ObservableProperty] private string _googleSearchEngineId;
 
+    // --- Voice (text-to-speech) ---
+
+    [ObservableProperty] private SpeechProvider _speechProvider;
+    [ObservableProperty] private string _piperExecutablePath;
+    [ObservableProperty] private string _piperModelPath;
+
+    [ObservableProperty] private string _voiceStatus = "";
+    [ObservableProperty] private string _voiceStatusColor = OkColor;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TestVoiceCommand))]
+    private bool _isTestingVoice;
+
+    // Provider as mutually exclusive radio options (mirrors the appearance-mode bools).
+    public bool IsVoiceOff
+    {
+        get => SpeechProvider == SpeechProvider.None;
+        set { if (value) SpeechProvider = SpeechProvider.None; }
+    }
+
+    public bool IsVoicePiper
+    {
+        get => SpeechProvider == SpeechProvider.Piper;
+        set { if (value) SpeechProvider = SpeechProvider.Piper; }
+    }
+
     // --- Cloud AI providers (Web Models) ---
 
     [ObservableProperty] private string _openAiApiKey;
@@ -199,7 +256,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     public SettingsViewModel(
         ISettingsService settings, IThemeService theme, IOllamaClient ollama,
-        IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic)
+        IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic,
+        ISpeechService speech, AgentsViewModel agentsPanel)
     {
         _settings = settings;
         _theme = theme;
@@ -207,6 +265,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _openAi = openAi;
         _gemini = gemini;
         _anthropic = anthropic;
+        _speech = speech;
+        AgentsPanel = agentsPanel;
 
         _loading = true;
         var s = settings.Current;
@@ -232,6 +292,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _openAiApiKey = s.OpenAiApiKey;
         _geminiApiKey = s.GeminiApiKey;
         _anthropicApiKey = s.AnthropicApiKey;
+        _speechProvider = s.SpeechProvider;
+        _piperExecutablePath = s.PiperExecutablePath;
+        _piperModelPath = s.PiperModelPath;
         _loading = false;
     }
 
@@ -239,7 +302,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public SettingsViewModel() : this(
         new DesignSettingsService(), new ThemeService(), new DesignOllamaClient(),
         new DesignCloudClient(AiProvider.OpenAI), new DesignCloudClient(AiProvider.Gemini),
-        new DesignCloudClient(AiProvider.Anthropic))
+        new DesignCloudClient(AiProvider.Anthropic), new DesignSpeechService(), new AgentsViewModel())
     {
     }
 
@@ -308,6 +371,62 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnOpenAiApiKeyChanged(string value) => SaveCloudKeys();
     partial void OnGeminiApiKeyChanged(string value) => SaveCloudKeys();
     partial void OnAnthropicApiKeyChanged(string value) => SaveCloudKeys();
+
+    partial void OnSpeechProviderChanged(SpeechProvider value)
+    {
+        OnPropertyChanged(nameof(IsVoiceOff));
+        OnPropertyChanged(nameof(IsVoicePiper));
+        SaveVoice();
+    }
+
+    partial void OnPiperExecutablePathChanged(string value) => SaveVoice();
+    partial void OnPiperModelPathChanged(string value) => SaveVoice();
+
+    /// <summary>Persist the voice settings (called as each field changes, like the web-search keys).</summary>
+    private void SaveVoice()
+    {
+        if (_loading)
+            return;
+        var s = _settings.Current;
+        s.SpeechProvider = SpeechProvider;
+        s.PiperExecutablePath = PiperExecutablePath.Trim();
+        s.PiperModelPath = PiperModelPath.Trim();
+        _settings.Save();
+    }
+
+    private bool CanTestVoice => !IsTestingVoice;
+
+    /// <summary>Speak a short sample so the user can hear the configured voice.</summary>
+    [RelayCommand(CanExecute = nameof(CanTestVoice))]
+    private async Task TestVoice()
+    {
+        SaveVoice(); // make sure the latest paths are persisted before the engine reads them
+        if (!_speech.IsConfigured)
+        {
+            VoiceStatusColor = ErrColor;
+            VoiceStatus = "Not configured — set the Piper executable and a voice model below.";
+            return;
+        }
+
+        IsTestingVoice = true;
+        VoiceStatusColor = BusyColor;
+        VoiceStatus = "Speaking…";
+        try
+        {
+            await _speech.SpeakAsync("This is a test of the selected voice.");
+            VoiceStatusColor = OkColor;
+            VoiceStatus = "Voice is working.";
+        }
+        catch (Exception ex)
+        {
+            VoiceStatusColor = ErrColor;
+            VoiceStatus = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsTestingVoice = false;
+        }
+    }
 
     /// <summary>Persist the cloud API keys (called as each field changes, like the web-search keys).</summary>
     private void SaveCloudKeys()

@@ -29,6 +29,7 @@ public sealed class DeepResearchService : IDeepResearchService
         IChatClient client,
         string question,
         string model,
+        string personaPrefix,
         IProgress<string> status,
         Action<string> onAnswerDelta,
         CancellationToken ct = default)
@@ -69,9 +70,9 @@ public sealed class DeepResearchService : IDeepResearchService
                 .ConfigureAwait(false);
         }
 
-        // 4. Synthesize a cited answer, streamed back to the caller.
+        // 4. Synthesize a cited answer, streamed back to the caller (in the active agent's voice).
         status.Report("Synthesizing answer…");
-        var messages = BuildSynthesisPrompt(question, toRead);
+        var messages = BuildSynthesisPrompt(question, toRead, personaPrefix);
         await foreach (var delta in client.ChatStreamAsync(model, messages, think: false, ct).ConfigureAwait(false))
             onAnswerDelta(delta);
 
@@ -132,7 +133,7 @@ public sealed class DeepResearchService : IDeepResearchService
     }
 
     private static IReadOnlyList<ChatMessage> BuildSynthesisPrompt(
-        string question, IReadOnlyList<SearchResult> sources)
+        string question, IReadOnlyList<SearchResult> sources, string personaPrefix)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Sources:");
@@ -151,6 +152,7 @@ public sealed class DeepResearchService : IDeepResearchService
         return new[]
         {
             ChatMessage.System(
+                personaPrefix +
                 "You are a research assistant. Answer the question using ONLY the numbered sources provided. " +
                 "Cite claims inline with bracketed numbers like [1] or [2][3]. Be specific and structured. " +
                 "If the sources do not contain the answer, say so plainly rather than guessing."),

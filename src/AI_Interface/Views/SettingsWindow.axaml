@@ -1,14 +1,15 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:AI_Interface.ViewModels"
+        xmlns:models="using:AI_Interface.Models"
         xmlns:conv="using:AI_Interface.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="640"
+        mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="640"
         x:Class="AI_Interface.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
-        Width="720" Height="640"
-        MinWidth="600" MinHeight="480"
+        Width="780" Height="640"
+        MinWidth="640" MinHeight="480"
         WindowStartupLocation="CenterOwner"
         Title="Settings">
 
@@ -18,6 +19,7 @@
 
     <Window.Resources>
         <conv:StringToBrushConverter x:Key="StringToBrush"/>
+        <conv:ProviderTagConverter x:Key="ProviderTag"/>
     </Window.Resources>
 
     <Window.Styles>
@@ -41,398 +43,555 @@
             <Setter Property="BorderBrush" Value="#40808080"/>
         </Style>
 
-        <!-- ====================================================================
-             Settings categories as a left sidebar (tabs on the left, content
-             on the right) — a VS Code–style settings layout. The strip uses the
-             lighter surface tone; the content area uses the editor background.
-             ==================================================================== -->
-        <Style Selector="TabControl.settings">
-            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
-            <Setter Property="Padding" Value="0"/>
+        <!-- Agents master-list rows -->
+        <Style Selector="ListBox.agents">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
         </Style>
-        <Style Selector="TabControl.settings /template/ ContentPresenter#PART_SelectedContentHost">
-            <Setter Property="Background" Value="{DynamicResource AppWindowBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1,0,0,0"/>
-            <Setter Property="Padding" Value="14,6,6,6"/>
-        </Style>
-
-        <!-- Category entries: full-width, left-aligned, sharp -->
-        <Style Selector="TabControl.settings > TabItem">
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="MinWidth" Value="150"/>
-            <Setter Property="MinHeight" Value="0"/>
-            <Setter Property="Margin" Value="6,1"/>
-            <Setter Property="Padding" Value="12,9"/>
+        <Style Selector="ListBox.agents ListBoxItem">
+            <Setter Property="Padding" Value="8,6"/>
             <Setter Property="CornerRadius" Value="3"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="Normal"/>
-            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
-        </Style>
-        <Style Selector="TabControl.settings > TabItem:pointerover">
-            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
-        </Style>
-        <Style Selector="TabControl.settings > TabItem:pointerover /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="#18FFFFFF"/>
-        </Style>
-        <Style Selector="TabControl.settings > TabItem:selected">
-            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-        <Style Selector="TabControl.settings > TabItem:selected /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="#33F2542D"/>
-        </Style>
-        <!-- The Fluent selection bar (left edge for left placement) tinted to the accent -->
-        <Style Selector="TabControl.settings > TabItem:selected /template/ Border#PART_SelectedPipe">
-            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
-            <Setter Property="IsVisible" Value="True"/>
+            <Setter Property="Margin" Value="0,1"/>
         </Style>
     </Window.Styles>
 
     <Grid RowDefinitions="*,Auto">
-        <TabControl Grid.Row="0" Classes="settings" TabStripPlacement="Left" Margin="6">
 
-            <!-- AI MODEL TAB -->
-            <TabItem Header="AI Model">
-                <TabControl Margin="0,6">
+        <!-- ============ Grouped left nav + content host ============ -->
+        <Grid Grid.Row="0" ColumnDefinitions="200,*" Margin="6">
 
-                    <!-- LOCAL AI -->
-                    <TabItem Header="Local AI">
-                        <ScrollViewer>
-                            <StackPanel Margin="14,6" Spacing="2">
-                                <TextBlock Classes="section" Text="Ollama"/>
-                                <TextBlock Classes="label" Text="Server URL"/>
-                                <Grid ColumnDefinitions="*,Auto" Width="360" HorizontalAlignment="Left">
-                                    <TextBox Grid.Column="0" Text="{Binding OllamaBaseUrl}"
-                                             PlaceholderText="http://localhost:11434"/>
-                                    <Button Grid.Column="1" Classes="ghost" Content="Quick setup" Margin="8,0,0,0"
-                                            Command="{Binding QuickSetupCommand}"
-                                            ToolTip.Tip="Scan localhost:11434 and fill this in if Ollama is running"/>
-                                </Grid>
-                                <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
-                                           Text="Quick setup scans localhost:11434 for a running Ollama server and fills in the URL."/>
+            <!-- Left rail: two section groups (Editor / AI) of Button.nav entries -->
+            <Border Grid.Column="0" Background="{DynamicResource AppSurfaceBrush}" CornerRadius="3" Padding="6">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Classes="navheader" Text="EDITOR FEATURES"/>
+                        <Button Classes="nav" Content="Appearance"
+                                Classes.active="{Binding IsAppearance}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.Appearance}"/>
+                        <Button Classes="nav" Content="Typography"
+                                Classes.active="{Binding IsTypography}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.Typography}"/>
+                        <Button Classes="nav" Content="Layout"
+                                Classes.active="{Binding IsLayout}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.Layout}"/>
 
-                                <!-- Model Config: enabled only when Ollama is connected -->
-                                <Button Classes="ghost" Content="Model_Config" Margin="0,14,0,0"
-                                        HorizontalAlignment="Left" MinWidth="150"
-                                        Command="{Binding ModelConfigCommand}"
-                                        ToolTip.Tip="Recommend models for your hardware (requires a connected Ollama)"/>
+                        <TextBlock Classes="navheader" Text="AI FEATURES"/>
+                        <Button Classes="nav" Content="Models"
+                                Classes.active="{Binding IsModels}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.Models}"/>
+                        <Button Classes="nav" Content="Agents"
+                                Classes.active="{Binding IsAgents}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.Agents}"/>
+                        <Button Classes="nav" Content="Autonomy &amp; Memory"
+                                Classes.active="{Binding IsAutonomyAndMemory}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.AutonomyAndMemory}"/>
+                        <Button Classes="nav" Content="Web Search"
+                                Classes.active="{Binding IsWebSearch}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.WebSearch}"/>
+                        <Button Classes="nav" Content="Voice"
+                                Classes.active="{Binding IsVoice}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.Voice}"/>
+                        <Button Classes="nav" Content="Research &amp; Thinking"
+                                Classes.active="{Binding IsResearchAndThinking}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.ResearchAndThinking}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
 
-                                <!-- Test connection + Connect sit at the bottom-most field -->
-                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,18,0,8"
-                                            HorizontalAlignment="Left">
-                                    <Button Classes="cta" Content="Test connection" MinWidth="150"
-                                            IsEnabled="{Binding !IsTestingConnection}"
-                                            Command="{Binding TestConnectionCommand}"/>
-                                    <Button Classes="ghost" Content="Connect" MinWidth="120"
-                                            IsEnabled="{Binding !IsTestingConnection}"
-                                            Command="{Binding ConnectCommand}"
-                                            ToolTip.Tip="Reconnect to Ollama and reload the model list"/>
+            <!-- Right content host: one panel per category, toggled by IsVisible -->
+            <Border Grid.Column="1" Background="{DynamicResource AppWindowBackground}"
+                    BorderBrush="{DynamicResource AppSurfaceBorderBrush}" BorderThickness="1,0,0,0"
+                    Padding="14,6,6,6">
+                <Panel>
+
+                    <!-- ============ EDITOR FEATURES → APPEARANCE ============ -->
+                    <ScrollViewer IsVisible="{Binding IsAppearance}">
+                        <StackPanel Margin="0,2">
+                            <TextBlock Classes="section" Text="Appearance"/>
+                            <StackPanel Spacing="2">
+                                <RadioButton GroupName="appearance" Content="Follow system"
+                                             IsChecked="{Binding IsSystemMode}"/>
+                                <RadioButton GroupName="appearance" Content="Light"
+                                             IsChecked="{Binding IsLightMode}"/>
+                                <RadioButton GroupName="appearance" Content="Dark  (Night mode)"
+                                             IsChecked="{Binding IsDarkMode}"/>
+                            </StackPanel>
+
+                            <TextBlock Classes="section" Text="Colors"/>
+
+                            <!-- Accent -->
+                            <TextBlock Classes="label" Text="Accent (buttons &amp; highlights)"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border Width="28" Height="28" CornerRadius="3" BorderThickness="1" BorderBrush="#40808080"
+                                        Background="{Binding AccentColor, Converter={StaticResource StringToBrush}}"/>
+                                <TextBox Width="130" Text="{Binding AccentColor}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <Button Classes="swatch" ToolTip.Tip="{Binding}"
+                                                Background="{Binding Converter={StaticResource StringToBrush}}"
+                                                CommandParameter="{Binding}"
+                                                Command="{Binding DataContext.SetAccentCommand,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- User bubble -->
+                            <TextBlock Classes="label" Text="Your message bubbles"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border Width="28" Height="28" CornerRadius="3" BorderThickness="1" BorderBrush="#40808080"
+                                        Background="{Binding UserBubbleColor, Converter={StaticResource StringToBrush}}"/>
+                                <TextBox Width="130" Text="{Binding UserBubbleColor}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <Button Classes="swatch" ToolTip.Tip="{Binding}"
+                                                Background="{Binding Converter={StaticResource StringToBrush}}"
+                                                CommandParameter="{Binding}"
+                                                Command="{Binding DataContext.SetUserColorCommand,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Assistant bubble -->
+                            <TextBlock Classes="label" Text="Assistant message bubbles"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border Width="28" Height="28" CornerRadius="3" BorderThickness="1" BorderBrush="#40808080"
+                                        Background="{Binding AssistantBubbleColor, Converter={StaticResource StringToBrush}}"/>
+                                <TextBox Width="130" Text="{Binding AssistantBubbleColor}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <Button Classes="swatch" ToolTip.Tip="{Binding}"
+                                                Background="{Binding Converter={StaticResource StringToBrush}}"
+                                                CommandParameter="{Binding}"
+                                                Command="{Binding DataContext.SetAssistantColorCommand,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Classes="ghost" Content="Reset to defaults"
+                                    Command="{Binding ResetThemeCommand}" Margin="0,16,0,0"
+                                    HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- ============ EDITOR FEATURES → TYPOGRAPHY ============ -->
+                    <ScrollViewer IsVisible="{Binding IsTypography}">
+                        <StackPanel Margin="0,2">
+                            <TextBlock Classes="section" Text="Typography"/>
+
+                            <TextBlock Classes="label" Text="Font"/>
+                            <ComboBox Width="220" HorizontalAlignment="Left"
+                                      ItemsSource="{Binding Fonts}" SelectedItem="{Binding FontFamily}"/>
+
+                            <TextBlock Classes="label" Text="Font size"/>
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Slider Width="220" Minimum="10" Maximum="22" TickFrequency="1"
+                                        IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                        Value="{Binding FontSize}"/>
+                                <TextBlock Text="{Binding FontSize}" Classes="muted" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- ============ EDITOR FEATURES → LAYOUT (placeholder) ============ -->
+                    <ScrollViewer IsVisible="{Binding IsLayout}">
+                        <StackPanel Margin="0,2">
+                            <TextBlock Classes="section" Text="Layout"/>
+                            <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
+                                       Text="Layout options (composer width, transcript density, and future editor-pane settings) will appear here."/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- ============ AI FEATURES → MODELS ============ -->
+                    <ScrollViewer IsVisible="{Binding IsModels}">
+                        <TabControl Margin="0,2">
+
+                            <!-- LOCAL AI -->
+                            <TabItem Header="Local AI">
+                                <ScrollViewer>
+                                    <StackPanel Margin="0,6" Spacing="2">
+                                        <TextBlock Classes="section" Text="Ollama"/>
+                                        <TextBlock Classes="label" Text="Server URL"/>
+                                        <Grid ColumnDefinitions="*,Auto" Width="360" HorizontalAlignment="Left">
+                                            <TextBox Grid.Column="0" Text="{Binding OllamaBaseUrl}"
+                                                     PlaceholderText="http://localhost:11434"/>
+                                            <Button Grid.Column="1" Classes="ghost" Content="Quick setup" Margin="8,0,0,0"
+                                                    Command="{Binding QuickSetupCommand}"
+                                                    ToolTip.Tip="Scan localhost:11434 and fill this in if Ollama is running"/>
+                                        </Grid>
+                                        <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
+                                                   Text="Quick setup scans localhost:11434 for a running Ollama server and fills in the URL."/>
+
+                                        <!-- Model Config: enabled only when Ollama is connected -->
+                                        <Button Classes="ghost" Content="Model_Config" Margin="0,14,0,0"
+                                                HorizontalAlignment="Left" MinWidth="150"
+                                                Command="{Binding ModelConfigCommand}"
+                                                ToolTip.Tip="Recommend models for your hardware (requires a connected Ollama)"/>
+
+                                        <!-- Test connection + Connect sit at the bottom-most field -->
+                                        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,18,0,8"
+                                                    HorizontalAlignment="Left">
+                                            <Button Classes="cta" Content="Test connection" MinWidth="150"
+                                                    IsEnabled="{Binding !IsTestingConnection}"
+                                                    Command="{Binding TestConnectionCommand}"/>
+                                            <Button Classes="ghost" Content="Connect" MinWidth="120"
+                                                    IsEnabled="{Binding !IsTestingConnection}"
+                                                    Command="{Binding ConnectCommand}"
+                                                    ToolTip.Tip="Reconnect to Ollama and reload the model list"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding ConnectionTestMessage}" FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
+                                                   IsVisible="{Binding ConnectionTestMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Foreground="{Binding ConnectionTestColor, Converter={StaticResource StringToBrush}}"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+
+                            <!-- WEB MODELS -->
+                            <TabItem Header="Web Models">
+                                <ScrollViewer>
+                                    <StackPanel Margin="0,6" Spacing="2">
+                                        <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="420"
+                                                   HorizontalAlignment="Left" Margin="0,0,0,4"
+                                                   Text="Enter an API key and click Connect. The provider's models are fetched live and appear in the top-right model picker alongside your local Ollama models."/>
+
+                                        <!-- ChatGPT (OpenAI) -->
+                                        <TextBlock Classes="section" Text="ChatGPT (OpenAI)"/>
+                                        <TextBlock Classes="label" Text="API key"/>
+                                        <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
+                                            <TextBox Grid.Column="0" PasswordChar="•"
+                                                     Text="{Binding OpenAiApiKey}"
+                                                     PlaceholderText="sk-…"/>
+                                            <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
+                                                    MinWidth="100"
+                                                    IsEnabled="{Binding !IsTestingCloud}"
+                                                    Command="{Binding ConnectOpenAiCommand}"/>
+                                        </Grid>
+                                        <TextBlock Text="{Binding OpenAiStatus}" FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
+                                                   IsVisible="{Binding OpenAiStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Foreground="{Binding OpenAiStatusColor, Converter={StaticResource StringToBrush}}"/>
+
+                                        <!-- Gemini (Google) -->
+                                        <TextBlock Classes="section" Text="Gemini (Google)"/>
+                                        <TextBlock Classes="label" Text="API key"/>
+                                        <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
+                                            <TextBox Grid.Column="0" PasswordChar="•"
+                                                     Text="{Binding GeminiApiKey}"
+                                                     PlaceholderText="AIza…"/>
+                                            <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
+                                                    MinWidth="100"
+                                                    IsEnabled="{Binding !IsTestingCloud}"
+                                                    Command="{Binding ConnectGeminiCommand}"/>
+                                        </Grid>
+                                        <TextBlock Text="{Binding GeminiStatus}" FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
+                                                   IsVisible="{Binding GeminiStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Foreground="{Binding GeminiStatusColor, Converter={StaticResource StringToBrush}}"/>
+
+                                        <!-- Claude (Anthropic) -->
+                                        <TextBlock Classes="section" Text="Claude (Anthropic)"/>
+                                        <TextBlock Classes="label" Text="API key"/>
+                                        <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
+                                            <TextBox Grid.Column="0" PasswordChar="•"
+                                                     Text="{Binding AnthropicApiKey}"
+                                                     PlaceholderText="sk-ant-…"/>
+                                            <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
+                                                    MinWidth="100"
+                                                    IsEnabled="{Binding !IsTestingCloud}"
+                                                    Command="{Binding ConnectAnthropicCommand}"/>
+                                        </Grid>
+                                        <TextBlock Text="{Binding AnthropicStatus}" FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
+                                                   IsVisible="{Binding AnthropicStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Foreground="{Binding AnthropicStatusColor, Converter={StaticResource StringToBrush}}"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+
+                        </TabControl>
+                    </ScrollViewer>
+
+                    <!-- ============ AI FEATURES → AGENTS ============ -->
+                    <Grid IsVisible="{Binding IsAgents}" RowDefinitions="Auto,*" Margin="0,2">
+                        <TextBlock Grid.Row="0" Classes="section" Text="Agents"/>
+
+                        <Grid Grid.Row="1" ColumnDefinitions="220,*" DataContext="{Binding AgentsPanel}">
+
+                            <!-- Master list + toolbar -->
+                            <Grid Grid.Column="0" RowDefinitions="*,Auto" Margin="0,0,8,0">
+                                <Border Grid.Row="0" Classes="card" CornerRadius="3" Padding="2">
+                                    <ListBox Classes="agents" ItemsSource="{Binding Agents}"
+                                             SelectedItem="{Binding SelectedAgent}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:Agent">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Glyph}" Margin="0,0,8,0"
+                                                               VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    <Border Grid.Column="2" Background="#33808080" CornerRadius="3"
+                                                            Padding="5,1" VerticalAlignment="Center"
+                                                            IsVisible="{Binding IsBuiltIn}">
+                                                        <TextBlock Text="built-in" FontSize="10"
+                                                                   Foreground="{DynamicResource AppTextSecondary}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Border>
+
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+                                    <Button Classes="cta" Content="＋ New" Command="{Binding NewCommand}"/>
+                                    <Button Classes="ghost" Content="Duplicate" Command="{Binding DuplicateCommand}"/>
+                                    <Button Classes="ghost" Content="Delete" Command="{Binding DeleteCommand}"/>
                                 </StackPanel>
-                                <TextBlock Text="{Binding ConnectionTestMessage}" FontWeight="SemiBold"
-                                           TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
-                                           IsVisible="{Binding ConnectionTestMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           Foreground="{Binding ConnectionTestColor, Converter={StaticResource StringToBrush}}"/>
-                            </StackPanel>
-                        </ScrollViewer>
-                    </TabItem>
+                            </Grid>
 
-                    <!-- WEB MODELS -->
-                    <TabItem Header="Web Models">
-                        <ScrollViewer>
-                            <StackPanel Margin="14,6" Spacing="2">
-                                <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="420"
-                                           HorizontalAlignment="Left" Margin="0,0,0,4"
-                                           Text="Enter an API key and click Connect. The provider's models are fetched live and appear in the top-right model picker alongside your local Ollama models."/>
+                            <!-- Detail editor -->
+                            <ScrollViewer Grid.Column="1">
+                                <StackPanel Spacing="2" IsEnabled="{Binding IsEditable}">
 
-                                <!-- ChatGPT (OpenAI) -->
-                                <TextBlock Classes="section" Text="ChatGPT (OpenAI)"/>
-                                <TextBlock Classes="label" Text="API key"/>
-                                <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
-                                    <TextBox Grid.Column="0" PasswordChar="•"
-                                             Text="{Binding OpenAiApiKey}"
-                                             PlaceholderText="sk-…"/>
-                                    <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
-                                            MinWidth="100"
-                                            IsEnabled="{Binding !IsTestingCloud}"
-                                            Command="{Binding ConnectOpenAiCommand}"/>
-                                </Grid>
-                                <TextBlock Text="{Binding OpenAiStatus}" FontWeight="SemiBold"
-                                           TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
-                                           IsVisible="{Binding OpenAiStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           Foreground="{Binding OpenAiStatusColor, Converter={StaticResource StringToBrush}}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,2"
+                                                IsVisible="{Binding IsBuiltInSelected}">
+                                        <TextBlock Classes="muted" VerticalAlignment="Center"
+                                                   Text="This is a built-in agent and can't be edited. Use Duplicate to make an editable copy."/>
+                                    </StackPanel>
 
-                                <!-- Gemini (Google) -->
-                                <TextBlock Classes="section" Text="Gemini (Google)"/>
-                                <TextBlock Classes="label" Text="API key"/>
-                                <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
-                                    <TextBox Grid.Column="0" PasswordChar="•"
-                                             Text="{Binding GeminiApiKey}"
-                                             PlaceholderText="AIza…"/>
-                                    <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
-                                            MinWidth="100"
-                                            IsEnabled="{Binding !IsTestingCloud}"
-                                            Command="{Binding ConnectGeminiCommand}"/>
-                                </Grid>
-                                <TextBlock Text="{Binding GeminiStatus}" FontWeight="SemiBold"
-                                           TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
-                                           IsVisible="{Binding GeminiStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           Foreground="{Binding GeminiStatusColor, Converter={StaticResource StringToBrush}}"/>
+                                    <TextBlock Classes="label" Text="Glyph &amp; name"/>
+                                    <Grid ColumnDefinitions="Auto,*" Width="360" HorizontalAlignment="Left">
+                                        <TextBox Grid.Column="0" Width="56" Text="{Binding EditGlyph}"
+                                                 HorizontalContentAlignment="Center"
+                                                 ToolTip.Tip="An emoji shown in the picker and transcript"/>
+                                        <TextBox Grid.Column="1" Margin="8,0,0,0" Text="{Binding EditName}"
+                                                 PlaceholderText="Agent name"/>
+                                    </Grid>
 
-                                <!-- Claude (Anthropic) -->
-                                <TextBlock Classes="section" Text="Claude (Anthropic)"/>
-                                <TextBlock Classes="label" Text="API key"/>
-                                <Grid ColumnDefinitions="*,Auto" Width="420" HorizontalAlignment="Left">
-                                    <TextBox Grid.Column="0" PasswordChar="•"
-                                             Text="{Binding AnthropicApiKey}"
-                                             PlaceholderText="sk-ant-…"/>
-                                    <Button Grid.Column="1" Classes="cta" Content="Connect" Margin="8,0,0,0"
-                                            MinWidth="100"
-                                            IsEnabled="{Binding !IsTestingCloud}"
-                                            Command="{Binding ConnectAnthropicCommand}"/>
-                                </Grid>
-                                <TextBlock Text="{Binding AnthropicStatus}" FontWeight="SemiBold"
-                                           TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left"
-                                           IsVisible="{Binding AnthropicStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           Foreground="{Binding AnthropicStatusColor, Converter={StaticResource StringToBrush}}"/>
-                            </StackPanel>
-                        </ScrollViewer>
-                    </TabItem>
+                                    <TextBlock Classes="label" Text="Persona (personality / system prompt)"/>
+                                    <TextBox Text="{Binding EditPersona}" AcceptsReturn="True" TextWrapping="Wrap"
+                                             MinHeight="160" MaxHeight="320" Width="440" HorizontalAlignment="Left"
+                                             PlaceholderText="Describe how this agent speaks and behaves — tone, expertise, priorities…"/>
 
-                </TabControl>
-            </TabItem>
-
-            <!-- THEME TAB -->
-            <TabItem Header="Theme">
-                <ScrollViewer>
-                    <StackPanel Margin="14,6">
-
-                        <TextBlock Classes="section" Text="Appearance"/>
-                        <StackPanel Spacing="2">
-                            <RadioButton GroupName="appearance" Content="Follow system"
-                                         IsChecked="{Binding IsSystemMode}"/>
-                            <RadioButton GroupName="appearance" Content="Light"
-                                         IsChecked="{Binding IsLightMode}"/>
-                            <RadioButton GroupName="appearance" Content="Dark  (Night mode)"
-                                         IsChecked="{Binding IsDarkMode}"/>
-                        </StackPanel>
-
-                        <TextBlock Classes="section" Text="Colors"/>
-
-                        <!-- Accent -->
-                        <TextBlock Classes="label" Text="Accent (buttons &amp; highlights)"/>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Border Width="28" Height="28" CornerRadius="3" BorderThickness="1" BorderBrush="#40808080"
-                                    Background="{Binding AccentColor, Converter={StaticResource StringToBrush}}"/>
-                            <TextBox Width="130" Text="{Binding AccentColor}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:CompileBindings="False">
-                                    <Button Classes="swatch" ToolTip.Tip="{Binding}"
-                                            Background="{Binding Converter={StaticResource StringToBrush}}"
-                                            CommandParameter="{Binding}"
-                                            Command="{Binding DataContext.SetAccentCommand,
-                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- User bubble -->
-                        <TextBlock Classes="label" Text="Your message bubbles"/>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Border Width="28" Height="28" CornerRadius="3" BorderThickness="1" BorderBrush="#40808080"
-                                    Background="{Binding UserBubbleColor, Converter={StaticResource StringToBrush}}"/>
-                            <TextBox Width="130" Text="{Binding UserBubbleColor}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:CompileBindings="False">
-                                    <Button Classes="swatch" ToolTip.Tip="{Binding}"
-                                            Background="{Binding Converter={StaticResource StringToBrush}}"
-                                            CommandParameter="{Binding}"
-                                            Command="{Binding DataContext.SetUserColorCommand,
-                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- Assistant bubble -->
-                        <TextBlock Classes="label" Text="Assistant message bubbles"/>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Border Width="28" Height="28" CornerRadius="3" BorderThickness="1" BorderBrush="#40808080"
-                                    Background="{Binding AssistantBubbleColor, Converter={StaticResource StringToBrush}}"/>
-                            <TextBox Width="130" Text="{Binding AssistantBubbleColor}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Palette}" Margin="0,8,0,0">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:CompileBindings="False">
-                                    <Button Classes="swatch" ToolTip.Tip="{Binding}"
-                                            Background="{Binding Converter={StaticResource StringToBrush}}"
-                                            CommandParameter="{Binding}"
-                                            Command="{Binding DataContext.SetAssistantColorCommand,
-                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <TextBlock Classes="section" Text="Typography"/>
-
-                        <TextBlock Classes="label" Text="Font"/>
-                        <ComboBox Width="220" HorizontalAlignment="Left"
-                                  ItemsSource="{Binding Fonts}" SelectedItem="{Binding FontFamily}"/>
-
-                        <TextBlock Classes="label" Text="Font size"/>
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <Slider Width="220" Minimum="10" Maximum="22" TickFrequency="1"
-                                    IsSnapToTickEnabled="True" VerticalAlignment="Center"
-                                    Value="{Binding FontSize}"/>
-                            <TextBlock Text="{Binding FontSize}" Classes="muted" VerticalAlignment="Center"/>
-                        </StackPanel>
-
-                        <Button Classes="ghost" Content="Reset to defaults"
-                                Command="{Binding ResetThemeCommand}" Margin="0,16,0,0"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- GENERAL TAB -->
-            <TabItem Header="General">
-                <ScrollViewer>
-                    <StackPanel Margin="14,6" Spacing="2">
-                        <TextBlock Classes="section" Text="Research depth"/>
-                        <TextBlock Classes="label" Text="Search results per query"/>
-                        <NumericUpDown Value="{Binding ResultsPerQuery}" Minimum="1" Maximum="10" Increment="1"
-                                       FormatString="0" Width="150" HorizontalAlignment="Left"/>
-                        <TextBlock Classes="label" Text="Pages read per deep-research run"/>
-                        <NumericUpDown Value="{Binding MaxPagesToRead}" Minimum="1" Maximum="15" Increment="1"
-                                       FormatString="0" Width="150" HorizontalAlignment="Left"/>
-                        <TextBlock Classes="label" Text="Planned queries per deep-research run"/>
-                        <NumericUpDown Value="{Binding ResearchQueryCount}" Minimum="1" Maximum="8" Increment="1"
-                                       FormatString="0" Width="150" HorizontalAlignment="Left"/>
-
-                        <TextBlock Classes="section" Text="Thinking"/>
-                        <TextBlock Classes="label" TextWrapping="Wrap"
-                                   Text="Effort — how hard the model plans before acting when the Thinking toggle is on."/>
-                        <Grid ColumnDefinitions="Auto,*,Auto" Width="340" HorizontalAlignment="Left" Margin="0,4,0,0">
-                            <TextBlock Grid.Column="0" Classes="label" Margin="0,0,8,0" VerticalAlignment="Center"
-                                       Text="Minimal"/>
-                            <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding ThinkingEffort}"
-                                    TickFrequency="25" IsSnapToTickEnabled="False" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Classes="label" Margin="8,0,0,0" VerticalAlignment="Center"
-                                       Text="Maximum"/>
+                                    <TextBlock Classes="label" Text="Default model (optional — just pre-selects one)"/>
+                                    <ComboBox Width="320" HorizontalAlignment="Left"
+                                              ItemsSource="{Binding Models}"
+                                              SelectedItem="{Binding EditDefaultModel}"
+                                              PlaceholderText="Use the model picker's selection">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:ChatModel">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding Id}" VerticalAlignment="Center"/>
+                                                    <Border Background="#33808080" CornerRadius="3" Padding="5,1"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Provider, Converter={StaticResource ProviderTag}}"
+                                                                   FontSize="10" Foreground="{DynamicResource AppTextSecondary}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Grid>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                    </Grid>
 
-            <!-- PROJECT AGENT TAB -->
-            <TabItem Header="Project">
-                <ScrollViewer>
-                    <StackPanel Margin="14,6">
-                        <TextBlock Classes="section" Text="Tool approval"/>
-                        <TextBlock Classes="label" TextWrapping="Wrap"
-                                   Text="Controls when the project agent asks before it writes/deletes files or runs terminal commands."/>
-                        <StackPanel Spacing="2" Margin="0,6,0,0">
-                            <RadioButton GroupName="approval" Content="Confirm destructive actions"
-                                         IsChecked="{Binding IsConfirmDestructive}"/>
-                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
-                                       Text="Reads and listings run automatically; ask before overwriting/deleting files or running commands."/>
-                            <RadioButton GroupName="approval" Content="Auto-run everything"
-                                         IsChecked="{Binding IsAutoRun}"/>
-                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
-                                       Text="The agent runs every action without asking. Each action is still logged in the chat."/>
-                            <RadioButton GroupName="approval" Content="Confirm every action"
-                                         IsChecked="{Binding IsConfirmEverything}"/>
-                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
-                                       Text="Ask before every tool call, including reads and directory listings."/>
-                        </StackPanel>
-
-                        <TextBlock Classes="section" Text="Software installation"/>
-                        <TextBlock Classes="label" TextWrapping="Wrap"
-                                   Text="Whether the agent may install missing tools/runtimes machine-wide via package managers (winget, apt, brew, …)."/>
-                        <StackPanel Spacing="2" Margin="0,6,0,0">
-                            <RadioButton GroupName="install" Content="No permission to install"
-                                         IsChecked="{Binding IsInstallNever}"/>
-                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
-                                       Text="System install commands are refused. Project-local dependencies (e.g. npm install) still work."/>
-                            <RadioButton GroupName="install" Content="Ask every time"
-                                         IsChecked="{Binding IsInstallAsk}"/>
-                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
-                                       Text="The agent may install software, but every install is confirmed first — even when the approval mode above is Auto-run."/>
-                            <RadioButton GroupName="install" Content="Allow agent to install software"
-                                         IsChecked="{Binding IsInstallAllow}"/>
-                            <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
-                                       Text="Installs follow the tool-approval setting above (Auto-run installs without asking)."/>
-                        </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- WEB SEARCH TAB -->
-            <TabItem Header="Web Search">
-                <ScrollViewer>
-                    <StackPanel Margin="14,6" Spacing="2">
-                        <TextBlock Classes="section" Text="Search provider"/>
-                        <TextBlock Classes="label" Text="Service used for web search and deep research"/>
-                        <ComboBox ItemsSource="{Binding SearchProviders}"
-                                  SelectedItem="{Binding SelectedSearchProvider}"
-                                  Width="320" HorizontalAlignment="Left"/>
-
-                        <!-- DuckDuckGo: no configuration -->
-                        <StackPanel IsVisible="{Binding IsDuckDuckGoSelected}">
+                    <!-- ============ AI FEATURES → AUTONOMY & MEMORY ============ -->
+                    <ScrollViewer IsVisible="{Binding IsAutonomyAndMemory}">
+                        <StackPanel Margin="0,2">
+                            <TextBlock Classes="section" Text="Tool approval"/>
                             <TextBlock Classes="label" TextWrapping="Wrap"
-                                       Text="DuckDuckGo needs no configuration — it works out of the box without an API key."/>
-                        </StackPanel>
+                                       Text="Controls when the project agent asks before it writes/deletes files or runs terminal commands."/>
+                            <StackPanel Spacing="2" Margin="0,6,0,0">
+                                <RadioButton GroupName="approval" Content="Confirm destructive actions"
+                                             IsChecked="{Binding IsConfirmDestructive}"/>
+                                <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                           Text="Reads and listings run automatically; ask before overwriting/deleting files or running commands."/>
+                                <RadioButton GroupName="approval" Content="Auto-run everything"
+                                             IsChecked="{Binding IsAutoRun}"/>
+                                <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                           Text="The agent runs every action without asking. Each action is still logged in the chat."/>
+                                <RadioButton GroupName="approval" Content="Confirm every action"
+                                             IsChecked="{Binding IsConfirmEverything}"/>
+                                <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                           Text="Ask before every tool call, including reads and directory listings."/>
+                            </StackPanel>
 
-                        <!-- SearXNG: instance URL -->
-                        <StackPanel IsVisible="{Binding IsSearxngSelected}">
-                            <TextBlock Classes="label" Text="Instance URL"/>
-                            <TextBox Text="{Binding SearxngUrl}" Width="320" HorizontalAlignment="Left"
-                                     PlaceholderText="https://searx.example.org"/>
+                            <TextBlock Classes="section" Text="Software installation"/>
+                            <TextBlock Classes="label" TextWrapping="Wrap"
+                                       Text="Whether the agent may install missing tools/runtimes machine-wide via package managers (winget, apt, brew, …)."/>
+                            <StackPanel Spacing="2" Margin="0,6,0,0">
+                                <RadioButton GroupName="install" Content="No permission to install"
+                                             IsChecked="{Binding IsInstallNever}"/>
+                                <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                           Text="System install commands are refused. Project-local dependencies (e.g. npm install) still work."/>
+                                <RadioButton GroupName="install" Content="Ask every time"
+                                             IsChecked="{Binding IsInstallAsk}"/>
+                                <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                           Text="The agent may install software, but every install is confirmed first — even when the approval mode above is Auto-run."/>
+                                <RadioButton GroupName="install" Content="Allow agent to install software"
+                                             IsChecked="{Binding IsInstallAllow}"/>
+                                <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap"
+                                           Text="Installs follow the tool-approval setting above (Auto-run installs without asking)."/>
+                            </StackPanel>
                         </StackPanel>
+                    </ScrollViewer>
 
-                        <!-- Brave: API key -->
-                        <StackPanel IsVisible="{Binding IsBraveSelected}">
-                            <TextBlock Classes="label" Text="API key"/>
-                            <TextBox Text="{Binding BraveApiKey}" PasswordChar="•"
-                                     Width="320" HorizontalAlignment="Left"
-                                     PlaceholderText="X-Subscription-Token"/>
-                        </StackPanel>
+                    <!-- ============ AI FEATURES → WEB SEARCH ============ -->
+                    <ScrollViewer IsVisible="{Binding IsWebSearch}">
+                        <StackPanel Margin="0,2" Spacing="2">
+                            <TextBlock Classes="section" Text="Search provider"/>
+                            <TextBlock Classes="label" Text="Service used for web search and deep research"/>
+                            <ComboBox ItemsSource="{Binding SearchProviders}"
+                                      SelectedItem="{Binding SelectedSearchProvider}"
+                                      Width="320" HorizontalAlignment="Left"/>
 
-                        <!-- Tavily: API key -->
-                        <StackPanel IsVisible="{Binding IsTavilySelected}">
-                            <TextBlock Classes="label" Text="API key"/>
-                            <TextBox Text="{Binding TavilyApiKey}" PasswordChar="•"
-                                     Width="320" HorizontalAlignment="Left"
-                                     PlaceholderText="tvly-..."/>
-                        </StackPanel>
+                            <!-- DuckDuckGo: no configuration -->
+                            <StackPanel IsVisible="{Binding IsDuckDuckGoSelected}">
+                                <TextBlock Classes="label" TextWrapping="Wrap"
+                                           Text="DuckDuckGo needs no configuration — it works out of the box without an API key."/>
+                            </StackPanel>
 
-                        <!-- Google: API key + Search Engine ID -->
-                        <StackPanel IsVisible="{Binding IsGoogleSelected}">
-                            <TextBlock Classes="label" Text="API key"/>
-                            <TextBox Text="{Binding GoogleApiKey}" PasswordChar="•"
-                                     Width="320" HorizontalAlignment="Left"
-                                     PlaceholderText="Custom Search JSON API key"/>
-                            <TextBlock Classes="label" Text="Search Engine ID (cx)"/>
-                            <TextBox Text="{Binding GoogleSearchEngineId}"
-                                     Width="320" HorizontalAlignment="Left"
-                                     PlaceholderText="Programmable Search engine ID"/>
+                            <!-- SearXNG: instance URL -->
+                            <StackPanel IsVisible="{Binding IsSearxngSelected}">
+                                <TextBlock Classes="label" Text="Instance URL"/>
+                                <TextBox Text="{Binding SearxngUrl}" Width="320" HorizontalAlignment="Left"
+                                         PlaceholderText="https://searx.example.org"/>
+                            </StackPanel>
+
+                            <!-- Brave: API key -->
+                            <StackPanel IsVisible="{Binding IsBraveSelected}">
+                                <TextBlock Classes="label" Text="API key"/>
+                                <TextBox Text="{Binding BraveApiKey}" PasswordChar="•"
+                                         Width="320" HorizontalAlignment="Left"
+                                         PlaceholderText="X-Subscription-Token"/>
+                            </StackPanel>
+
+                            <!-- Tavily: API key -->
+                            <StackPanel IsVisible="{Binding IsTavilySelected}">
+                                <TextBlock Classes="label" Text="API key"/>
+                                <TextBox Text="{Binding TavilyApiKey}" PasswordChar="•"
+                                         Width="320" HorizontalAlignment="Left"
+                                         PlaceholderText="tvly-..."/>
+                            </StackPanel>
+
+                            <!-- Google: API key + Search Engine ID -->
+                            <StackPanel IsVisible="{Binding IsGoogleSelected}">
+                                <TextBlock Classes="label" Text="API key"/>
+                                <TextBox Text="{Binding GoogleApiKey}" PasswordChar="•"
+                                         Width="320" HorizontalAlignment="Left"
+                                         PlaceholderText="Custom Search JSON API key"/>
+                                <TextBlock Classes="label" Text="Search Engine ID (cx)"/>
+                                <TextBox Text="{Binding GoogleSearchEngineId}"
+                                         Width="320" HorizontalAlignment="Left"
+                                         PlaceholderText="Programmable Search engine ID"/>
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-        </TabControl>
+                    </ScrollViewer>
+
+                    <!-- ============ AI FEATURES → VOICE ============ -->
+                    <ScrollViewer IsVisible="{Binding IsVoice}">
+                        <StackPanel Margin="0,2" Spacing="2">
+                            <TextBlock Classes="section" Text="Read aloud"/>
+                            <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="460" HorizontalAlignment="Left"
+                                       Text="Adds a 🔈 button on each reply to speak it. Piper is a free, offline neural voice engine."/>
+
+                            <StackPanel Spacing="2" Margin="0,6,0,0">
+                                <RadioButton GroupName="voice" Content="Off" IsChecked="{Binding IsVoiceOff}"/>
+                                <RadioButton GroupName="voice" Content="Piper (local, offline)"
+                                             IsChecked="{Binding IsVoicePiper}"/>
+                            </StackPanel>
+
+                            <!-- Piper configuration -->
+                            <StackPanel IsVisible="{Binding IsVoicePiper}" Margin="0,4,0,0">
+                                <TextBlock Classes="label" Text="Piper executable"/>
+                                <Grid ColumnDefinitions="*,Auto" Width="460" HorizontalAlignment="Left">
+                                    <TextBox Grid.Column="0" Text="{Binding PiperExecutablePath}"
+                                             PlaceholderText="path to piper(.exe)"/>
+                                    <Button Grid.Column="1" Classes="ghost" Content="Browse…" Margin="8,0,0,0"
+                                            Click="OnBrowsePiperExe"/>
+                                </Grid>
+
+                                <TextBlock Classes="label" Text="Voice model (.onnx)"/>
+                                <Grid ColumnDefinitions="*,Auto" Width="460" HorizontalAlignment="Left">
+                                    <TextBox Grid.Column="0" Text="{Binding PiperModelPath}"
+                                             PlaceholderText="path to a *.onnx voice"/>
+                                    <Button Grid.Column="1" Classes="ghost" Content="Browse…" Margin="8,0,0,0"
+                                            Click="OnBrowsePiperModel"/>
+                                </Grid>
+                                <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="460" HorizontalAlignment="Left"
+                                           Text="Get the binary from github.com/rhasspy/piper and voices from huggingface.co/rhasspy/piper-voices. Keep each voice's .onnx.json next to its .onnx."/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,16,0,8" HorizontalAlignment="Left">
+                                <Button Classes="cta" Content="Test voice" MinWidth="150"
+                                        IsEnabled="{Binding !IsTestingVoice}"
+                                        Command="{Binding TestVoiceCommand}"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding VoiceStatus}" FontWeight="SemiBold"
+                                       TextWrapping="Wrap" MaxWidth="460" HorizontalAlignment="Left"
+                                       IsVisible="{Binding VoiceStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Foreground="{Binding VoiceStatusColor, Converter={StaticResource StringToBrush}}"/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- ============ AI FEATURES → RESEARCH & THINKING ============ -->
+                    <ScrollViewer IsVisible="{Binding IsResearchAndThinking}">
+                        <StackPanel Margin="0,2" Spacing="2">
+                            <TextBlock Classes="section" Text="Research depth"/>
+                            <TextBlock Classes="label" Text="Search results per query"/>
+                            <NumericUpDown Value="{Binding ResultsPerQuery}" Minimum="1" Maximum="10" Increment="1"
+                                           FormatString="0" Width="150" HorizontalAlignment="Left"/>
+                            <TextBlock Classes="label" Text="Pages read per deep-research run"/>
+                            <NumericUpDown Value="{Binding MaxPagesToRead}" Minimum="1" Maximum="15" Increment="1"
+                                           FormatString="0" Width="150" HorizontalAlignment="Left"/>
+                            <TextBlock Classes="label" Text="Planned queries per deep-research run"/>
+                            <NumericUpDown Value="{Binding ResearchQueryCount}" Minimum="1" Maximum="8" Increment="1"
+                                           FormatString="0" Width="150" HorizontalAlignment="Left"/>
+
+                            <TextBlock Classes="section" Text="Thinking"/>
+                            <TextBlock Classes="label" TextWrapping="Wrap"
+                                       Text="Effort — how hard the model plans before acting when the Thinking toggle is on."/>
+                            <Grid ColumnDefinitions="Auto,*,Auto" Width="340" HorizontalAlignment="Left" Margin="0,4,0,0">
+                                <TextBlock Grid.Column="0" Classes="label" Margin="0,0,8,0" VerticalAlignment="Center"
+                                           Text="Minimal"/>
+                                <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding ThinkingEffort}"
+                                        TickFrequency="25" IsSnapToTickEnabled="False" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Classes="label" Margin="8,0,0,0" VerticalAlignment="Center"
+                                           Text="Maximum"/>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                </Panel>
+            </Border>
+        </Grid>
 
         <Button Grid.Row="1" Classes="cta" Content="Close" Click="OnClose"
                 HorizontalAlignment="Right" Margin="0,0,14,12" MinWidth="100"/>

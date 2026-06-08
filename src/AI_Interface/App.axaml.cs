@@ -83,15 +83,24 @@ public partial class App : Application
         });
 
         services.AddTransient<IDeepResearchService, DeepResearchService>();
+
+        // Voice (text-to-speech): the Piper engine + a cross-platform audio player, behind the
+        // provider-agnostic ISpeechService (SpeechRouter picks the engine from settings).
+        services.AddSingleton<IAudioPlayer, AudioPlayer>();
+        services.AddSingleton<IPiperSpeechService, PiperSpeechService>();
+        services.AddSingleton<ISpeechService, SpeechRouter>();
+
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IAttachmentService, AttachmentService>();
         services.AddSingleton<IChatHistoryService, ChatHistoryService>();
         services.AddSingleton<IProjectAgentService, ProjectAgentService>();
         services.AddSingleton<IProjectSkillService, ProjectSkillService>();
         services.AddSingleton<IHardwareService, HardwareService>();
+        services.AddSingleton<IAgentService, AgentService>();
 
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<AgentsViewModel>();
         services.AddTransient<ProjectViewModel>();
         services.AddTransient<ModelConfigViewModel>();
 

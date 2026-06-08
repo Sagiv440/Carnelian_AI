@@ -111,7 +111,7 @@ internal sealed class DesignWebSearchService : IWebSearchService
 internal sealed class DesignDeepResearchService : IDeepResearchService
 {
     public Task<IReadOnlyList<SearchResult>> RunAsync(
-        IChatClient client, string question, string model, IProgress<string> status,
+        IChatClient client, string question, string model, string personaPrefix, IProgress<string> status,
         Action<string> onAnswerDelta, CancellationToken ct = default)
     {
         onAnswerDelta("Design-time research answer.");
@@ -123,6 +123,13 @@ internal sealed class DesignSettingsService : ISettingsService
 {
     public AppSettings Current { get; } = new();
     public void Save() { }
+}
+
+internal sealed class DesignSpeechService : ISpeechService
+{
+    public bool IsConfigured => false;
+    public Task SpeakAsync(string text, CancellationToken ct = default) => Task.CompletedTask;
+    public Task StopAsync() => Task.CompletedTask;
 }
 
 internal sealed class DesignAttachmentService : IAttachmentService
@@ -160,7 +167,7 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
 {
     public Task RunAsync(
         IChatClient client, Project project, string model, IReadOnlyList<ChatMessage> conversation,
-        AgentApprovalMode approvalMode, string thinkingDirective, string projectSkills,
+        AgentApprovalMode approvalMode, string personaPrefix, string thinkingDirective, string projectSkills,
         SoftwareInstallPermission installPermission, IProgress<string> status,
         Action<string> onActivity, Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
@@ -168,4 +175,15 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
         onAnswer("Design-time project agent response.");
         return Task.CompletedTask;
     }
+}
+
+internal sealed class DesignAgentService : IAgentService
+{
+    private readonly AgentService _real = new();
+
+    public Agent Default => _real.Default;
+    public IReadOnlyList<Agent> ListAgents(string? projectDir) => _real.ListAgents(null);
+    public Agent? Get(string id, string? projectDir) => _real.Get(id, null);
+    public void SaveCustom(Agent agent, string? projectDir) { }
+    public void DeleteCustom(string id, string? projectDir) { }
 }
