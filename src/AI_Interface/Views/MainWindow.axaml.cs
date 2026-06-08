@@ -150,6 +150,12 @@ public partial class MainWindow : Window
             await Clipboard.SetTextAsync(message.Text);
     }
 
+    private async void OnCopyCode(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: MessageSegment segment } && Clipboard is not null)
+            await Clipboard.SetTextAsync(segment.Text);
+    }
+
     private void OnRerunMessage(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: MessageViewModel message } && _vm is not null)

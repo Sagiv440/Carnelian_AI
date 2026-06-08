@@ -120,6 +120,22 @@
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
 
+        <!-- Code / command block bubble in replies -->
+        <Style Selector="Border.codeBubble">
+            <Setter Property="Background" Value="{DynamicResource AppInputBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+        </Style>
+        <Style Selector="Border.codeHeader">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="10,2,5,2"/>
+        </Style>
+
         <!-- Source links -->
         <Style Selector="Button.link">
             <Setter Property="Padding" Value="0"/>
@@ -397,10 +413,46 @@
                                             </Border>
                                         </StackPanel>
 
-                                        <!-- Final answer -->
-                                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                             MaxWidth="900" HorizontalAlignment="Left"
-                                                             Foreground="{DynamicResource AppTextPrimary}"/>
+                                        <!-- Final answer: prose flows as text, code/commands render as bubbles -->
+                                        <ItemsControl ItemsSource="{Binding Segments}"
+                                                      MaxWidth="900" HorizontalAlignment="Left">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:MessageSegment">
+                                                    <Panel>
+                                                        <!-- Prose -->
+                                                        <SelectableTextBlock IsVisible="{Binding !IsCode}"
+                                                                             Text="{Binding Text}" TextWrapping="Wrap"
+                                                                             Foreground="{DynamicResource AppTextPrimary}"/>
+
+                                                        <!-- Code / command bubble -->
+                                                        <Border IsVisible="{Binding IsCode}" Classes="codeBubble">
+                                                            <Grid RowDefinitions="Auto,Auto">
+                                                                <Border Grid.Row="0" Classes="codeHeader">
+                                                                    <Grid ColumnDefinitions="*,Auto">
+                                                                        <TextBlock Grid.Column="0" Classes="muted"
+                                                                                   Text="{Binding LanguageLabel}"
+                                                                                   FontSize="11" VerticalAlignment="Center"/>
+                                                                        <Button Grid.Column="1" Classes="copy" Content="📋"
+                                                                                ToolTip.Tip="Copy code" Click="OnCopyCode"/>
+                                                                    </Grid>
+                                                                </Border>
+                                                                <ScrollViewer Grid.Row="1" Padding="12,8"
+                                                                              HorizontalScrollBarVisibility="Auto"
+                                                                              VerticalScrollBarVisibility="Disabled">
+                                                                    <SelectableTextBlock Text="{Binding Text}"
+                                                                                         FontFamily="Cascadia Code,Consolas,monospace"
+                                                                                         FontSize="12.5"
+                                                                                         Foreground="{DynamicResource AppTextPrimary}"/>
+                                                                </ScrollViewer>
+                                                            </Grid>
+                                                        </Border>
+                                                    </Panel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
 
                                         <!-- Attached files -->
                                         <ItemsControl ItemsSource="{Binding Attachments}"

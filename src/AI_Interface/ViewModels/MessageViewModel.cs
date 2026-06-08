@@ -43,6 +43,35 @@ public sealed partial class MessageViewModel : ObservableObject
     private string _text;
 
     /// <summary>
+    /// <see cref="Text"/> parsed into prose / code-block parts for rendering: prose as normal text,
+    /// fenced code/commands as a monospace bubble with a copy button. Rebuilt as the text streams in.
+    /// </summary>
+    public ObservableCollection<MessageSegment> Segments { get; } = new();
+
+    partial void OnTextChanged(string value) => RebuildSegments();
+
+    /// <summary>Re-parse <see cref="Text"/> into <see cref="Segments"/>, updating parts in place so a
+    /// streaming code block grows without recreating its container.</summary>
+    private void RebuildSegments()
+    {
+        var parts = MarkdownSegmenter.Parse(Text);
+
+        for (var i = 0; i < parts.Count; i++)
+        {
+            var p = parts[i];
+            if (i < Segments.Count && Segments[i].IsCode == p.IsCode && Segments[i].Language == p.Language)
+                Segments[i].Text = p.Text;                 // same kind of part — just grow it
+            else if (i < Segments.Count)
+                Segments[i] = new MessageSegment(p.IsCode, p.Language, p.Text);
+            else
+                Segments.Add(new MessageSegment(p.IsCode, p.Language, p.Text));
+        }
+
+        while (Segments.Count > parts.Count)
+            Segments.RemoveAt(Segments.Count - 1);
+    }
+
+    /// <summary>
     /// The model's reasoning / the agent's action log — "how it got to the answer". Shown in a
     /// collapsible block above the answer. Empty for user messages and non-reasoning replies.
     /// </summary>
@@ -98,6 +127,7 @@ public sealed partial class MessageViewModel : ObservableObject
     {
         Role = role;
         _text = text;
+        RebuildSegments(); // the field initializer above bypasses OnTextChanged
     }
 
     /// <summary>Appends a streamed token to the message body. Call on the UI thread.</summary>
