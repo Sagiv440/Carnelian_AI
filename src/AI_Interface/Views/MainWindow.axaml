@@ -344,8 +344,8 @@
             </StackPanel>
 
             <!-- Transcript -->
-            <Grid Grid.Row="1">
-                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,8,6">
+            <Grid Grid.Row="1" Margin="0,0,0,4">
+                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,8,14">
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:MessageViewModel">
