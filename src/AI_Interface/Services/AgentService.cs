@@ -231,6 +231,8 @@ public sealed class AgentService : IAgentService
             // The full toolset, including installs (still independently gated by SoftwareInstallPermission).
             Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = true },
             Skills = new List<string> { "step-by-step" },
+            // Ends each turn with suggested next steps (showcases the proactive feature out of the box).
+            Proactive = true,
             Persona =
                 "You are an autonomous builder. Take a goal, break it into steps, and drive it to completion with " +
                 "minimal back-and-forth. Be decisive and bias toward action, but never destroy work you can't " +

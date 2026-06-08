@@ -131,6 +131,24 @@
             <Setter Property="HorizontalAlignment" Value="Left"/>
         </Style>
 
+        <!-- Proactive next-step suggestion chips -->
+        <Style Selector="Button.suggestion">
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="Padding" Value="11,5"/>
+            <Setter Property="CornerRadius" Value="13"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Button.suggestion /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style Selector="Button.suggestion:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#22F2542D"/>
+        </Style>
+
         <!-- Connection status dot -->
         <Style Selector="Ellipse.status">
             <Setter Property="Width" Value="9"/>
@@ -429,6 +447,22 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                         </Expander>
+
+                                        <!-- Proactive next-step suggestions: click a chip to drop it into the composer -->
+                                        <ItemsControl ItemsSource="{Binding Suggestions}"
+                                                      IsVisible="{Binding HasSuggestions}" Margin="0,10,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:CompileBindings="False">
+                                                    <Button Classes="suggestion" Content="{Binding}"
+                                                            CommandParameter="{Binding}"
+                                                            Command="{Binding DataContext.UseSuggestionCommand,
+                                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
 
                                     <!-- Message actions (top-right, appear on hover). Rerun only for user prompts. -->

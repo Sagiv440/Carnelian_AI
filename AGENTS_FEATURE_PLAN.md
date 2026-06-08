@@ -268,7 +268,7 @@ model id moves to a tooltip). Suggestion chips render under proactive replies (P
 4. ✅ Phase 2: per-agent skills (built-in packs + project `SKILL.md`) + tool allow-list → `ProjectAgentService`.
 5. ✅ Phase 3: `AutonomyLevel` → approval/steps/planning mapping.
 6. ✅ Phase 4: `IMemoryService` (Markdown store) + prompt injection + `remember` tool + memory management UI.
-7. ⬜ Phase 5: proactive suggestion chips.
+7. ✅ Phase 5: proactive next-step suggestion chips.
 
 ---
 
@@ -417,3 +417,33 @@ remains the only persist-only field (Phase 5).
 chat and ask "what do you know about me?" → the fact is in the prompt. In a project, ask the agent to note
 something and it can call `remember` (scope project). Manage/forget facts in Settings → AI Features →
 Autonomy & Memory. Turn off *Enable persistent memory* → nothing is injected and the tool is withheld.
+
+---
+
+## ✅ Phase 5 status — IMPLEMENTED (builds clean: 0 warnings, 0 errors) — roadmap complete
+
+**A proactive agent ends its turn with clickable next-step chips.** When the active agent's
+`Agent.Proactive` is on, `MainWindowViewModel.SendAsync` follows the completed turn with a small extra
+`IChatClient.CompleteAsync` call (`GenerateSuggestionsAsync`) asking for 2–4 short follow-up phrases;
+`ParseSuggestions` cleans/dedups/caps them and `MessageViewModel.SetSuggestions` attaches them. They render
+as `Button.suggestion` pills below the answer; clicking one fires `UseSuggestionCommand`, which **drops the
+text into the composer** (`InputText`) to review/edit/send — it does **not** auto-send (chosen default).
+
+**Generation = a separate cheap completion** (chosen over an inline structured block), so it's
+model-agnostic and never corrupts the visible answer. It's **best-effort and gated**: skipped unless the
+agent is proactive, the turn produced a real answer, and the run wasn't cancelled; any failure or a `NONE`
+reply yields no chips and never disturbs the completed turn.
+
+**New/edited:** `MessageViewModel` (`Suggestions` + `HasSuggestions` + `SetSuggestions`);
+`MainWindowViewModel` (`GenerateSuggestionsAsync` + `ParseSuggestions` + `UseSuggestionCommand`, plus the
+gated call after the mode switch); `AgentsViewModel` (`EditProactive` + load/persist); `Views/MainWindow.axaml`
+(`Button.suggestion` style + a chip `ItemsControl` in the transcript template); `Views/SettingsWindow.axaml`
+(a **Proactive** checkbox in the Agents editor); `Services/AgentService.cs` (built-in **Autopilot** ships
+`Proactive = true`).
+
+**To try it:** pick **Autopilot** (or check **Proactive** on a custom agent in Settings → AI Features →
+Agents), send a prompt → after the answer, next-step chips appear; click one and it lands in the composer.
+Non-proactive agents behave exactly as before (no extra call).
+
+**Roadmap complete:** all five phases (segmentation → skills/tools → autonomy → memory → proactive) are
+implemented; `Agent` has no persisted-but-unwired fields left.

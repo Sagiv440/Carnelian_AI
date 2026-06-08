@@ -275,6 +275,74 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Phase 5 (proactive): asks the model for a few short follow-up actions and attaches them to the
+    /// assistant message as clickable chips. Best-effort — any failure (or no useful suggestions, or a
+    /// user stop) just yields none and never disturbs the completed turn.
+    /// </summary>
+    private async Task GenerateSuggestionsAsync(
+        IChatClient client, string model, string prompt, MessageViewModel assistant, CancellationToken ct)
+    {
+        try
+        {
+            var answer = assistant.Text.Length > 2000 ? assistant.Text[..2000] : assistant.Text;
+
+            var messages = new List<ChatMessage>
+            {
+                ChatMessage.System(
+                    "You propose concise next steps. Given the user's request and the assistant's answer, " +
+                    "suggest 2 to 4 short follow-up actions the user might take next. Each is a brief imperative " +
+                    "phrase of 3-8 words (e.g. \"Add unit tests\"). Output one per line — no numbering, bullets, " +
+                    "or extra commentary. If there are no useful follow-ups, reply with exactly NONE."),
+                new ChatMessage(ChatRole.User, $"Request:\n{prompt}\n\nAnswer:\n{answer}")
+            };
+
+            var raw = await client.CompleteAsync(model, messages, ct);
+            var suggestions = ParseSuggestions(raw);
+            if (suggestions.Count > 0)
+                assistant.SetSuggestions(suggestions);
+        }
+        catch (OperationCanceledException)
+        {
+            // user stopped — no suggestions
+        }
+        catch
+        {
+            // best-effort: never let suggestion generation break the completed turn
+        }
+    }
+
+    /// <summary>Parses the model's reply into a short, de-duplicated list of next-step phrases (max 4).</summary>
+    private static List<string> ParseSuggestions(string raw)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(raw) || raw.Trim().Equals("NONE", StringComparison.OrdinalIgnoreCase))
+            return result;
+
+        foreach (var line in raw.Replace("\r\n", "\n").Split('\n'))
+        {
+            // Strip any leading bullet/number marker ("- ", "* ", "• ", "1.", "2)") the model may add.
+            var s = System.Text.RegularExpressions.Regex.Replace(line.Trim(), @"^\s*([-*•]|\d+[.)])\s+", "");
+            s = s.Trim().Trim('"', '\'', '.', ' ');
+
+            if (s.Length < 2 || s.Length > 80 || s.Equals("NONE", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!result.Any(x => x.Equals(s, StringComparison.OrdinalIgnoreCase)))
+                result.Add(s);
+            if (result.Count == 4)
+                break;
+        }
+        return result;
+    }
+
+    /// <summary>Drops a clicked suggestion chip into the composer for the user to review/edit, then send.</summary>
+    [RelayCommand]
+    private void UseSuggestion(string? suggestion)
+    {
+        if (!string.IsNullOrWhiteSpace(suggestion))
+            InputText = suggestion!;
+    }
+
+    /// <summary>
     /// Rebuilds the agent picker from the registry (built-in + global + the active project's customs)
     /// and restores the saved selection. Called on construction, on project enter/exit, and after the
     /// Settings → Agents panel may have changed the roster.
@@ -454,6 +522,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
             if (assistant.Text.Length == 0 && assistant.Work.Length == 0)
                 assistant.Text = "_(no response)_";
+
+            // Phase 5: a proactive agent ends its turn with suggested next steps (best-effort, gated).
+            if (SelectedAgent?.Proactive == true && !ct.IsCancellationRequested
+                && assistant.Text.Length > 0 && assistant.Text != "_(no response)_")
+            {
+                StatusText = "Thinking of next steps…";
+                await GenerateSuggestionsAsync(client, model, prompt, assistant, ct);
+            }
         }
         catch (OperationCanceledException)
         {

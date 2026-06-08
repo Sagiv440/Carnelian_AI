@@ -148,8 +148,8 @@ to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `c
 **Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
 An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2) +
 **Autonomy** (Phase 3 — wired into the project-agent run; see *Autonomy* above) + **MemoryEnabled**
-(Phase 4 — per-agent opt-out for persistent memory; see *Memory* below) + still-forward-compat
-`Proactive` (persisted-only, Phase 5). The registry
+(Phase 4 — per-agent opt-out for persistent memory; see *Memory* below) + **Proactive** (Phase 5 —
+next-step suggestion chips; see *Proactive* below). The registry
 de-dupes three sources by id with **project overriding global overriding built-in**: an embedded read-only
 seed (`assistant`/`researcher`/`code-buddy`/`autopilot`, `IsBuiltIn=true`), global customs in
 `<app-data>/AI_Interface/agents/*.md`, and per-project customs in `<project>/.AI/agents/*.md` (portable
@@ -164,8 +164,9 @@ skills apply in **all four modes**. The assistant `MessageViewModel` carries `Ag
 transcript header shows the agent's glyph + name (model id moves to a tooltip). Settings → AI Features →
 **Agents** is a master/detail panel (`AgentsViewModel`): list with a built-in badge, **＋ New** / **Duplicate**
 (always a global custom) / **Delete** (disabled for built-ins), editing Name / Glyph / Persona / Default model
-/ **Tool permissions** (checkboxes) / **Autonomy** (Ask/Guided/Autonomous radios, Phase 3) / **Skills**
-(checklist; built-in + project). The main window calls `AgentsPanel.Initialize(projectDir)` before opening
+/ **Tool permissions** (checkboxes) / **Autonomy** (Ask/Guided/Autonomous radios, Phase 3) / **Proactive**
+(checkbox, Phase 5) / **Skills** (checklist; built-in + project). The main window calls
+`AgentsPanel.Initialize(projectDir)` before opening
 Settings and `vm.LoadAgents()` after it closes.
 
 **Skills (Phase 2).** Two kinds: **built-in skill packs** (`Models/SkillCatalog.cs` — `cited-research`,
@@ -191,7 +192,17 @@ the project agent's `remember` **tool** (see Project mode), and an explicit chat
 (project scope when a project is active, else global). The **Autonomy & Memory** settings panel manages it:
 an *Enable persistent memory* toggle plus per-scope lists with per-item ✕ and *Clear all*
 (`SettingsViewModel.InitializeMemory(projectDir)` is called by the main window before the dialog opens,
-like `AgentsPanel.Initialize`). `Agent.Proactive` remains the only persisted-but-unwired field (Phase 5).
+like `AgentsPanel.Initialize`).
+
+**Proactive (Phase 5).** When the active agent's `Agent.Proactive` is set, `MainWindowViewModel.SendAsync`
+follows a completed turn with a small extra `IChatClient.CompleteAsync` call (`GenerateSuggestionsAsync`,
+best-effort/gated) that asks for 2–4 short next-step phrases; `ParseSuggestions` cleans them (strips
+bullet/number markers, dedups, caps at 4) and `MessageViewModel.SetSuggestions` attaches them. The
+transcript renders them as `Button.suggestion` chips below the answer; clicking one fires
+`UseSuggestionCommand`, which **drops the text into the composer** (`InputText`) to edit and send (it does
+not auto-send). The Agents editor has a **Proactive** checkbox (`AgentsViewModel.EditProactive`); the
+built-in **Autopilot** ships proactive so the feature works out of the box. This completes the 5-phase
+Agents roadmap — `Agent` has no persisted-but-unwired fields left.
 
 **Model Config — hardware-aware recommender.** `IHardwareService` scans CPU/RAM and GPU/VRAM
 (nvidia-smi first, best-effort cross-platform). `ModelCatalog` (in `Models/ModelCatalog.cs`) ranks a

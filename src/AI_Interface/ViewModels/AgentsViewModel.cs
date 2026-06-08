@@ -52,6 +52,9 @@ public sealed partial class AgentsViewModel : ViewModelBase
     [ObservableProperty] private string _editPersona = "";
     [ObservableProperty] private ChatModel? _editDefaultModel;
 
+    /// <summary>Proactive (Phase 5): end each turn with clickable next-step suggestion chips.</summary>
+    [ObservableProperty] private bool _editProactive;
+
     // --- tool permissions (bound to the checkbox row) ---
     [ObservableProperty] private bool _toolReadFiles = true;
     [ObservableProperty] private bool _toolWriteFiles = true;
@@ -160,6 +163,7 @@ public sealed partial class AgentsViewModel : ViewModelBase
         ToolInstallSoftware = tools.Allows(AgentToolGroup.InstallSoftware);
 
         Autonomy = value?.Autonomy ?? AutonomyLevel.Guided;
+        EditProactive = value?.Proactive ?? false;
 
         RebuildSkillChoices(value);
         _loadingDetail = false;
@@ -251,6 +255,8 @@ public sealed partial class AgentsViewModel : ViewModelBase
     partial void OnToolInstallSoftwareChanged(bool value) => PersistTool(t => t.InstallSoftware = value);
 
     partial void OnAutonomyChanged(AutonomyLevel value) => Persist(a => a.Autonomy = value);
+
+    partial void OnEditProactiveChanged(bool value) => Persist(a => a.Proactive = value);
 
     private void PersistTool(Action<AgentTools> apply) => Persist(a =>
     {

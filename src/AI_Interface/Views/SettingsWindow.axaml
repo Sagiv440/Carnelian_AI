@@ -456,6 +456,13 @@
                                                    Text="Run multi-step with auto-run (within its tool permissions + sandbox); outlines a short plan, then executes."/>
                                     </StackPanel>
 
+                                    <!-- Behaviour -->
+                                    <TextBlock Classes="label" Text="Behaviour"/>
+                                    <CheckBox Content="Proactive — suggest next steps after each reply"
+                                              IsChecked="{Binding EditProactive}"/>
+                                    <TextBlock Classes="muted" Margin="22,0,0,4" TextWrapping="Wrap" MaxWidth="418"
+                                               Text="After answering, the agent proposes a few short follow-up actions as clickable chips; clicking one drops it into the composer to edit and send. Adds a small extra model call per turn."/>
+
                                     <!-- Skills -->
                                     <TextBlock Classes="label" Text="Skills"/>
                                     <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"

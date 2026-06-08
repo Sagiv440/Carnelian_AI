@@ -115,7 +115,7 @@ Four agents are built in:
 | 🤖 **Assistant** | read-only | Guided | Neutral general-purpose helper. |
 | 🔬 **Researcher** | read-only | Guided | Evidence-first, cites sources (`cited-research` skill). |
 | 👨‍💻 **Code Buddy** | files + commands | Guided | Careful senior engineer (`careful-coding` skill). |
-| 🚀 **Autopilot** | full + installs | Autonomous | Drives a goal to completion (`step-by-step` skill). |
+| 🚀 **Autopilot** | full + installs | Autonomous | Drives a goal to completion; proactive (`step-by-step` skill). |
 
 **Autonomy** is authoritative for a Project-agent run — it sets the approval mode and how many tool steps
 the agent may take before it must reply:
@@ -131,6 +131,10 @@ software-install permission allows it *and* the agent's tools include installs.
 
 **Skills** are either built-in skill packs (`cited-research`, `concise`, `careful-coding`,
 `step-by-step`) or per-project `SKILL.md` files the agent can be pointed at.
+
+**Proactive** agents end each reply with a few **clickable next-step chips**; clicking one drops it into
+the composer to edit and send. Toggle it per agent in the Agents editor — the built-in **Autopilot** is
+proactive out of the box.
 
 **Custom agents** are stored as portable **Markdown files** (Claude-Code-style frontmatter + a persona
 body), so you can move them between tools:

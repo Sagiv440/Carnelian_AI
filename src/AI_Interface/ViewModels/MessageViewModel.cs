@@ -76,6 +76,12 @@ public sealed partial class MessageViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasSources;
 
+    /// <summary>Proactive next-step suggestions (Phase 5), shown as clickable chips below the answer.</summary>
+    public ObservableCollection<string> Suggestions { get; } = new();
+
+    [ObservableProperty]
+    private bool _hasSuggestions;
+
     /// <summary>Files attached to this (user) message, shown as chips in the bubble.</summary>
     public ObservableCollection<Attachment> Attachments { get; } = new();
 
@@ -127,5 +133,13 @@ public sealed partial class MessageViewModel : ObservableObject
         foreach (var a in attachments)
             Attachments.Add(a);
         HasAttachments = Attachments.Count > 0;
+    }
+
+    public void SetSuggestions(IEnumerable<string> suggestions)
+    {
+        Suggestions.Clear();
+        foreach (var s in suggestions)
+            Suggestions.Add(s);
+        HasSuggestions = Suggestions.Count > 0;
     }
 }
