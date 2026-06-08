@@ -436,6 +436,26 @@
                                                   ToolTip.Tip="install_software (still requires the global software-install permission)"/>
                                     </WrapPanel>
 
+                                    <!-- Autonomy (Project mode) -->
+                                    <TextBlock Classes="label" Text="Autonomy (Project mode)"/>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
+                                               Margin="0,0,0,4"
+                                               Text="How much this agent may act on its own when it runs a project task. The active agent's autonomy governs each run; software installs stay gated by Settings → Autonomy &amp; Memory."/>
+                                    <StackPanel Spacing="2">
+                                        <RadioButton GroupName="agentAutonomy" Content="Ask"
+                                                     IsChecked="{Binding IsAutonomyAsk}"/>
+                                        <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap" MaxWidth="418"
+                                                   Text="Confirm every action; short multi-step budget."/>
+                                        <RadioButton GroupName="agentAutonomy" Content="Guided"
+                                                     IsChecked="{Binding IsAutonomyGuided}"/>
+                                        <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap" MaxWidth="418"
+                                                   Text="Confirm destructive actions; reads/listings run automatically (today's default)."/>
+                                        <RadioButton GroupName="agentAutonomy" Content="Autonomous"
+                                                     IsChecked="{Binding IsAutonomyAutonomous}"/>
+                                        <TextBlock Classes="label" Margin="22,0,0,4" TextWrapping="Wrap" MaxWidth="418"
+                                                   Text="Run multi-step with auto-run (within its tool permissions + sandbox); outlines a short plan, then executes."/>
+                                    </StackPanel>
+
                                     <!-- Skills -->
                                     <TextBlock Classes="label" Text="Skills"/>
                                     <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
@@ -468,6 +488,8 @@
                             <TextBlock Classes="section" Text="Tool approval"/>
                             <TextBlock Classes="label" TextWrapping="Wrap"
                                        Text="Controls when the project agent asks before it writes/deletes files or runs terminal commands."/>
+                            <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,2,0,0"
+                                       Text="The active agent's autonomy governs each run — this is just the default autonomy for newly created agents (Settings → AI Features → Agents)."/>
                             <StackPanel Spacing="2" Margin="0,6,0,0">
                                 <RadioButton GroupName="approval" Content="Confirm destructive actions"
                                              IsChecked="{Binding IsConfirmDestructive}"/>

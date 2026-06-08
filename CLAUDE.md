@@ -97,7 +97,8 @@ same name when re-serialising the running conversation. Gemini has no system rol
 
 **Project mode — the agent** (`ProjectAgentService`). Loop: advertise tools → run the tools the model
 requests → feed each result back as a `ChatRole.Tool` message → repeat until the model replies in plain
-text (`MaxSteps` cap). Tools: `list_directory`, `read_file`, `write_file`, `create_folder`,
+text (step-budget cap — a `maxSteps` arg to `RunAsync`, set by the active agent's autonomy; `≤0` falls back
+to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `create_folder`,
 `delete_file`, `delete_folder`, `run_command`, and `install_software` (offered only when permitted).
 - **Per-agent tool allow-list (Phase 2).** `RunAsync` takes the active agent's `AgentTools`; `BuildTools`
   advertises **only the permitted groups** (ReadFiles→list/read, WriteFiles→write/create, DeleteFiles→
@@ -107,9 +108,21 @@ text (`MaxSteps` cap). Tools: `list_directory`, `read_file`, `write_file`, `crea
   (`AllowAll=true`, the default for an un-customized agent) offers the full set, so behaviour is unchanged.
 - **Sandbox.** File ops are confined to the project directory (`TryResolve` rejects paths outside it);
   commands run with the project root as the working directory.
-- **Approval.** `AgentApprovalMode` (Settings → Project): `AutoRun` / `ConfirmDestructive` /
-  `ConfirmEverything`. The service awaits an `approve` callback; the VM raises `ToolApprovalRequested`,
+- **Approval.** `AgentApprovalMode` (`AutoRun` / `ConfirmDestructive` / `ConfirmEverything`) is passed to
+  `RunAsync` per turn. The service awaits an `approve` callback; the VM raises `ToolApprovalRequested`,
   the code-behind shows `ToolApprovalWindow`, and the decision returns via a `TaskCompletionSource<bool>`.
+  **Phase 3:** the approval mode + step budget are no longer the global setting — they're derived from the
+  active agent's `Autonomy` (see *Autonomy* below).
+- **Autonomy (Phase 3).** The active agent's `AutonomyLevel` is **authoritative** for a project-agent run.
+  `MainWindowViewModel.RunProjectAgentAsync` derives `(approval, maxSteps)` via `AutonomyMap.ForRun` and
+  passes them to `RunAsync` **instead of** the global `AppSettings.AgentApproval`: `Ask`→
+  (`ConfirmEverything`, 8), `Guided`→(`ConfirmDestructive`, 24 = today's behaviour), `Autonomous`→
+  (`AutoRun`, 40). For `Autonomous` only, `AgentPromptBuilder.PlanningDirective` adds a plan-then-execute
+  directive (folded into the `thinkingDirective` arg, so it's a prompt directive — not a separate planning
+  round). `SoftwareInstallPermission` remains an **independent** gate (both autonomy auto-run **and** the
+  install permission must allow). The global `AppSettings.AgentApproval` (Settings → Autonomy & Memory) now
+  only seeds the **default autonomy for newly created custom agents** (`AutonomyMap.FromApprovalMode` in
+  `AgentsViewModel.New()`).
 - **Software install permission.** `AppSettings.SoftwareInstall` (`SoftwareInstallPermission`:
   `Never` / `Ask` / `Allow`). Under `Never`, `install_software` is withheld and `run_command` refuses
   machine-wide package-manager installs (winget/apt/brew/`npm -g`/…) while still allowing project-local
@@ -128,9 +141,9 @@ text (`MaxSteps` cap). Tools: `list_directory`, `read_file`, `write_file`, `crea
   if it names none, **all** discovered project skills are included (back-compat).
 
 **Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
-An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (wired into
-behaviour, Phase 2) + still-forward-compat fields (Autonomy/MemoryEnabled/Proactive, persisted-only). The
-registry
+An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2) +
+**Autonomy** (Phase 3 — wired into the project-agent run; see *Autonomy* above) + still-forward-compat
+fields (MemoryEnabled/Proactive, persisted-only). The registry
 de-dupes three sources by id with **project overriding global overriding built-in**: an embedded read-only
 seed (`assistant`/`researcher`/`code-buddy`/`autopilot`, `IsBuiltIn=true`), global customs in
 `<app-data>/AI_Interface/agents/*.json`, and per-project customs in `<project>/.AI/agents/*.json`
@@ -144,8 +157,9 @@ skills apply in **all four modes**. The assistant `MessageViewModel` carries `Ag
 transcript header shows the agent's glyph + name (model id moves to a tooltip). Settings → AI Features →
 **Agents** is a master/detail panel (`AgentsViewModel`): list with a built-in badge, **＋ New** / **Duplicate**
 (always a global custom) / **Delete** (disabled for built-ins), editing Name / Glyph / Persona / Default model
-/ **Tool permissions** (checkboxes) / **Skills** (checklist; built-in + project). The main window calls
-`AgentsPanel.Initialize(projectDir)` before opening Settings and `vm.LoadAgents()` after it closes.
+/ **Tool permissions** (checkboxes) / **Autonomy** (Ask/Guided/Autonomous radios, Phase 3) / **Skills**
+(checklist; built-in + project). The main window calls `AgentsPanel.Initialize(projectDir)` before opening
+Settings and `vm.LoadAgents()` after it closes.
 
 **Skills (Phase 2).** Two kinds: **built-in skill packs** (`Models/SkillCatalog.cs` — `cited-research`,
 `concise`, `careful-coding`, `step-by-step`; `SkillPack(Id, Name, Content)`) and **project `SKILL.md`**

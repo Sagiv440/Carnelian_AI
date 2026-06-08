@@ -266,7 +266,7 @@ model id moves to a tooltip). Suggestion chips render under proactive replies (P
 2. ✅ `AgentPromptBuilder`; route Chat/Web/Deep/Project system prompts through it (persona only).
 3. ✅ Settings: grouped **Editor/AI** left nav + **Agents** panel (list/create/edit/delete); top-bar agent picker; transcript header glyph.
 4. ✅ Phase 2: per-agent skills (built-in packs + project `SKILL.md`) + tool allow-list → `ProjectAgentService`.
-5. ⬜ Phase 3: `AutonomyLevel` → approval/steps/planning mapping.
+5. ✅ Phase 3: `AutonomyLevel` → approval/steps/planning mapping.
 6. ⬜ Phase 4: `IMemoryService` + prompt injection + `remember` tool + memory management UI.
 7. ⬜ Phase 5: proactive suggestion chips.
 
@@ -343,3 +343,44 @@ all-on state, then the per-tool booleans are authoritative. `install_software` i
 list/read but not write/create (the tool is absent and refused if forced). Pick an agent with the `concise`
 skill pack → replies get terser. With a project open, the agent's **Skills** checklist also lists the
 project's `SKILL.md` names; checking specific ones narrows what's loaded in Project mode.
+
+---
+
+## ✅ Phase 3 status — IMPLEMENTED (builds clean: 0 warnings, 0 errors)
+
+**The active agent's `Autonomy` is authoritative for a project-agent run** (overrides the global approval
+mode), mapping to approval + step budget + planning:
+
+| Level | Effective approval | Step budget | Planning |
+|---|---|---|---|
+| `Ask` | `ConfirmEverything` | 8 | none |
+| `Guided` | `ConfirmDestructive` | 24 (= today's default) | none |
+| `Autonomous` | `AutoRun` | 40 | plan-then-execute directive |
+
+**New mapping (one place):** `Models/AutonomyLevel.cs` — `AutonomyMap.ForRun(level) → (approval, maxSteps)`
+and `AutonomyMap.FromApprovalMode(mode) → level` (global-setting ↔ autonomy). `AgentPromptBuilder.PlanningDirective(autonomy)`
+returns the plan-then-execute text for `Autonomous` (empty otherwise) — a prompt directive, not a separate round.
+
+**Edited:** `Services/ProjectAgentService.cs` (+ `IProjectAgentService` + `DesignProjectAgentService` stub):
+`RunAsync` gained an `int maxSteps` param; the const `MaxSteps` became `DefaultMaxSteps` (=24) fallback.
+`ViewModels/MainWindowViewModel.cs` (`RunProjectAgentAsync` derives `(approval, maxSteps)` from
+`SelectedAgent.Autonomy`, appends `PlanningDirective` to the directives, passes both to the service —
+`SoftwareInstall` still passed independently). `ViewModels/AgentsViewModel.cs` (now injects `ISettingsService`;
+`New()` seeds `Autonomy` from the global `AgentApproval`; an `Autonomy` observable + three radio bools +
+load/persist). `Views/SettingsWindow.axaml` (Autonomy radios in the Agents editor + a muted note in
+Autonomy & Memory that the active agent governs each run). `Models/Agent.cs` / `AutonomyLevel.cs` doc updates.
+`App.ConfigureServices()` unchanged (`AgentsViewModel` is transient; `ISettingsService` already registered).
+
+**Where the wiring lives:** autonomy→(approval, steps) — `AutonomyMap.ForRun` consumed in
+`MainWindowViewModel.RunProjectAgentAsync`. Planning — `AgentPromptBuilder.PlanningDirective`. Global-setting
+→ new-agent default — `AutonomyMap.FromApprovalMode` in `AgentsViewModel.New()`. `SoftwareInstallPermission`
+stays a separate gate (`ProjectAgentService.ExecuteAsync`/`BuildTools`, untouched).
+
+**Known Phase-3 limitations (by design):** Memory/Proactive still persist-only (Phases 4–5). The
+plan-then-execute pass is a prompt directive (no forced separate planning round), reusing the tool loop.
+
+**To try it:** in Settings → AI Features → Agents, set a custom agent's **Autonomy** to *Autonomous* → in
+Project mode it auto-runs multi-step (within its tool allow-list + sandbox) and its reply opens with a short
+numbered plan. *Ask* prompts before every tool call; *Guided* (the default) is unchanged (confirm-destructive,
+24 steps). With `SoftwareInstall = No permission`, an Autonomous agent allowed Install software still can't
+install (the tool is withheld and system-install commands refused).

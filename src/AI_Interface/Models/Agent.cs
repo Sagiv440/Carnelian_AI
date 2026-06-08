@@ -37,7 +37,11 @@ public sealed class Agent
     /// <summary>Per-tool allow-list (Phase 2 — persisted only for now).</summary>
     public AgentTools Tools { get; set; } = new();
 
-    /// <summary>Autonomy level (Phase 3 — persisted only for now).</summary>
+    /// <summary>
+    /// Autonomy level. Authoritative for a project-agent run: it sets the effective approval mode + step
+    /// budget (<see cref="AutonomyMap.ForRun"/>) and, for <see cref="AutonomyLevel.Autonomous"/>, adds a
+    /// plan-then-execute directive. Software-install permission stays an independent gate.
+    /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AutonomyLevel Autonomy { get; set; } = AutonomyLevel.Guided;
 

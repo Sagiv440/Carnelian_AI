@@ -61,6 +61,18 @@ public static class AgentPromptBuilder
     }
 
     /// <summary>
+    /// The plan-then-execute directive added to the Project-agent system prompt for an
+    /// <see cref="AutonomyLevel.Autonomous"/> agent, so it outlines a short plan before acting and then
+    /// summarizes. Empty for <see cref="AutonomyLevel.Ask"/> / <see cref="AutonomyLevel.Guided"/> (no
+    /// planning pass). Led by a blank line so it slots after preceding system-prompt content. This is a
+    /// prompt directive only — it reuses the existing tool loop rather than adding a separate planning round.
+    /// </summary>
+    public static string PlanningDirective(AutonomyLevel autonomy) => autonomy == AutonomyLevel.Autonomous
+        ? "\n\nWork autonomously: first outline a short numbered plan of the steps you'll take, then " +
+          "execute it step by step (calling tools as needed), and finish with a brief summary of what you did."
+        : "";
+
+    /// <summary>
     /// The combined text of the agent's selected <b>built-in</b> skill packs, each prefixed with its name,
     /// led by a blank line so it slots after preceding content. Empty when no built-in packs are selected.
     /// (Project <c>SKILL.md</c> selections are resolved separately, in Project mode only.)

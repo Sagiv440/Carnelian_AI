@@ -18,8 +18,8 @@ namespace AI_Interface.Services;
 /// </summary>
 public sealed class ProjectAgentService : IProjectAgentService
 {
-    /// <summary>Hard cap on tool-use rounds so a confused model can't loop forever.</summary>
-    private const int MaxSteps = 24;
+    /// <summary>Fallback hard cap on tool-use rounds when a caller doesn't specify one (matches Guided).</summary>
+    private const int DefaultMaxSteps = AutonomyMap.GuidedSteps;
 
     /// <summary>Output kept per tool result (both for the model and the transcript).</summary>
     private const int MaxResultChars = 6000;
@@ -33,6 +33,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         string model,
         IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode,
+        int maxSteps,
         AgentTools allowedTools,
         string personaPrefix,
         string thinkingDirective,
@@ -46,6 +47,9 @@ public sealed class ProjectAgentService : IProjectAgentService
     {
         // A null allow-list (e.g. an agent with no tool profile) is treated as unrestricted.
         allowedTools ??= new AgentTools();
+        // The step budget is set by the active agent's autonomy level; fall back to the Guided default.
+        if (maxSteps <= 0)
+            maxSteps = DefaultMaxSteps;
         var tools = BuildTools(allowedTools, installPermission);
 
         var messages = new List<ChatMessage>
@@ -55,7 +59,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         };
         messages.AddRange(conversation);
 
-        for (var step = 0; step < MaxSteps; step++)
+        for (var step = 0; step < maxSteps; step++)
         {
             ct.ThrowIfCancellationRequested();
             status.Report(step == 0 ? "Thinking…" : "Working…");
@@ -85,7 +89,7 @@ public sealed class ProjectAgentService : IProjectAgentService
             }
         }
 
-        onAnswer($"_(stopped after {MaxSteps} steps — the task may be unfinished)_");
+        onAnswer($"_(stopped after {maxSteps} steps — the task may be unfinished)_");
     }
 
     // ---- the agent loop's single-tool step -------------------------------------------------

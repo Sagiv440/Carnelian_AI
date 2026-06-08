@@ -549,12 +549,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var progress = new Progress<string>(s => StatusText = s);
         var conversation = BuildAgentConversation(assistant);
 
+        // The active agent's autonomy is authoritative for the run: it overrides the global approval mode
+        // and sets the step budget (Ask → confirm-everything/8, Guided → confirm-destructive/24,
+        // Autonomous → auto-run/40). SoftwareInstall stays an independent gate, passed through below.
+        var autonomy = SelectedAgent?.Autonomy ?? AutonomyLevel.Guided;
+        var (approval, maxSteps) = AutonomyMap.ForRun(autonomy);
+        // An Autonomous agent gets a plan-then-execute directive appended to the system prompt; it slots
+        // in alongside the Thinking directive (both lead with their own blank line, both may be empty).
+        var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(autonomy);
+
         // The agent runs on background threads; marshal its callbacks back to the UI.
         // Activity (the 🔧 action log) goes to the collapsible "work" block; the final reply to the answer.
         await _agent.RunAsync(
-            client, ActiveProject, model, conversation, _settings.Current.AgentApproval,
+            client, ActiveProject, model, conversation, approval, maxSteps,
             SelectedAgent?.Tools ?? new AgentTools(),
-            PersonaPrefix(), ThinkingDirective(), ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
+            PersonaPrefix(), directives, ProjectSkillsContext(), _settings.Current.SoftwareInstall, progress,
             activity => Dispatcher.UIThread.Post(() =>
             {
                 assistant.AppendWork(activity);
