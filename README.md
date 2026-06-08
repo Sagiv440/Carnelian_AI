@@ -1,4 +1,8 @@
-# AI Interface
+
+<h1>
+  <img src="https://raw.githubusercontent.com/Sagiv440/AI_Interface/refs/heads/main/src/AI_Interface/Assets/avalonia-logo.ico?token=GHSAT0AAAAAAD7JXB7BMPR66M7L3L4SEO5O2RGWXHQ" alt="AI Interface logo" width="30" height="30" style="vertical-align: middle;">
+  AI Interface
+</h1>
 
 A cross-platform desktop app for running AI. It runs models **locally** through a local
 [Ollama](https://ollama.com) server, and can **optionally** talk to cloud providers — OpenAI (ChatGPT),
