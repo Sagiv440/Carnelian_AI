@@ -1,10 +1,9 @@
 
-<h1>
-  <img src="https://raw.githubusercontent.com/Sagiv440/AI_Interface/refs/heads/main/src/AI_Interface/Assets/avalonia-logo.ico?token=GHSAT0AAAAAAD7JXB7BMPR66M7L3L4SEO5O2RGWXHQ" alt="AI Interface logo" width="30" height="30" style="vertical-align: middle;">
+<h1 style="font-weight: bold;">
+  <img src="src/AI_Interface/Assets/app-logo.png" alt="AI Interface logo" width="40" height="40" align="center" />
   AI Interface
 </h1>
-
-A cross-platform desktop app for running AI. It runs models **locally** through a local
+A cross-platform desktop app for running AI. It runs models <strong>locally</strong> through a local
 [Ollama](https://ollama.com) server, and can **optionally** talk to cloud providers — OpenAI (ChatGPT),
 Google Gemini, and Anthropic (Claude) — when you add an API key. Every provider's models share one
 picker, and all modes work the same regardless of which model you choose.
