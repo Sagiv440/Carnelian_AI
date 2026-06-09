@@ -292,6 +292,20 @@ Claude-Code-style Markdown via `AgentMarkdown`; legacy `*.json` is auto-migrated
 `SaveCustom`/`DeleteCustom` refuse built-in ids). The active agent's id persists in
 `AppSettings.ActiveAgentId`. `MainWindowViewModel` holds the `Agents` collection + `SelectedAgent` (top-bar
 picker beside the model dropdown — agent and model are independent) and reloads on project enter/exit.
+- **Project mode prefers "team" (orchestrator) agents.** In a project the picker leads with the coordinated
+  team experience (`ViewModels/ProjectAgentPicker.cs`, pure `internal static` helpers, unit-tested):
+  `LoadAgents` runs the roster through `Arrange(roster, ProjectTeamAgentsOnly)` **only when a project is
+  active** — orchestrators sorted first (stable), and (opt-in) single agents hidden; the global/non-project
+  order is untouched. `ActivateProjectAsync` auto-selects `PreferredOrchestrator(Agents)` (built-in **Lead**,
+  else first orchestrator) when the current pick isn't an orchestrator, stashing the prior id in
+  `_preProjectAgentId`; `ExitProject` restores it. The in-project selection is **transient** —
+  `OnSelectedAgentChanged` persists `ActiveAgentId` **only outside a project** (`ActiveProject is null`), so
+  entering a project (and the auto-switch) never permanently changes the global preference, even if the app
+  closes mid-project. The picker badges orchestrators with a muted **"team"** pill (`IsOrchestrator`).
+  `AppSettings.ProjectTeamAgentsOnly` (default off; Settings → Autonomy & Memory → *Project agents*) is the
+  opt-in strict filter. **Picker ↔ roster are decoupled:** the Lead's delegation roster comes from
+  `IAgentService.ListAgents` (`AgentOrchestrator.BuildRoster`), never the picker `Agents`, so hiding single
+  agents from the picker never starves the Lead of specialists.
 `AgentPromptBuilder.Compose(agent, baseInstructions, thinkingDirective)` builds the streaming modes' system
 prompt (persona → base → **built-in skill packs** → Thinking), and `PersonaPrefix(agent)` (now persona +
 skills) is threaded into `DeepResearchService.RunAsync` and `ProjectAgentService.RunAsync` so persona +

@@ -103,6 +103,16 @@ public sealed class AppSettings
     /// </summary>
     public bool GlobalMemoryEnabled { get; set; } = true;
 
+    // --- Agents (Project mode) ---
+
+    /// <summary>
+    /// When on, the Project-mode agent picker offers <b>only</b> orchestrator ("team") agents — single
+    /// agents are hidden while a project is active (the Lead still delegates to them behind the scenes,
+    /// since the delegation roster comes from the registry, not the picker). Off ⇒ the picker still
+    /// auto-selects the Lead and badges orchestrators, but single agents stay selectable. Default off.
+    /// </summary>
+    public bool ProjectTeamAgentsOnly { get; set; } = false;
+
     // --- Thinking ---
 
     /// <summary>

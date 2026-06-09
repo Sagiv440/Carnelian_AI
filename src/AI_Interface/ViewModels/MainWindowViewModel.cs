@@ -69,6 +69,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>Agents offered in the top-bar picker (built-in + global + the active project's customs).</summary>
     public ObservableCollection<Agent> Agents { get; } = new();
+
+    /// <summary>
+    /// The agent that was selected before entering a project, when Project mode auto-switched to the Lead.
+    /// Restored on project exit so entering a project never permanently changes the global agent preference.
+    /// Null when no override is pending (already an orchestrator on entry, or not in a project).
+    /// </summary>
+    private string? _preProjectAgentId;
+
     public IReadOnlyList<ModeOption> Modes { get; }
 
     /// <summary>The composer's search-scope dropdown options (Local / Web / Deep), a subset of <see cref="Modes"/>.</summary>
@@ -245,8 +253,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedAgentChanged(Agent? value)
     {
-        // Persist the chosen agent's id so it's restored next launch (like DefaultModel).
-        if (value is not null)
+        // Persist the chosen agent's id so it's restored next launch (like DefaultModel) — but ONLY outside
+        // a project. In Project mode the selection is transient: entering a project auto-selects the Lead,
+        // and persisting that (or any in-project switch) would silently overwrite the user's global agent
+        // preference if the app closed mid-project. The pre-project pick is restored on ExitProject.
+        if (value is not null && ActiveProject is null)
         {
             _settings.Current.ActiveAgentId = value.Id;
             _settings.Save();
@@ -376,8 +387,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         var previousId = SelectedAgent?.Id ?? _settings.Current.ActiveAgentId;
 
+        var roster = _agents.ListAgents(ActiveProject?.Directory);
+
+        // In a project, lead with the "team" experience: orchestrators sorted first, and (when the user
+        // opted in) single agents hidden entirely. Outside a project the picker order is untouched.
+        // Hiding single agents here doesn't affect delegation — the Lead's roster comes from the registry.
+        IEnumerable<Agent> picker = ActiveProject is not null
+            ? ProjectAgentPicker.Arrange(roster, _settings.Current.ProjectTeamAgentsOnly)
+            : roster;
+
         Agents.Clear();
-        foreach (var agent in _agents.ListAgents(ActiveProject?.Directory))
+        foreach (var agent in picker)
             Agents.Add(agent);
 
         SelectedAgent =
@@ -1014,6 +1034,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         LoadLog();                        // load this project's chats into the sidebar log
         LoadFileTree();                   // build the Files tab tree
         LoadAgents();                     // surface this project's custom agents in the picker
+
+        // Project mode leads with the "team" experience: if the current pick isn't an orchestrator, switch
+        // to the Lead and remember the previous pick to restore on exit (so we don't hijack the global one).
+        if (SelectedAgent?.IsOrchestrator != true)
+        {
+            var lead = ProjectAgentPicker.PreferredOrchestrator(Agents);
+            if (lead is not null)
+            {
+                _preProjectAgentId = SelectedAgent?.Id;
+                SelectedAgent = lead;
+            }
+        }
+
         await LoadProjectSkillsAsync(project);
     }
 
@@ -1034,6 +1067,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         FileTree.Clear();
         LoadLog();                        // reload the global chat log
         LoadAgents();                     // drop the project's custom agents from the picker
+
+        // Restore the agent we auto-switched away from on project entry (see ActivateProjectAsync), so the
+        // global agent preference survives a project session unchanged.
+        if (_preProjectAgentId is not null)
+        {
+            var prior = Agents.FirstOrDefault(a => string.Equals(a.Id, _preProjectAgentId, StringComparison.OrdinalIgnoreCase));
+            if (prior is not null)
+                SelectedAgent = prior;
+            _preProjectAgentId = null;
+        }
+
         SetMode(AppMode.Chat);
     }
 

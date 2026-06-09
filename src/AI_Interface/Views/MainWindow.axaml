@@ -570,6 +570,14 @@
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <TextBlock Text="{Binding Glyph}" VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                <!-- "team" badge: marks an orchestrator (delegates to specialist agents) -->
+                                <Border IsVisible="{Binding IsOrchestrator}" VerticalAlignment="Center"
+                                        Background="{DynamicResource AppSurfaceBrush}"
+                                        BorderBrush="{DynamicResource AppSurfaceBorderBrush}"
+                                        BorderThickness="1" CornerRadius="3" Padding="5,1"
+                                        ToolTip.Tip="Team agent — delegates subtasks to specialist agents">
+                                    <TextBlock Text="team" FontSize="10" Classes="muted"/>
+                                </Border>
                             </StackPanel>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>

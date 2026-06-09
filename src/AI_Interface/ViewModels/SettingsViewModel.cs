@@ -220,6 +220,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Master switch for persistent memory; mirrors <see cref="AppSettings.GlobalMemoryEnabled"/>.</summary>
     [ObservableProperty] private bool _globalMemoryEnabled;
 
+    /// <summary>
+    /// When on, Project mode offers only orchestrator ("team") agents in the picker; mirrors
+    /// <see cref="AppSettings.ProjectTeamAgentsOnly"/>. The main window reloads the picker after Settings
+    /// closes, so toggling this re-applies to an active project.
+    /// </summary>
+    [ObservableProperty] private bool _projectTeamAgentsOnly;
+
     /// <summary>Facts remembered about the user (global scope).</summary>
     public ObservableCollection<MemoryEntry> GlobalMemories { get; } = new();
 
@@ -260,6 +267,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
         if (_loading)
             return;
         _settings.Current.GlobalMemoryEnabled = value;
+        _settings.Save();
+    }
+
+    partial void OnProjectTeamAgentsOnlyChanged(bool value)
+    {
+        if (_loading)
+            return;
+        _settings.Current.ProjectTeamAgentsOnly = value;
         _settings.Save();
     }
 
@@ -421,6 +436,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _agentApproval = s.AgentApproval;
         _softwareInstall = s.SoftwareInstall;
         _globalMemoryEnabled = s.GlobalMemoryEnabled;
+        _projectTeamAgentsOnly = s.ProjectTeamAgentsOnly;
         _searchProvider = s.SearchProvider;
         _searxngUrl = s.SearxngUrl;
         _braveApiKey = s.BraveApiKey;

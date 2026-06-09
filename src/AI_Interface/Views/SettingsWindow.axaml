@@ -523,6 +523,15 @@
                                            Text="Installs follow the tool-approval setting above (Auto-run installs without asking)."/>
                             </StackPanel>
 
+                            <!-- Project agents -->
+                            <TextBlock Classes="section" Text="Project agents"/>
+                            <TextBlock Classes="label" TextWrapping="Wrap"
+                                       Text="In Project mode the agent picker auto-selects the Lead and badges “team” (orchestrator) agents that delegate to specialists."/>
+                            <CheckBox Margin="0,8,0,0" Content="Project mode: only allow team agents"
+                                      IsChecked="{Binding ProjectTeamAgentsOnly}"/>
+                            <TextBlock Classes="label" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       Text="When on, single agents are hidden from the picker while a project is open — you steer the team through a Lead. The Lead still delegates to those specialists behind the scenes."/>
+
                             <!-- Persistent memory -->
                             <TextBlock Classes="section" Text="Memory"/>
                             <TextBlock Classes="label" TextWrapping="Wrap"
