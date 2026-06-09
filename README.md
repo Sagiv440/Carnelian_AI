@@ -25,8 +25,8 @@ There are four ways to work, chosen from the sidebar and the composer:
 Cross-cutting extras:
 
 - **🤝 Agents** — a selectable **persona** (top-bar picker) whose voice is layered into *every* mode.
-  Each agent bundles a personality, a set of **skills**, a **tool allow-list**, and an **autonomy
-  level**. Five are built in (Assistant, Researcher, Code Buddy, Autopilot, and **Lead** — which
+  Each agent bundles a personality, a set of **skills**, and a **tool allow-list** (approval behaviour is
+  a single global setting, not per-agent). Five are built in (Assistant, Researcher, Code Buddy, Autopilot, and **Lead** — which
   coordinates a team by delegating subtasks to the others), and you can create your own, globally or
   per-project. See [Agents](#agents) below.
 - **🧩 Memory** — persistent facts the assistant recalls across sessions, in two scopes: **global**
@@ -111,9 +111,9 @@ Either script also cross-publishes from the other OS — the .NET SDK can target
   its chats are saved under `<project>/.AI/chats`, and any skill files in the project are loaded into
   the agent's system prompt. While a project is active the sidebar gains a **Files** tab (a live tree of
   the project directory).
-- **Project agent safety** is governed per-agent by the active agent's **autonomy level** (see below),
-  with a three-way **software-install** permission (no permission / ask every time / allow) kept as an
-  independent gate. File operations are sandboxed to the project directory.
+- **Project agent safety** is governed by a single global **approval mode** (Settings → Autonomy &
+  Memory; see below), with a three-way **software-install** permission (no permission / ask every time /
+  allow) kept as an independent gate. File operations are sandboxed to the project directory.
 - **Settings** (⚙, top-right) has a grouped left rail under two headers:
   - **Editor Features** — *Appearance* (light/dark + accent/bubble colors), *Typography* (font + size),
     *Layout*.
@@ -124,25 +124,26 @@ Either script also cross-publishes from the other OS — the .NET SDK can target
 ## Agents
 
 An **agent** is a reusable profile that shapes how the assistant behaves in every mode — it bundles a
-**persona** (personality / system prompt), a set of **skills**, a **tool allow-list**, and an **autonomy
-level**. Pick the active agent from the top-bar picker; manage them in **Settings → AI Features →
-Agents**.
+**persona** (personality / system prompt), a set of **skills**, and a **tool allow-list**. Pick the
+active agent from the top-bar picker; manage them in **Settings → AI Features → Agents**. (Approval
+behaviour — whether an agent asks before acting — is a single global setting, not per-agent; see
+*Autonomy* below.)
 
 Five agents are built in:
 
-| Agent | Tools | Autonomy | Notes |
-|-------|-------|----------|-------|
-| 🤖 **Assistant** | read-only | Guided | Neutral general-purpose helper. |
-| 🔬 **Researcher** | read-only | Guided | Evidence-first, cites sources (`cited-research` skill). |
-| 👨‍💻 **Code Buddy** | files + commands | Guided | Careful senior engineer (`careful-coding` skill). |
-| 🚀 **Autopilot** | full + installs | Autonomous | Drives a goal to completion; proactive (`step-by-step` skill). |
-| 🧭 **Lead** | read-only | Guided | Coordinates a team: delegates subtasks to the other agents (see below). |
+| Agent | Tools | Notes |
+|-------|-------|-------|
+| 🤖 **Assistant** | read-only | Neutral general-purpose helper. |
+| 🔬 **Researcher** | read-only | Evidence-first, cites sources (`cited-research` skill). |
+| 👨‍💻 **Code Buddy** | files + commands | Careful senior engineer (`careful-coding` skill). |
+| 🚀 **Autopilot** | full + installs | Drives a goal to completion; proactive (`step-by-step` skill). |
+| 🧭 **Lead** | read/write/delete/run (team ceiling, no install) | Coordinates a team: delegates subtasks to the other agents (see below). |
 
 #### Lead — the orchestrator
 
 In **Project** mode the **Lead** agent doesn't do the hands-on work itself. It reads your roster of
 specialist agents, breaks your goal into subtasks, and **delegates** each to the best-fit specialist —
-which runs with its own persona, tools, autonomy, and model — then reviews the results and follows up
+which runs with its own persona and model (its tools capped to the Lead's ceiling) — then reviews the results and follows up
 (for example, asking a reviewer to check an implementer's work) until the goal is met. Pick **Lead** in
 the top-bar agent picker, enter a project, and send a goal. The Lead and the specialists it delegates to
 all need a tool-calling-capable model. (A lead can never delegate to another lead.)
@@ -152,16 +153,17 @@ task, a running/done indicator, and (when expanded) its activity log and result 
 planning stays in the reply's "Thinking" block. Any custom agent can be turned into a lead with the
 **Lead / orchestrator** checkbox in the agent editor (Settings → AI Features → Agents → Behaviour).
 
-**Autonomy** is authoritative for a Project-agent run — it sets the approval mode and how many tool steps
-the agent may take before it must reply:
+**Autonomy** is a single global setting (**Settings → AI Features → Autonomy & Memory**) — there is no
+per-agent autonomy. It sets the approval mode and how many tool steps an agent may take before it must
+reply, and it governs **every** Project-agent run, including the specialists a Lead delegates to:
 
-| Level | Approval | Step budget | Planning |
-|-------|----------|-------------|----------|
-| **Ask** | confirm every action | 8 | — |
-| **Guided** | confirm destructive actions | 24 | — |
-| **Autonomous** | auto-run | 40 | outlines a plan, then executes |
+| Approval mode | Asks before | Step budget | Planning |
+|---------------|-------------|-------------|----------|
+| **Confirm every action** | every tool call (including reads) | 8 | — |
+| **Confirm destructive actions** | writes, deletes, commands | 24 | — |
+| **Auto-run everything** | nothing | 40 | outlines a plan, then executes |
 
-Software installs stay independently gated: an Autonomous agent still can't install unless the
+Software installs stay independently gated: even under Auto-run an agent still can't install unless the
 software-install permission allows it *and* the agent's tools include installs.
 
 **Skills** are either built-in skill packs (`cited-research`, `concise`, `careful-coding`,
@@ -193,7 +195,7 @@ Built-in agents are read-only; **＋ New** and **Duplicate** create global custo
 ## Settings
 
 User settings (Ollama URL, cloud API keys, last model + agent, theme, font, search depth, agent
-autonomy, software-install permission, …) are stored as JSON at:
+approval mode, software-install permission, …) are stored as JSON at:
 
 - **Windows:** `%APPDATA%\AI_Interface\settings.json`
 - **Linux:** `~/.config/AI_Interface/settings.json`
@@ -205,7 +207,7 @@ per-project agents, chats, skills and memory live under the project's own `.AI/`
 
 ```
 src/AI_Interface/
-  Models/        Plain data types (chat, providers, agent profile/tools/autonomy, model catalog, settings)
+  Models/        Plain data types (chat, providers, agent profile/tools, model catalog, settings)
   Services/      Provider clients (Ollama + OpenAI/Gemini/Anthropic) behind IChatClient + a router,
                  web search, deep-research + project-agent orchestrators, agent registry,
                  hardware scan, attachments, theme + settings stores

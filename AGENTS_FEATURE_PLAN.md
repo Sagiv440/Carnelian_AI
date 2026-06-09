@@ -31,6 +31,8 @@ of a *named agent*, no persona, no memory, and autonomy is fixed by the global a
    selected project `SKILL.md` files) and a tool allow-list; wire these into `ProjectAgentService`.
 3. **Phase 3 — Autonomy.** A per-agent **autonomy level** that maps to approval mode + step budget +
    an optional *plan-then-execute* pass, so a trusted agent can self-run multi-step tasks.
+   *(⚠️ Superseded 2026-06 — per-agent autonomy was removed; autonomy is now a single global setting,
+   `AppSettings.AgentApproval`. See the Phase 3 status section below.)*
 4. **Phase 4 — Persistent memory.** `IMemoryService` (global + per-project) that remembers facts about
    you and your work, injects them into prompts, and exposes a `remember` tool the agent can call.
 5. **Phase 5 — Proactive.** Agents end turns with suggested next steps rendered as clickable chips.

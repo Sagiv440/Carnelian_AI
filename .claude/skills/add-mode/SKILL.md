@@ -65,7 +65,9 @@ handed the resolved `IChatClient`):
   in `Services/ProjectAgentService.cs`. Tools are defined there with JSON-schema parameters; the action
   log (tool calls + truncated results) is echoed via `onActivity` into the collapsible "work" block, while
   the model's final plain-text reply goes to `onAnswer` (the answer).
-- **User gating:** each call is gated by `AgentApprovalMode` (Settings → Project). The service awaits an
+- **User gating:** each call is gated by `AgentApprovalMode` — the single global approval setting
+  (`AppSettings.AgentApproval`, Settings → Autonomy & Memory; mapped to (approval, step budget) by
+  `AutonomyMap.ForApprovalMode`). The service awaits an
   `approve` callback; the VM raises `ToolApprovalRequested`, the code-behind shows `ToolApprovalWindow`,
   and the decision returns through a `TaskCompletionSource<bool>`.
 - **Sandboxing:** all file ops are confined to the active project directory (`TryResolve` rejects paths
