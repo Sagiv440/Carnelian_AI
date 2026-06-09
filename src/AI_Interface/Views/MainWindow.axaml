@@ -104,6 +104,79 @@
             <Setter Property="BorderThickness" Value="2,0,0,0"/>
         </Style>
 
+        <!-- ====================================================================
+             Orchestrator delegation cards — one collapsible sub-task per
+             specialist the lead handed work to. Reads as a nested subordinate
+             of the assistant answer: a slight left indent + a hairline left
+             accent rule, calmer than the answer itself. Flat, sharp, hairline.
+             ==================================================================== -->
+
+        <!-- Subordinate card: indented under the lead, with a left accent rule -->
+        <Style Selector="Border.delegation">
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+        </Style>
+
+        <!-- Header row toggle: full-width, flat; click anywhere toggles the body -->
+        <Style Selector="ToggleButton.delegationHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
+        </Style>
+        <Style Selector="ToggleButton.delegationHeader /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.delegationHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#10808080"/>
+        </Style>
+        <Style Selector="ToggleButton.delegationHeader:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- Disclosure triangle for the header -->
+        <Style Selector="TextBlock.delegationCaret">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+        </Style>
+
+        <!-- Status pip: an accent dot while running, neutral when done -->
+        <Style Selector="Ellipse.delegationStatus">
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="Height" Value="7"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Fill" Value="#3FB950"/>
+        </Style>
+        <Style Selector="Ellipse.delegationStatus.running">
+            <Setter Property="Fill" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- Body: separated from the header by a hairline, holds the activity log + result -->
+        <Style Selector="Border.delegationBody">
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        </Style>
+
+        <!-- Result block: hairline divider + a small label above the specialist's summary -->
+        <Style Selector="Border.delegationResult">
+            <Setter Property="Margin" Value="0,8,0,0"/>
+            <Setter Property="Padding" Value="0,8,0,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        </Style>
+
         <!-- Copy-message button: visibility is bound to the bubble's hover state (see template) -->
         <Style Selector="Button.copy">
             <Setter Property="Width" Value="26"/>
@@ -411,6 +484,91 @@
                                                                          Foreground="{DynamicResource AppTextSecondary}"/>
                                                 </ScrollViewer>
                                             </Border>
+                                        </StackPanel>
+
+                                        <!-- Orchestrator delegations: one collapsible card per subtask handed to a
+                                             specialist. Reads as a nested sub-task under the lead — a slight left
+                                             indent and a hairline left accent rule mark it as subordinate to the answer. -->
+                                        <StackPanel IsVisible="{Binding HasDelegations}" Spacing="4" Margin="0,2">
+                                            <ItemsControl ItemsSource="{Binding Delegations}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Spacing="4"/></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:DelegationStepViewModel">
+                                                        <!-- Hairline left accent rule sits behind the card to mark it as a
+                                                             child of the lead's answer without competing with it. -->
+                                                        <Border Background="{DynamicResource AppAccentBrush}"
+                                                                CornerRadius="4" Padding="2,0,0,0">
+                                                            <Border Classes="delegation">
+                                                                <StackPanel>
+                                                                    <!-- Header (always visible): caret · glyph+name · task · status -->
+                                                                    <ToggleButton Classes="delegationHeader"
+                                                                                  IsChecked="{Binding IsExpanded}"
+                                                                                  ToolTip.Tip="{Binding Task}">
+                                                                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" >
+                                                                            <TextBlock Grid.Column="0" Classes="delegationCaret"
+                                                                                       Text="▸" IsVisible="{Binding !IsExpanded}"
+                                                                                       Margin="0,0,6,0"/>
+                                                                            <TextBlock Grid.Column="0" Classes="delegationCaret"
+                                                                                       Text="▾" IsVisible="{Binding IsExpanded}"
+                                                                                       Margin="0,0,6,0"/>
+                                                                            <TextBlock Grid.Column="1" Text="{Binding Header}"
+                                                                                       FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                                       Foreground="{DynamicResource AppTextPrimary}"/>
+                                                                            <!-- Task brief: muted, one line, ellipsis when long -->
+                                                                            <TextBlock Grid.Column="2" Text="{Binding Task}"
+                                                                                       Classes="muted" VerticalAlignment="Center"
+                                                                                       TextTrimming="CharacterEllipsis"
+                                                                                       Margin="8,0,8,0"/>
+                                                                            <!-- Status: accent pip + "running" while working, green pip + "done" after -->
+                                                                            <StackPanel Grid.Column="3" Orientation="Horizontal"
+                                                                                        Spacing="5" VerticalAlignment="Center">
+                                                                                <Ellipse Classes="delegationStatus"
+                                                                                         Classes.running="{Binding IsRunning}"/>
+                                                                                <TextBlock Text="running" Classes="muted"
+                                                                                           VerticalAlignment="Center"
+                                                                                           IsVisible="{Binding IsRunning}"/>
+                                                                                <TextBlock Text="done" Classes="muted"
+                                                                                           VerticalAlignment="Center"
+                                                                                           IsVisible="{Binding !IsRunning}"/>
+                                                                            </StackPanel>
+                                                                        </Grid>
+                                                                    </ToggleButton>
+
+                                                                    <!-- Body (when expanded): the specialist's activity log + result -->
+                                                                    <Border Classes="delegationBody" IsVisible="{Binding IsExpanded}">
+                                                                        <ScrollViewer MaxHeight="260" HorizontalScrollBarVisibility="Disabled">
+                                                                            <StackPanel>
+                                                                                <!-- Full task brief (the header truncates it) -->
+                                                                                <SelectableTextBlock Text="{Binding Task}" TextWrapping="Wrap"
+                                                                                                     IsVisible="{Binding Task, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                                                                     Foreground="{DynamicResource AppTextPrimary}"
+                                                                                                     Margin="0,0,0,6"/>
+                                                                                <!-- Growing monospace activity log -->
+                                                                                <SelectableTextBlock Text="{Binding Activity}" TextWrapping="Wrap"
+                                                                                                     IsVisible="{Binding Activity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                                                                     FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"
+                                                                                                     Foreground="{DynamicResource AppTextSecondary}"/>
+                                                                                <!-- Final summary, set apart by a hairline divider + label -->
+                                                                                <Border Classes="delegationResult"
+                                                                                        IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                                    <StackPanel Spacing="3">
+                                                                                        <TextBlock Text="RESULT" Classes="muted"
+                                                                                                   FontSize="10" FontWeight="SemiBold"/>
+                                                                                        <SelectableTextBlock Text="{Binding Result}" TextWrapping="Wrap"
+                                                                                                             Foreground="{DynamicResource AppTextPrimary}"/>
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                            </StackPanel>
+                                                                        </ScrollViewer>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                         </StackPanel>
 
                                         <!-- Final answer: prose flows as text, code/commands render as bubbles -->

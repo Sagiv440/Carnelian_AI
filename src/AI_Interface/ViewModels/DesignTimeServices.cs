@@ -216,6 +216,20 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
     }
 }
 
+internal sealed class DesignAgentOrchestrator : IAgentOrchestrator
+{
+    public Task RunAsync(
+        Agent lead, IChatClient leadClient, string leadModel, Project project,
+        IReadOnlyList<ChatMessage> conversation, string memoryBlock, bool memoryEnabled, string projectSkills,
+        string thinkingDirective, SoftwareInstallPermission installPermission, IProgress<string> status,
+        Action<string> onActivity, Action<string> onAnswer, Action<DelegationUpdate> onDelegation,
+        Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+    {
+        onAnswer("Design-time orchestrator response.");
+        return Task.CompletedTask;
+    }
+}
+
 internal sealed class DesignMemoryService : IMemoryService
 {
     public IReadOnlyList<MemoryEntry> Load(MemoryScope scope, string? projectDir) => Array.Empty<MemoryEntry>();

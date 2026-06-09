@@ -115,6 +115,9 @@ public partial class App : Application
         services.AddSingleton<IAttachmentService, AttachmentService>();
         services.AddSingleton<IChatHistoryService, ChatHistoryService>();
         services.AddSingleton<IProjectAgentService, ProjectAgentService>();
+        // Lead/orchestrator: runs a tool-calling loop that delegates subtasks to specialist agents (the
+        // built-in "Lead") via IProjectAgentService — the "agents as tools" pattern.
+        services.AddSingleton<IAgentOrchestrator, AgentOrchestrator>();
         services.AddSingleton<IProjectSkillService, ProjectSkillService>();
         services.AddSingleton<IHardwareService, HardwareService>();
         services.AddSingleton<IAgentService, AgentService>();

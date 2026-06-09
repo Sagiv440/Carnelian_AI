@@ -55,6 +55,9 @@ public sealed partial class AgentsViewModel : ViewModelBase
     /// <summary>Proactive (Phase 5): end each turn with clickable next-step suggestion chips.</summary>
     [ObservableProperty] private bool _editProactive;
 
+    /// <summary>Orchestrator/lead: in Project mode this agent delegates subtasks to other agents instead of doing the work itself.</summary>
+    [ObservableProperty] private bool _editIsOrchestrator;
+
     // --- tool permissions (bound to the checkbox row) ---
     [ObservableProperty] private bool _toolReadFiles = true;
     [ObservableProperty] private bool _toolWriteFiles = true;
@@ -164,6 +167,7 @@ public sealed partial class AgentsViewModel : ViewModelBase
 
         Autonomy = value?.Autonomy ?? AutonomyLevel.Guided;
         EditProactive = value?.Proactive ?? false;
+        EditIsOrchestrator = value?.IsOrchestrator ?? false;
 
         RebuildSkillChoices(value);
         _loadingDetail = false;
@@ -258,6 +262,8 @@ public sealed partial class AgentsViewModel : ViewModelBase
 
     partial void OnEditProactiveChanged(bool value) => Persist(a => a.Proactive = value);
 
+    partial void OnEditIsOrchestratorChanged(bool value) => Persist(a => a.IsOrchestrator = value);
+
     private void PersistTool(Action<AgentTools> apply) => Persist(a =>
     {
         a.Tools ??= new AgentTools();
@@ -325,6 +331,7 @@ public sealed partial class AgentsViewModel : ViewModelBase
             Autonomy = src.Autonomy,
             MemoryEnabled = src.MemoryEnabled,
             Proactive = src.Proactive,
+            IsOrchestrator = src.IsOrchestrator,
             Scope = AgentScope.Global, // duplicates are always editable global customs
             IsBuiltIn = false
         };

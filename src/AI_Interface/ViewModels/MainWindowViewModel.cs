@@ -29,6 +29,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IAttachmentService _attachments;
     private readonly IChatHistoryService _history;
     private readonly IProjectAgentService _agent;
+    private readonly IAgentOrchestrator _orchestrator;
     private readonly IProjectSkillService _skills;
     private readonly ISpeechService _speech;
     private readonly IAgentService _agents;
@@ -165,6 +166,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IAttachmentService attachments,
         IChatHistoryService history,
         IProjectAgentService agent,
+        IAgentOrchestrator orchestrator,
         IProjectSkillService skills,
         ISpeechService speech,
         IAgentService agents,
@@ -177,6 +179,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _attachments = attachments;
         _history = history;
         _agent = agent;
+        _orchestrator = orchestrator;
         _skills = skills;
         _speech = speech;
         _agents = agents;
@@ -211,7 +214,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         : this(new DesignModelRouter(), new DesignWebSearchService(),
                new DesignDeepResearchService(), new DesignSettingsService(),
                new DesignAttachmentService(), new DesignChatHistoryService(),
-               new DesignProjectAgentService(), new DesignProjectSkillService(),
+               new DesignProjectAgentService(), new DesignAgentOrchestrator(),
+               new DesignProjectSkillService(),
                new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService())
     {
     }
@@ -729,36 +733,69 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var progress = new Progress<string>(s => StatusText = s);
         var conversation = BuildAgentConversation(assistant);
 
-        // The active agent's autonomy is authoritative for the run: it overrides the global approval mode
-        // and sets the step budget (Ask → confirm-everything/8, Guided → confirm-destructive/24,
-        // Autonomous → auto-run/40). SoftwareInstall stays an independent gate, passed through below.
-        var autonomy = SelectedAgent?.Autonomy ?? AutonomyLevel.Guided;
-        var (approval, maxSteps) = AutonomyMap.ForRun(autonomy);
-        // An Autonomous agent gets a plan-then-execute directive appended to the system prompt; it slots
-        // in alongside the Thinking directive (both lead with their own blank line, both may be empty).
-        var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(autonomy);
+        // The agent/lead runs on background threads; marshal its callbacks back to the UI.
+        // Activity (the 🔧 / 🤝 action log) goes to the collapsible "work" block; the final reply to the answer.
+        void OnActivity(string activity) => Dispatcher.UIThread.Post(() =>
+        {
+            assistant.AppendWork(activity);
+            RequestScroll();
+        });
+        void OnAnswer(string answer) => Dispatcher.UIThread.Post(() =>
+        {
+            var (reasoning, text) = ReasoningSplit.Split(answer);
+            if (!string.IsNullOrEmpty(reasoning))
+                assistant.AppendWork(reasoning);
+            assistant.Append(text);
+            RequestScroll();
+        });
 
-        // The agent runs on background threads; marshal its callbacks back to the UI.
-        // Activity (the 🔧 action log) goes to the collapsible "work" block; the final reply to the answer.
-        await _agent.RunAsync(
-            client, ActiveProject, model, conversation, approval, maxSteps,
-            SelectedAgent?.Tools ?? new AgentTools(),
-            PersonaPrefix(), directives, ProjectSkillsContext(), _settings.Current.SoftwareInstall, MemoryActive(), progress,
-            activity => Dispatcher.UIThread.Post(() =>
+        // Orchestrator-only: structured per-delegation updates → per-delegation cards in the transcript.
+        void OnDelegation(DelegationUpdate u) => Dispatcher.UIThread.Post(() =>
+        {
+            switch (u.Phase)
             {
-                assistant.AppendWork(activity);
-                RequestScroll();
-            }),
-            answer => Dispatcher.UIThread.Post(() =>
-            {
-                var (reasoning, text) = ReasoningSplit.Split(answer);
-                if (!string.IsNullOrEmpty(reasoning))
-                    assistant.AppendWork(reasoning);
-                assistant.Append(text);
-                RequestScroll();
-            }),
-            RequestToolApprovalAsync,
-            ct);
+                case DelegationPhase.Started:
+                    assistant.StartDelegation(u.Index, u.AgentName, u.Glyph, u.Task);
+                    break;
+                case DelegationPhase.Activity:
+                    assistant.AppendDelegationActivity(u.Index, u.Text);
+                    break;
+                case DelegationPhase.Finished:
+                    assistant.FinishDelegation(u.Index, u.Text);
+                    break;
+            }
+            RequestScroll();
+        });
+
+        if (SelectedAgent?.IsOrchestrator == true)
+        {
+            // Lead/orchestrator: it reads the roster and delegates subtasks to specialist agents, each run
+            // via the existing project-agent loop with its own persona/tools/autonomy/model. The lead's own
+            // autonomy bounds the coordination loop inside the orchestrator (its read tools are gated by Tools).
+            // The lead's reasoning goes to the work block (OnActivity); each delegation to a card (OnDelegation).
+            await _orchestrator.RunAsync(
+                SelectedAgent, client, model, ActiveProject, conversation,
+                MemoryBlock(), MemoryActive(), ProjectSkillsContext(), ThinkingDirective(),
+                _settings.Current.SoftwareInstall, progress, OnActivity, OnAnswer, OnDelegation,
+                RequestToolApprovalAsync, ct);
+        }
+        else
+        {
+            // Single-agent path (unchanged): the active agent's autonomy is authoritative for the run — it
+            // overrides the global approval mode and sets the step budget (Ask → confirm-everything/8,
+            // Guided → confirm-destructive/24, Autonomous → auto-run/40). SoftwareInstall stays independent.
+            var autonomy = SelectedAgent?.Autonomy ?? AutonomyLevel.Guided;
+            var (approval, maxSteps) = AutonomyMap.ForRun(autonomy);
+            // An Autonomous agent gets a plan-then-execute directive appended to the system prompt; it slots
+            // in alongside the Thinking directive (both lead with their own blank line, both may be empty).
+            var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(autonomy);
+
+            await _agent.RunAsync(
+                client, ActiveProject, model, conversation, approval, maxSteps,
+                SelectedAgent?.Tools ?? new AgentTools(),
+                PersonaPrefix(), directives, ProjectSkillsContext(), _settings.Current.SoftwareInstall, MemoryActive(), progress,
+                OnActivity, OnAnswer, RequestToolApprovalAsync, ct);
+        }
 
         // The turn may have created/edited project skills (create_skill, or write_file under .AI/skills) —
         // re-scan so they load on the next turn and the sidebar's "N skills" count stays current.

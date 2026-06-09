@@ -99,6 +99,16 @@ public sealed partial class MessageViewModel : ObservableObject
 
     partial void OnIsSpeakingChanged(bool value) => OnPropertyChanged(nameof(SpeakGlyph));
 
+    /// <summary>
+    /// Per-delegation cards for an orchestrator (lead) run — one per subtask handed to a specialist.
+    /// The lead's own reasoning stays in <see cref="Work"/>; each specialist's activity + result lives here.
+    /// </summary>
+    public ObservableCollection<DelegationStepViewModel> Delegations { get; } = new();
+
+    /// <summary>True once any delegation card exists (drives the delegations section's visibility).</summary>
+    [ObservableProperty]
+    private bool _hasDelegations;
+
     /// <summary>Web sources backing this answer (web-search / deep-research modes).</summary>
     public ObservableCollection<SearchResult> Sources { get; } = new();
 
@@ -147,6 +157,45 @@ public sealed partial class MessageViewModel : ObservableObject
     {
         Work = work ?? "";
         HasWork = !string.IsNullOrWhiteSpace(Work);
+    }
+
+    /// <summary>Adds a delegation card for a freshly started subtask. Call on the UI thread.</summary>
+    public void StartDelegation(int index, string name, string glyph, string task)
+    {
+        Delegations.Add(new DelegationStepViewModel
+        {
+            Index = index,
+            AgentName = name,
+            Glyph = glyph,
+            Task = task
+        });
+        HasDelegations = true;
+    }
+
+    /// <summary>Appends an activity line to the delegation card with the given index. Call on the UI thread.</summary>
+    public void AppendDelegationActivity(int index, string text)
+    {
+        var step = FindDelegation(index);
+        step?.AppendActivity(text);
+    }
+
+    /// <summary>Marks the delegation card with the given index finished and records its result. Call on the UI thread.</summary>
+    public void FinishDelegation(int index, string result)
+    {
+        var step = FindDelegation(index);
+        if (step is null)
+            return;
+        step.Result = result ?? "";
+        step.IsRunning = false;
+    }
+
+    /// <summary>Finds a delegation card by its index (robust if a stray index has no matching card).</summary>
+    private DelegationStepViewModel? FindDelegation(int index)
+    {
+        foreach (var d in Delegations)
+            if (d.Index == index)
+                return d;
+        return null;
     }
 
     public void SetSources(IEnumerable<SearchResult> sources)

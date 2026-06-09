@@ -16,7 +16,8 @@ Four operating modes (`AppMode`), chosen from the sidebar / composer rather than
 
 Cross-cutting extras: a per-prompt 🧠 **Thinking** toggle (plan-before-answer, depth set by an *Effort*
 slider in Settings), a hardware-aware **Model Config** tool for choosing/downloading Ollama models,
-**Agents** — a selectable persona (top-bar picker) whose voice is layered into every mode's system prompt,
+**Agents** — a selectable persona (top-bar picker) whose voice is layered into every mode's system prompt
+(including a built-in **Lead** orchestrator that, in Project mode, delegates subtasks to specialist agents),
 **Memory** — persistent facts (global + per-project, stored as Markdown) injected into every mode, and
 **Voice** — read replies aloud with a local **Piper** TTS engine (one-click install, a voice-catalog
 browser, and automatic language-matched voice selection; composer 🔊 *Auto-read* toggle).
@@ -171,13 +172,67 @@ see **Project skills**).
   path is computed from a slugified name so the model can't write outside the skills folder. Intended for
   "create a skill for &lt;subject&gt;" — the model authors thorough, structured guidance and the tool persists it.
 
+**Project mode — the orchestrator / lead agent** (`IAgentOrchestrator`/`AgentOrchestrator`). A built-in
+**Lead** agent (`Id="lead"`, glyph 🧭, `IsOrchestrator=true`, read-only `Tools`, `Autonomy=Guided`) doesn't
+do the work in a single tool loop — it **delegates**. This is the "agents as tools" pattern: the lead is a
+tool-calling loop (modelled on `ProjectAgentService.RunAsync`) whose main tool runs a *nested* specialist.
+`MainWindowViewModel.RunProjectAgentAsync` routes to `_orchestrator.RunAsync(...)` when
+`SelectedAgent?.IsOrchestrator == true`; otherwise the single-agent `_agent.RunAsync` path is unchanged
+(the activity/answer marshalling lambdas are shared by both branches).
+- **`Agent.IsOrchestrator`** (`Models/Agent.cs`) marks an agent as a lead; it round-trips as the
+  `orchestrator:` frontmatter key in `AgentMarkdown` (mirroring `proactive`/`memory`). The Agents editor
+  exposes it as a **"Lead / orchestrator (delegates to other agents)"** checkbox under *Behaviour*
+  (`AgentsViewModel.EditIsOrchestrator`, loaded/persisted exactly like `EditProactive`; copied by Duplicate),
+  so any custom agent can be made a lead — not just the built-in Lead.
+- **Lead tools.** `delegate_task(agent_id, task)` (always offered) + read-only `list_directory`/`read_file`
+  (gated by the lead's own `Tools` — the built-in Lead is read-only). **Finish convention is reused:** a
+  lead reply with **no** tool calls is its final plain-text summary (no separate `finish` tool).
+- **Roster.** `_agents.ListAgents(project.Directory)` filtered to `!IsOrchestrator && Id != lead.Id` — an
+  orchestrator can **never** delegate to another orchestrator (hard rule → no nested orchestration). The
+  roster is injected into the lead's service-owned system prompt via `BuildRosterCatalog` (one line per
+  agent: id, name, description-or-first-persona-sentence, tools summary, autonomy).
+- **`delegate_task` execution.** Resolves the specialist by `agent_id` (missing ⇒ a `"No agent 'X'.
+  Available: …"` tool result), builds its model from `DefaultModel` ("{provider}:{id}" via `_router.For`;
+  unset/unparseable ⇒ the lead's client+model), computes `(approval, maxSteps) = AutonomyMap.ForRun(specialist
+  .Autonomy)`, then runs the **existing** `IProjectAgentService.RunAsync` with a one-message conversation
+  (the `task` brief as a `ChatMessage.User`), `PersonaPrefix(specialist, memoryBlock)`, the specialist's
+  own `Tools`, and `specialist.MemoryEnabled && memoryEnabled`. The specialist's final answer is **captured
+  via the `onAnswer` callback** (a capturing lambda — `ProjectAgentService`'s signature is unchanged),
+  truncated ~6000 chars, and returned to the lead as the tool result. The specialist's activity flows into
+  the delegation's structured card (see *Structured delegation UI* below), not the lead's work log.
+- **Guards.** A `MaxDelegations` cap (12) on the lead loop; exceeding it forces a wrap-up
+  (`onAnswer("_(stopped after N delegations …)_")`). A **repeat guard** (`DelegationKey` = lowercased,
+  trimmed `agent_id` + `task`) returns the prior result instead of re-running an identical subtask, to break
+  trivial loops. `OperationCanceledException` propagates.
+- **Structured delegation UI.** `RunAsync` takes an `Action<DelegationUpdate> onDelegation` (right before
+  `approve`). The lead's **own** reasoning still flows to the collapsible "work" block via `onActivity`; each
+  **delegation** instead emits structured `DelegationUpdate`s (`Models/DelegationUpdate.cs`:
+  `DelegationPhase Started/Activity/Finished`, a 0-based `Index`, agent name/glyph, task, text). The
+  orchestrator owns the counter at the `RunAsync` level (a single-element `int[]` holder — a `ref` can't flow
+  into the async `DelegateAsync`); `DelegateAsync` consumes `nextIndex[0]++` **only past** the missing-agent /
+  repeat-guard early returns, so every Started/Activity/Finished of one delegation shares the same `Index`.
+  The VM marshals `onDelegation` via `Dispatcher.UIThread.Post` and dispatches by phase to the assistant
+  `MessageViewModel`'s `StartDelegation`/`AppendDelegationActivity`/`FinishDelegation` (keyed by `Index`,
+  robust if not found), which back an `ObservableCollection<DelegationStepViewModel>` (`Delegations`, plus
+  `HasDelegations`). Each step renders as a **collapsible per-delegation card** (`MainWindow.axaml`, between
+  the work block and the answer `Segments`): header (glyph + name + task + running/done indicator) toggling
+  a body that shows the specialist's `Activity` (monospace) + `Result`. A failed specialist emits a
+  `Finished` update with the error text. The lead's plain-text summary still goes to the answer bubble.
+- **Testable helpers** (`internal static`, via `InternalsVisibleTo`): `BuildRosterCatalog`,
+  `ShortDescription`, `ToolsSummary`, `DelegationKey` (see `AgentOrchestratorTests`).
+- **Triggering it:** pick **Lead** in the top-bar agent picker, enter a project, send a goal. Needs a
+  tool-calling-capable model for both the lead and the specialists.
+- **DI:** `AddSingleton<IAgentOrchestrator, AgentOrchestrator>()` (next to `IProjectAgentService`); the
+  orchestrator injects `IProjectAgentService` + `IModelRouter` + `IAgentService`.
+
 **Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
 An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2) +
 **Autonomy** (Phase 3 — wired into the project-agent run; see *Autonomy* above) + **MemoryEnabled**
 (Phase 4 — per-agent opt-out for persistent memory; see *Memory* below) + **Proactive** (Phase 5 —
-next-step suggestion chips; see *Proactive* below). The registry
+next-step suggestion chips; see *Proactive* below) + **IsOrchestrator** (the lead/delegation flag; see
+*Project mode — the orchestrator / lead agent* above). The registry
 de-dupes three sources by id with **project overriding global overriding built-in**: an embedded read-only
-seed (`assistant`/`researcher`/`code-buddy`/`autopilot`, `IsBuiltIn=true`), global customs in
+seed (`assistant`/`researcher`/`code-buddy`/`autopilot`/`lead`, `IsBuiltIn=true`), global customs in
 `<app-data>/AI_Interface/agents/*.md`, and per-project customs in `<project>/.AI/agents/*.md` (portable
 Claude-Code-style Markdown via `AgentMarkdown`; legacy `*.json` is auto-migrated to `*.md` on load;
 `SaveCustom`/`DeleteCustom` refuse built-in ids). The active agent's id persists in

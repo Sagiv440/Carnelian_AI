@@ -471,6 +471,10 @@
                                               IsChecked="{Binding EditProactive}"/>
                                     <TextBlock Classes="muted" Margin="22,0,0,4" TextWrapping="Wrap" MaxWidth="418"
                                                Text="After answering, the agent proposes a few short follow-up actions as clickable chips; clicking one drops it into the composer to edit and send. Adds a small extra model call per turn."/>
+                                    <CheckBox Content="Lead / orchestrator (delegates to other agents)"
+                                              IsChecked="{Binding EditIsOrchestrator}"/>
+                                    <TextBlock Classes="muted" Margin="22,0,0,4" TextWrapping="Wrap" MaxWidth="418"
+                                               Text="In Project mode this agent plans and delegates subtasks to the other agents on the roster (each runs with its own persona, tools, and model) instead of doing the work itself. A lead can never delegate to another lead."/>
 
                                     <!-- Skills -->
                                     <TextBlock Classes="label" Text="Skills"/>

@@ -51,6 +51,14 @@ public sealed class Agent
     /// <summary>Whether the agent ends turns with suggested next steps (Phase 5 — persisted only for now).</summary>
     public bool Proactive { get; set; }
 
+    /// <summary>
+    /// When true this agent is a <b>lead/orchestrator</b>: in Project mode it doesn't do the work in a
+    /// single tool loop — instead it reads the roster and <c>delegate_task</c>s subtasks to specialist
+    /// agents (the "agents as tools" pattern, run by <c>AgentOrchestrator</c>). An orchestrator can never
+    /// delegate to another orchestrator (no nested orchestration). The built-in <i>Lead</i> sets this.
+    /// </summary>
+    public bool IsOrchestrator { get; set; }
+
     /// <summary>Where the agent comes from / persists. Built-ins are read-only.</summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AgentScope Scope { get; set; } = AgentScope.Global;

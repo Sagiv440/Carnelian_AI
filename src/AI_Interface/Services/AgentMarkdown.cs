@@ -15,7 +15,7 @@ namespace AI_Interface.Services;
 /// <para>Portability rules: a plain <c>.md</c> with no frontmatter loads with its whole text as the
 /// persona; unknown frontmatter keys are ignored; missing keys take <see cref="Agent"/> defaults.
 /// App-specific extras (<c>glyph</c>, <c>model</c>, <c>skills</c>, <c>autonomy</c>, <c>memory</c>,
-/// <c>proactive</c>) are written as additional frontmatter that other tools simply skip.</para>
+/// <c>proactive</c>, <c>orchestrator</c>) are written as additional frontmatter that other tools simply skip.</para>
 /// </summary>
 public static class AgentMarkdown
 {
@@ -38,6 +38,8 @@ public static class AgentMarkdown
         sb.Append("autonomy: ").Append(a.Autonomy).Append('\n');
         sb.Append("memory: ").Append(a.MemoryEnabled ? "true" : "false").Append('\n');
         sb.Append("proactive: ").Append(a.Proactive ? "true" : "false").Append('\n');
+        if (a.IsOrchestrator)
+            sb.Append("orchestrator: true\n");
         sb.Append("---\n\n");
         sb.Append((a.Persona ?? "").Trim()).Append('\n');
         return sb.ToString();
@@ -86,7 +88,8 @@ public static class AgentMarkdown
             Tools = ParseTools(Get(fm, "tools")),
             Autonomy = ParseAutonomy(Get(fm, "autonomy")),
             MemoryEnabled = ParseBool(Get(fm, "memory"), true),
-            Proactive = ParseBool(Get(fm, "proactive"), false)
+            Proactive = ParseBool(Get(fm, "proactive"), false),
+            IsOrchestrator = ParseBool(Get(fm, "orchestrator"), false)
         };
     }
 

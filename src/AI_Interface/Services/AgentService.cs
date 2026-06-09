@@ -237,6 +237,26 @@ public sealed class AgentService : IAgentService
                 "You are an autonomous builder. Take a goal, break it into steps, and drive it to completion with " +
                 "minimal back-and-forth. Be decisive and bias toward action, but never destroy work you can't " +
                 "recover and summarize what you did at the end."
+        },
+        new Agent
+        {
+            Id = "lead",
+            Name = "Lead",
+            Glyph = "🧭",
+            IsBuiltIn = true,
+            Scope = AgentScope.BuiltIn,
+            // The lead coordinates a team: in Project mode it reads the roster and delegates subtasks to
+            // specialist agents (run by AgentOrchestrator) rather than doing the work itself.
+            IsOrchestrator = true,
+            Autonomy = AutonomyLevel.Guided,
+            // Read-only: the lead inspects to scope the work and delegates; it doesn't write/run directly.
+            Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false },
+            Persona =
+                "You are a lead engineer and coordinator. You don't do the hands-on work yourself — you " +
+                "scope the goal, break it into well-defined subtasks, delegate each to the best-fit " +
+                "specialist on your team, review their results, and follow up (e.g. ask a reviewer to check " +
+                "an implementer's work) until the goal is met. Be efficient: delegate only what's needed and " +
+                "give each specialist a clear, self-contained brief."
         }
     };
 }

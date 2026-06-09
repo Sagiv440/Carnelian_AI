@@ -26,8 +26,9 @@ Cross-cutting extras:
 
 - **🤝 Agents** — a selectable **persona** (top-bar picker) whose voice is layered into *every* mode.
   Each agent bundles a personality, a set of **skills**, a **tool allow-list**, and an **autonomy
-  level**. Four are built in (Assistant, Researcher, Code Buddy, Autopilot) and you can create your own,
-  globally or per-project. See [Agents](#agents) below.
+  level**. Five are built in (Assistant, Researcher, Code Buddy, Autopilot, and **Lead** — which
+  coordinates a team by delegating subtasks to the others), and you can create your own, globally or
+  per-project. See [Agents](#agents) below.
 - **🧩 Memory** — persistent facts the assistant recalls across sessions, in two scopes: **global**
   (about you) and **per-project**. Stored as editable Markdown (`memory.md`) so it's portable. Say
   *"remember …"* in chat, let the Project agent's `remember` tool save a note, and manage/forget facts in
@@ -127,7 +128,7 @@ An **agent** is a reusable profile that shapes how the assistant behaves in ever
 level**. Pick the active agent from the top-bar picker; manage them in **Settings → AI Features →
 Agents**.
 
-Four agents are built in:
+Five agents are built in:
 
 | Agent | Tools | Autonomy | Notes |
 |-------|-------|----------|-------|
@@ -135,6 +136,21 @@ Four agents are built in:
 | 🔬 **Researcher** | read-only | Guided | Evidence-first, cites sources (`cited-research` skill). |
 | 👨‍💻 **Code Buddy** | files + commands | Guided | Careful senior engineer (`careful-coding` skill). |
 | 🚀 **Autopilot** | full + installs | Autonomous | Drives a goal to completion; proactive (`step-by-step` skill). |
+| 🧭 **Lead** | read-only | Guided | Coordinates a team: delegates subtasks to the other agents (see below). |
+
+#### Lead — the orchestrator
+
+In **Project** mode the **Lead** agent doesn't do the hands-on work itself. It reads your roster of
+specialist agents, breaks your goal into subtasks, and **delegates** each to the best-fit specialist —
+which runs with its own persona, tools, autonomy, and model — then reviews the results and follows up
+(for example, asking a reviewer to check an implementer's work) until the goal is met. Pick **Lead** in
+the top-bar agent picker, enter a project, and send a goal. The Lead and the specialists it delegates to
+all need a tool-calling-capable model. (A lead can never delegate to another lead.)
+
+Each delegation shows up in the transcript as its own **collapsible card** — the specialist's glyph, name,
+task, a running/done indicator, and (when expanded) its activity log and result — while the Lead's own
+planning stays in the reply's "Thinking" block. Any custom agent can be turned into a lead with the
+**Lead / orchestrator** checkbox in the agent editor (Settings → AI Features → Agents → Behaviour).
 
 **Autonomy** is authoritative for a Project-agent run — it sets the approval mode and how many tool steps
 the agent may take before it must reply:
