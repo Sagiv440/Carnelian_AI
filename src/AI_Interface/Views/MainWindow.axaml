@@ -452,10 +452,15 @@
 
             <!-- Transcript -->
             <Grid Grid.Row="1" Margin="0,0,0,4">
-                <!-- Bottom padding is a safety margin so the last line always clears the composer even if a
-                     late layout pass is missed; the real fix for last-line clipping is in the code-behind's
-                     OnScrollToEndRequested (re-scroll once the layout settles). -->
-                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,8,18">
+                <!-- HorizontalScrollBarVisibility=Disabled so wrapped text is measured at the real (finite)
+                     width, never infinite (matches the chat-log list). The bottom breathing room is a REAL
+                     measured spacer child below the list (see end of this StackPanel), NOT ScrollViewer.Padding:
+                     Avalonia doesn't reliably include bottom padding in the scroll EXTENT, so a wrapped
+                     SelectableTextBlock that under-measures its height by ~a line would still clip the last
+                     reply line at the very bottom. The end-of-turn re-scroll lives in the code-behind's
+                     OnScrollToEndRequested. -->
+                <ScrollViewer x:Name="TranscriptScroll" HorizontalScrollBarVisibility="Disabled" Padding="6,4,8,0">
+                    <StackPanel>
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:MessageViewModel">
@@ -698,6 +703,10 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <!-- Bottom breathing room as a real measured child (see ScrollViewer comment): keeps the
+                         last reply's final line inside the scroll extent despite the text-wrap under-measure. -->
+                    <Border Height="48" Background="Transparent" IsHitTestVisible="False"/>
+                    </StackPanel>
                 </ScrollViewer>
             </Grid>
 

@@ -419,6 +419,17 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   `ScrollViewer` (one under-measured the text height and clipped the last lines); long code just makes a
   taller message and the transcript scrolls. The raw `Text` is still the source of truth for
   copy/persist/speak. Inline single-backtick spans stay literal.
+- **Transcript scrolling / last-line clipping.** The transcript `ScrollViewer` (`TranscriptScroll` in
+  `MainWindow.axaml`) sets `HorizontalScrollBarVisibility="Disabled"` (so wrapped text is measured at the
+  real finite width, never infinite) and gets its bottom breathing room from a **real measured spacer
+  `Border` child** at the end of the messages `StackPanel` — **not** `ScrollViewer.Padding`, because
+  Avalonia doesn't reliably include bottom padding in the scroll *extent*, so a wrapping
+  `SelectableTextBlock` that under-measures its height by ~a line would clip the last reply line even when
+  fully scrolled. Auto-scroll (`MainWindow.axaml.cs` `OnScrollToEndRequested`) scrolls immediately for
+  streaming responsiveness, then re-scrolls once on the next settled `LayoutUpdated` (one-shot, guarded by
+  `IsNearBottom()` so a manual scroll-up isn't overridden) so the end-of-turn offset lands against the
+  final extent. Both pieces are needed: the spacer fixes *measurement* clipping; the re-scroll fixes
+  *timing* undershoot.
 - **Design-time stubs** in `ViewModels/DesignTimeServices.cs` back the parameterless VM constructors so
   the XAML previewer works. If you add a service dependency to a container-resolved VM, add a matching
   stub (and update the VM's design-time constructor).

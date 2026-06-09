@@ -187,7 +187,9 @@ public partial class MainWindow : Window
         // so the last line ends up just below the fold, pinned against the composer. Re-scrolling on the
         // next LayoutUpdated guarantees the Extent is final when we land the offset, so the last line
         // clears the composer. One-shot + guarded so a deferred re-scroll never yanks the view down if
-        // the user has meanwhile scrolled up to read earlier messages.
+        // the user has meanwhile scrolled up to read earlier messages. (This handles only the *timing*
+        // undershoot; the *measurement* clip — content measured shorter than it renders — is fixed
+        // structurally by the bottom spacer child in MainWindow.axaml's TranscriptScroll.)
         if (_scrollPending)
             return;
         _scrollPending = true;
