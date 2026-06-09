@@ -50,6 +50,8 @@ public partial class SettingsWindow : Window
             await vm.RefreshConnectionAsync();
             // Populate the Agents → Default model picker (best-effort).
             await vm.AgentsPanel.LoadModelsAsync();
+            // Populate the Deep Research planning/synthesis model pickers (best-effort).
+            await vm.LoadResearchModelsAsync();
         }
     }
 

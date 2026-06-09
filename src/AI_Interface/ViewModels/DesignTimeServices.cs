@@ -112,7 +112,8 @@ internal sealed class DesignDeepResearchService : IDeepResearchService
 {
     public Task<IReadOnlyList<SearchResult>> RunAsync(
         IChatClient client, string question, string model, string personaPrefix, IProgress<string> status,
-        Action<string> onAnswerDelta, CancellationToken ct = default)
+        Action<string> onAnswerDelta, ModelEndpoint? planner = null, ModelEndpoint? synthesizer = null,
+        CancellationToken ct = default)
     {
         onAnswerDelta("Design-time research answer.");
         return Task.FromResult<IReadOnlyList<SearchResult>>(Array.Empty<SearchResult>());

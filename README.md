@@ -14,7 +14,10 @@ There are four ways to work, chosen from the sidebar and the composer:
 - **Web Search** — a search-scope dropdown in the composer: runs one web search for your question and
   answers with inline citations.
 - **Deep Research** — the model plans several search queries, the app searches the web and reads the
-  top pages, then the model synthesizes a cited report.
+  top pages, then the model synthesizes a cited report. With **Use Multiple LLMs** (Settings → Research &
+  Thinking) you can assign a separate model to each of its two AI steps — query planning and report
+  synthesis — leaving either blank to use your chat model. The synthesis model receives the fetched page
+  text, so keep it local (Ollama) if your sources are sensitive.
 - **Project** — a tool-using **agent** scoped to a project folder. It can list, read, write and delete
   files, create folders, run terminal commands, and (when permitted) install software — all confined to
   the project directory — to build or fix a project for you.
@@ -114,7 +117,8 @@ Either script also cross-publishes from the other OS — the .NET SDK can target
   - **Editor Features** — *Appearance* (light/dark + accent/bubble colors), *Typography* (font + size),
     *Layout*.
   - **AI Features** — *Models* (Local AI + Web Models, plus Model Config), *Agents* (the agent roster),
-    *Autonomy & Memory*, *Web Search*, *Voice*, *Research & Thinking* (research depth + Thinking effort).
+    *Autonomy & Memory*, *Web Search*, *Voice*, *Research & Thinking* (research depth, the **Use Multiple
+    LLMs** planning/synthesis model pickers, and Thinking effort).
 
 ## Agents
 

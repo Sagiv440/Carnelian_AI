@@ -730,6 +730,57 @@
                             <NumericUpDown Value="{Binding ResearchQueryCount}" Minimum="1" Maximum="8" Increment="1"
                                            FormatString="0" Width="150" HorizontalAlignment="Left"/>
 
+                            <TextBlock Classes="section" Text="Models" Margin="0,12,0,0"/>
+                            <CheckBox Content="Use Multiple LLMs"
+                                      IsChecked="{Binding DeepResearchUseMultipleModels}"/>
+                            <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
+                                       Margin="0,0,0,4"
+                                       Text="Give Deep Research's two LLM steps — query planning and report synthesis — their own models. Searching and page-reading are unchanged. Leave a picker blank to use the chat model for that step."/>
+
+                            <StackPanel Spacing="2" IsVisible="{Binding DeepResearchUseMultipleModels}">
+                                <TextBlock Classes="label" Text="Planning Model"/>
+                                <ComboBox Width="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding ResearchModels}"
+                                          SelectedItem="{Binding PlanningModel}"
+                                          PlaceholderText="Use the chat model">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:ChatModel">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding Id}" VerticalAlignment="Center"/>
+                                                <Border Background="#33808080" CornerRadius="3" Padding="5,1"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Provider, Converter={StaticResource ProviderTag}}"
+                                                               FontSize="10" Foreground="{DynamicResource AppTextSecondary}"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
+                                           Text="Only your question is sent to this model."/>
+
+                                <TextBlock Classes="label" Text="Synthesize Model" Margin="0,8,0,0"/>
+                                <ComboBox Width="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding ResearchModels}"
+                                          SelectedItem="{Binding SynthesisModel}"
+                                          PlaceholderText="Use the chat model">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:ChatModel">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding Id}" VerticalAlignment="Center"/>
+                                                <Border Background="#33808080" CornerRadius="3" Padding="5,1"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Provider, Converter={StaticResource ProviderTag}}"
+                                                               FontSize="10" Foreground="{DynamicResource AppTextSecondary}"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left"
+                                           Text="⚠ Web-page contents are sent to this model. Keep it local (Ollama) if your sources are sensitive."/>
+                            </StackPanel>
+
                             <TextBlock Classes="section" Text="Thinking"/>
                             <TextBlock Classes="label" TextWrapping="Wrap"
                                        Text="Effort — how hard the model plans before acting when the Thinking toggle is on."/>

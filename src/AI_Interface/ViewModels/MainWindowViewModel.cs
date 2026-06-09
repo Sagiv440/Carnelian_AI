@@ -391,6 +391,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Resolves a saved "{provider}:{id}" Deep Research model override against the live model list.
+    /// Returns the parsed model only if it's currently <paramref name="available"/> (compared by
+    /// Provider+Id) — membership is the reachability/fallback guarantee — otherwise <c>null</c>.
+    /// </summary>
+    internal static ChatModel? ResolveModelOverride(string? setting, IReadOnlyList<ChatModel> available)
+    {
+        var parsed = ParseSavedModel(setting);
+        if (parsed is null)
+            return null;
+        return available.Any(m => m.Provider == parsed.Provider && m.Id == parsed.Id) ? parsed : null;
+    }
+
+    /// <summary>
     /// The composer's Local / Web / Deep search dropdown selection, mapped to the active
     /// <see cref="AppMode"/>. (In Project mode the dropdown is hidden; the getter falls back to the first option.)
     /// </summary>
@@ -669,6 +682,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var progress = new Progress<string>(s => StatusText = s);
         var raw = new StringBuilder();
 
+        // "Use Multiple LLMs": optionally route planning/synthesis to their own models. An override
+        // resolves to null (and so falls back to the chat model) when the toggle is off or the saved
+        // pick isn't in the live list — i.e. it isn't currently reachable.
+        ModelEndpoint? planner = null, synthesizer = null;
+        if (_settings.Current.DeepResearchUseMultipleModels)
+        {
+            var plan = ResolveModelOverride(_settings.Current.DeepResearchPlanningModel, Models);
+            if (plan is not null)
+                planner = new ModelEndpoint(_router.For(plan.Provider), plan.Id);
+
+            var synth = ResolveModelOverride(_settings.Current.DeepResearchSynthesisModel, Models);
+            if (synth is not null)
+                synthesizer = new ModelEndpoint(_router.For(synth.Provider), synth.Id);
+        }
+
         var sources = await _research.RunAsync(
             client,
             WithAttachedContext(prompt, user),
@@ -681,6 +709,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 ApplyStreamDelta(assistant, raw, delta);
                 RequestScroll();
             }),
+            planner,
+            synthesizer,
             ct);
 
         assistant.SetSources(sources);

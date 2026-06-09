@@ -64,6 +64,11 @@ and routes through the `IChatClient` surface (see **Providers & routing**).
 - *Web Search* does one `IWebSearchService.SearchAsync`, injects snippets as context, then streams.
 - *Deep Research* delegates to `IDeepResearchService.RunAsync` (plans → searches → reads → synthesizes),
   passing the resolved `IChatClient`; reports progress via `IProgress<string>` and streams via `Action<string>`.
+  **Use Multiple LLMs (optional):** when `AppSettings.DeepResearchUseMultipleModels` is on, the VM resolves
+  per-step model overrides and passes them as `RunAsync`'s optional `planner`/`synthesizer`
+  (`ModelEndpoint(IChatClient Client, string Model)`); each blank/unreachable override falls back to the chat
+  model. Search + page-reading are pure I/O and never change. **Note:** the synthesis step receives page
+  contents — point it at a local Ollama model for sensitive sources.
 - *Project* delegates to `IProjectAgentService.RunAsync` (also passed the `IChatClient`) — a tool-calling
   loop (see **Project mode**).
 
@@ -284,7 +289,11 @@ entries, and a right `Panel` whose category panels toggle by `IsVisible` bound t
   (agent approval mode + software-install permission + **persistent-memory** toggle and per-scope fact
   lists, Phase 4), *Web Search* (provider + keys), *Voice* (Piper: *Download & install Piper* + *Browse
   voices* + a manual-paths Advanced expander; raises `VoiceBrowserRequested` to open `VoiceBrowserWindow`),
-  *Research & Thinking* (research depth + Thinking *Effort*).
+  *Research & Thinking* (research depth + a **Use Multiple LLMs** Deep Research toggle that reveals
+  **Planning Model** / **Synthesize Model** pickers, blank = use the chat model; the Synthesize Model carries
+  a privacy note since page contents are sent to it + Thinking *Effort*). The two research pickers are loaded
+  by `SettingsViewModel.LoadResearchModelsAsync()` (called from `SettingsWindow.OnLoaded`), which uses the
+  injected `IModelRouter` and restores the saved picks under a sync guard so it doesn't re-persist on restore.
 
 **Theming & design system** (`ThemeService` + `SettingsWindow` + `Styles/ControlStyles.axaml`): a flat
 "IDE" look modelled on VS Code / Photoshop — the system UI font (Poppins still embedded in `Assets/Fonts`

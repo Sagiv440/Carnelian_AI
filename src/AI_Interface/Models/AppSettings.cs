@@ -58,6 +58,27 @@ public sealed class AppSettings
     /// <summary>Characters of page text kept per source when building the synthesis prompt.</summary>
     public int MaxCharsPerPage { get; set; } = 4000;
 
+    /// <summary>
+    /// When on, Deep Research can use a separate model for each of its two LLM steps — query
+    /// planning and report synthesis — instead of the chat/selected model. Off = both steps use
+    /// the chat model (today's behavior).
+    /// </summary>
+    public bool DeepResearchUseMultipleModels { get; set; }
+
+    /// <summary>
+    /// Model used for Deep Research's query-planning step when <see cref="DeepResearchUseMultipleModels"/>
+    /// is on. Stored as "{provider}:{id}" (same convention as <see cref="DefaultModel"/>); blank/unknown
+    /// falls back to the chat model. Only the user's question is sent to this model.
+    /// </summary>
+    public string? DeepResearchPlanningModel { get; set; }
+
+    /// <summary>
+    /// Model used for Deep Research's report-synthesis step when <see cref="DeepResearchUseMultipleModels"/>
+    /// is on. Stored as "{provider}:{id}"; blank/unknown falls back to the chat model. <b>Web-page contents
+    /// are sent to this model</b> — keep it local (Ollama) if the sources may be sensitive.
+    /// </summary>
+    public string? DeepResearchSynthesisModel { get; set; }
+
     // --- Project agent ---
 
     /// <summary>How the project agent's tool calls are gated before they run.</summary>

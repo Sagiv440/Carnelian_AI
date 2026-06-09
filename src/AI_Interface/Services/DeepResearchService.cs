@@ -11,8 +11,10 @@ namespace AI_Interface.Services;
 
 /// <summary>
 /// Orchestrates a research run: plan queries → search the web → read top pages → synthesize a
-/// cited answer. All model work runs through the local Ollama model; nothing leaves the machine
-/// except the web searches and page fetches themselves.
+/// cited answer. By default both LLM steps use the chat model; the "Use Multiple LLMs" setting can
+/// route planning and synthesis to their own models (the <c>planner</c>/<c>synthesizer</c> overrides).
+/// Nothing leaves the machine except the web searches/page fetches — unless an override targets a
+/// cloud provider, in which case that step's prompt is sent to it (synthesis includes page contents).
 /// </summary>
 public sealed class DeepResearchService : IDeepResearchService
 {
@@ -32,13 +34,23 @@ public sealed class DeepResearchService : IDeepResearchService
         string personaPrefix,
         IProgress<string> status,
         Action<string> onAnswerDelta,
+        ModelEndpoint? planner = null,
+        ModelEndpoint? synthesizer = null,
         CancellationToken ct = default)
     {
         var cfg = _settings.Current;
 
-        // 1. Plan: let the model decompose the question into focused search queries.
-        status.Report("Planning search queries…");
-        var queries = await PlanQueriesAsync(client, question, model, cfg.ResearchQueryCount, ct).ConfigureAwait(false);
+        // Resolve the per-step models: each override falls back to the chat client/model.
+        var planClient = planner?.Client ?? client;
+        var planModel = planner?.Model ?? model;
+        var synthClient = synthesizer?.Client ?? client;
+        var synthModel = synthesizer?.Model ?? model;
+
+        // 1. Plan: let the (planning) model decompose the question into focused search queries.
+        var plannerDistinct = IsDistinct(planClient, planModel, client, model);
+        status.Report(plannerDistinct ? $"Planning with {planModel}…" : "Planning search queries…");
+        var queries = await PlanQueriesAsync(
+            planClient, planModel, client, model, question, cfg.ResearchQueryCount, ct).ConfigureAwait(false);
         status.Report($"Planned {queries.Count} queries: {string.Join(" | ", queries)}");
 
         // 2. Search each query, collecting unique results across all of them.
@@ -71,16 +83,74 @@ public sealed class DeepResearchService : IDeepResearchService
         }
 
         // 4. Synthesize a cited answer, streamed back to the caller (in the active agent's voice).
-        status.Report("Synthesizing answer…");
+        var synthDistinct = IsDistinct(synthClient, synthModel, client, model);
+        status.Report(synthDistinct ? $"Synthesizing with {synthModel}…" : "Synthesizing answer…");
         var messages = BuildSynthesisPrompt(question, toRead, personaPrefix);
-        await foreach (var delta in client.ChatStreamAsync(model, messages, think: false, ct).ConfigureAwait(false))
-            onAnswerDelta(delta);
+        await SynthesizeAsync(
+            synthClient, synthModel, client, model, synthDistinct, messages, onAnswerDelta, ct).ConfigureAwait(false);
 
         return toRead;
     }
 
+    /// <summary>
+    /// Streams the synthesis answer. If a <i>distinct</i> synthesizer throws before emitting any token,
+    /// restarts the stream on the chat client/model; a failure after tokens were already emitted stops
+    /// gracefully with a short note (no double-emit). Cancellation is rethrown.
+    /// </summary>
+    private static async Task SynthesizeAsync(
+        IChatClient synthClient, string synthModel,
+        IChatClient chatClient, string chatModel, bool synthDistinct,
+        IReadOnlyList<ChatMessage> messages, Action<string> onAnswerDelta, CancellationToken ct)
+    {
+        var emittedAny = false;
+        try
+        {
+            await foreach (var delta in synthClient.ChatStreamAsync(synthModel, messages, think: false, ct).ConfigureAwait(false))
+            {
+                emittedAny = true;
+                onAnswerDelta(delta);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // A distinct synthesizer that failed before producing anything: retry on the chat model.
+            // The retry itself must degrade gracefully too — if the fallback model also fails, surface a
+            // note rather than letting the exception crash the whole research run (cancellation rethrows).
+            if (synthDistinct && !emittedAny)
+            {
+                try
+                {
+                    await foreach (var delta in chatClient.ChatStreamAsync(chatModel, messages, think: false, ct).ConfigureAwait(false))
+                        onAnswerDelta(delta);
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Fall through to the graceful note below.
+                }
+            }
+
+            // Failed mid-stream (or on the chat-model fallback itself): stop gracefully without crashing.
+            onAnswerDelta("\n\n_(Synthesis was interrupted by an error; the answer above may be incomplete.)_");
+        }
+    }
+
+    /// <summary>
+    /// Plans search queries on the planning model. A <i>distinct</i> planner that throws is retried once on
+    /// the chat client/model before falling back to the raw question. Cancellation is rethrown.
+    /// </summary>
     private async Task<List<string>> PlanQueriesAsync(
-        IChatClient client, string question, string model, int count, CancellationToken ct)
+        IChatClient planClient, string planModel,
+        IChatClient chatClient, string chatModel,
+        string question, int count, CancellationToken ct)
     {
         var messages = new[]
         {
@@ -91,10 +161,10 @@ public sealed class DeepResearchService : IDeepResearchService
             ChatMessage.User(question)
         };
 
+        var plannerDistinct = IsDistinct(planClient, planModel, chatClient, chatModel);
         try
         {
-            var raw = await client.CompleteAsync(model, messages, ct).ConfigureAwait(false);
-            var parsed = ParseJsonStringArray(raw, count);
+            var parsed = await CompletePlanAsync(planClient, planModel, messages, count, ct).ConfigureAwait(false);
             if (parsed.Count > 0)
                 return parsed;
         }
@@ -104,11 +174,44 @@ public sealed class DeepResearchService : IDeepResearchService
         }
         catch
         {
+            // A distinct planner failed: retry once on the chat model before giving up.
+            if (plannerDistinct)
+            {
+                try
+                {
+                    var parsed = await CompletePlanAsync(chatClient, chatModel, messages, count, ct).ConfigureAwait(false);
+                    if (parsed.Count > 0)
+                        return parsed;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Fall through to the raw question.
+                }
+            }
             // Planning is best-effort; fall through to the raw question.
         }
 
         return new List<string> { question };
     }
+
+    private static async Task<List<string>> CompletePlanAsync(
+        IChatClient client, string model, IReadOnlyList<ChatMessage> messages, int count, CancellationToken ct)
+    {
+        var raw = await client.CompleteAsync(model, messages, ct).ConfigureAwait(false);
+        return ParseJsonStringArray(raw, count);
+    }
+
+    /// <summary>
+    /// "Distinct" = a different client instance OR a different model id from the chat client/model.
+    /// Used to decide status wording and whether to attempt a chat-model retry.
+    /// </summary>
+    private static bool IsDistinct(IChatClient client, string model, IChatClient chatClient, string chatModel) =>
+        !ReferenceEquals(client, chatClient) ||
+        !string.Equals(model, chatModel, StringComparison.Ordinal);
 
     private static List<string> ParseJsonStringArray(string raw, int max)
     {

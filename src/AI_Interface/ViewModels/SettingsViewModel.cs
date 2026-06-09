@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using AI_Interface.Models;
 using AI_Interface.Services;
@@ -17,6 +18,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
 {
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
+    private readonly IModelRouter _router;
     private readonly IOllamaClient _ollama;
     private readonly IOpenAiClient _openAi;
     private readonly IGeminiClient _gemini;
@@ -153,6 +155,23 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private decimal _maxPagesToRead;
     [ObservableProperty] private decimal _researchQueryCount;
     [ObservableProperty] private double _thinkingEffort;
+
+    // --- Deep Research: "Use Multiple LLMs" (give planning + synthesis their own models) ---
+
+    /// <summary>When on, the two model pickers below assign separate models to planning vs. synthesis.</summary>
+    [ObservableProperty] private bool _deepResearchUseMultipleModels;
+
+    /// <summary>Models offered in the planning/synthesis pickers (across every configured provider).</summary>
+    public ObservableCollection<ChatModel> ResearchModels { get; } = new();
+
+    /// <summary>Model for the query-planning step (null = use the chat model).</summary>
+    [ObservableProperty] private ChatModel? _planningModel;
+
+    /// <summary>Model for the report-synthesis step (null = use the chat model). Receives page contents.</summary>
+    [ObservableProperty] private ChatModel? _synthesisModel;
+
+    /// <summary>Set while restoring saved picks so the change handlers don't persist back (avoids a loop).</summary>
+    private bool _syncingResearchModels;
 
     // --- Project agent ---
 
@@ -367,13 +386,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private bool _isTestingCloud;
 
     public SettingsViewModel(
-        ISettingsService settings, IThemeService theme, IOllamaClient ollama,
+        ISettingsService settings, IThemeService theme, IModelRouter router, IOllamaClient ollama,
         IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic,
         ISpeechService speech, AgentsViewModel agentsPanel, IMemoryService memory,
         IPiperInstaller piperInstaller, IOllamaInstaller ollamaInstaller)
     {
         _settings = settings;
         _theme = theme;
+        _router = router;
         _ollama = ollama;
         _openAi = openAi;
         _gemini = gemini;
@@ -396,6 +416,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _resultsPerQuery = s.SearchResultsPerQuery;
         _maxPagesToRead = s.MaxPagesToRead;
         _researchQueryCount = s.ResearchQueryCount;
+        _deepResearchUseMultipleModels = s.DeepResearchUseMultipleModels;
         _thinkingEffort = s.ThinkingEffort;
         _agentApproval = s.AgentApproval;
         _softwareInstall = s.SoftwareInstall;
@@ -417,7 +438,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     // Design-time constructor for the XAML previewer.
     public SettingsViewModel() : this(
-        new DesignSettingsService(), new ThemeService(), new DesignOllamaClient(),
+        new DesignSettingsService(), new ThemeService(), new DesignModelRouter(), new DesignOllamaClient(),
         new DesignCloudClient(AiProvider.OpenAI), new DesignCloudClient(AiProvider.Gemini),
         new DesignCloudClient(AiProvider.Anthropic), new DesignSpeechService(), new AgentsViewModel(),
         new DesignMemoryService(), new DesignPiperInstaller(), new DesignOllamaInstaller())
@@ -443,6 +464,71 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnMaxPagesToReadChanged(decimal value) => SaveGeneral();
     partial void OnResearchQueryCountChanged(decimal value) => SaveGeneral();
     partial void OnThinkingEffortChanged(double value) => SaveGeneral();
+
+    partial void OnDeepResearchUseMultipleModelsChanged(bool value)
+    {
+        if (_loading)
+            return;
+        _settings.Current.DeepResearchUseMultipleModels = value;
+        _settings.Save();
+    }
+
+    partial void OnPlanningModelChanged(ChatModel? value)
+    {
+        if (_loading || _syncingResearchModels)
+            return;
+        _settings.Current.DeepResearchPlanningModel = value is null ? null : $"{value.Provider}:{value.Id}";
+        _settings.Save();
+    }
+
+    partial void OnSynthesisModelChanged(ChatModel? value)
+    {
+        if (_loading || _syncingResearchModels)
+            return;
+        _settings.Current.DeepResearchSynthesisModel = value is null ? null : $"{value.Provider}:{value.Id}";
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// Populates the planning/synthesis model pickers (best-effort; offline/missing providers contribute
+    /// nothing) and restores the saved picks without re-persisting them. Mirrors
+    /// <see cref="AgentsViewModel.LoadModelsAsync"/>. Called by the Settings window after it loads.
+    /// </summary>
+    public async Task LoadResearchModelsAsync()
+    {
+        try
+        {
+            var models = await _router.ListAllModelsAsync();
+            ResearchModels.Clear();
+            foreach (var m in models)
+                ResearchModels.Add(m);
+        }
+        catch
+        {
+            // The pickers simply stay empty if no provider answers.
+        }
+
+        // Restore the saved picks against the freshly loaded list, guarded so the change handlers
+        // don't write the settings back (which could clobber an as-yet-unloaded selection).
+        _syncingResearchModels = true;
+        PlanningModel = ResolveResearchModel(_settings.Current.DeepResearchPlanningModel);
+        SynthesisModel = ResolveResearchModel(_settings.Current.DeepResearchSynthesisModel);
+        _syncingResearchModels = false;
+    }
+
+    /// <summary>Resolves a saved "{provider}:{id}" pick to a current <see cref="ResearchModels"/> entry, or null.</summary>
+    private ChatModel? ResolveResearchModel(string? saved)
+    {
+        if (string.IsNullOrWhiteSpace(saved))
+            return null;
+        var sep = saved.IndexOf(':');
+        if (sep > 0 && Enum.TryParse<AiProvider>(saved[..sep], out var provider))
+        {
+            var id = saved[(sep + 1)..];
+            return ResearchModels.FirstOrDefault(m => m.Provider == provider && m.Id == id);
+        }
+        return null;
+    }
 
     partial void OnSearchProviderChanged(SearchProvider value)
     {
