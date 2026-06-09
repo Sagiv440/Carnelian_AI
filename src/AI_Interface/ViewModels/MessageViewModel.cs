@@ -80,6 +80,7 @@ public sealed partial class MessageViewModel : ObservableObject
 
     /// <summary>True when <see cref="Work"/> has content (drives the collapsible block's visibility).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWorkBlock))]
     private bool _hasWork;
 
     /// <summary>Whether the reasoning block is expanded. Collapsed by default.</summary>
@@ -123,6 +124,25 @@ public sealed partial class MessageViewModel : ObservableObject
     /// <summary>True once any delegation card exists (drives the delegations section's visibility).</summary>
     [ObservableProperty]
     private bool _hasDelegations;
+
+    /// <summary>
+    /// Structured activity feed for a single-agent project run — one row per tool call (icon + title +
+    /// target + running/done status with an expandable result), plus "note" rows for the model's interim
+    /// narration. The orchestrator (lead) path uses <see cref="Delegations"/> instead.
+    /// </summary>
+    public ObservableCollection<ActivityStepViewModel> Activities { get; } = new();
+
+    /// <summary>True once any structured activity step exists (drives the structured feed's visibility).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWorkBlock))]
+    private bool _hasActivities;
+
+    /// <summary>
+    /// Whether to show the legacy monospace <see cref="Work"/> block: only when there's work text but no
+    /// structured feed (e.g. chat-with-thinking). Single-agent project runs populate <see cref="Activities"/>,
+    /// so the structured feed shows and the raw block is hidden (no duplicate display).
+    /// </summary>
+    public bool ShowWorkBlock => HasWork && !HasActivities;
 
     /// <summary>Web sources backing this answer (web-search / deep-research modes).</summary>
     public ObservableCollection<SearchResult> Sources { get; } = new();
@@ -210,6 +230,48 @@ public sealed partial class MessageViewModel : ObservableObject
         foreach (var d in Delegations)
             if (d.Index == index)
                 return d;
+        return null;
+    }
+
+    /// <summary>
+    /// Applies one structured activity update from a single-agent project run. Call on the UI thread.
+    /// A Note adds a narration row; Started adds a running tool row; Finished resolves the matching tool
+    /// row's result/status (robust if no matching row is found — just ignored, like the delegation methods).
+    /// </summary>
+    public void ApplyActivity(ActivityUpdate u)
+    {
+        switch (u.Phase)
+        {
+            case ActivityPhase.Note:
+                Activities.Add(new ActivityStepViewModel { Index = u.Index, IsNote = true, Text = u.Text });
+                HasActivities = true;
+                break;
+
+            case ActivityPhase.Started:
+                Activities.Add(new ActivityStepViewModel
+                {
+                    Index = u.Index, Icon = u.Icon, Title = u.Title, Detail = u.Detail, IsRunning = true
+                });
+                HasActivities = true;
+                break;
+
+            case ActivityPhase.Finished:
+                var step = FindActivity(u.Index);
+                if (step is null)
+                    return;
+                step.Result = u.Text ?? "";
+                step.Failed = u.Failed;
+                step.IsRunning = false;
+                break;
+        }
+    }
+
+    /// <summary>Finds the last non-note activity step with the given index (its Started row to resolve).</summary>
+    private ActivityStepViewModel? FindActivity(int index)
+    {
+        for (var i = Activities.Count - 1; i >= 0; i--)
+            if (!Activities[i].IsNote && Activities[i].Index == index)
+                return Activities[i];
         return null;
     }
 

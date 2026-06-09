@@ -455,6 +455,20 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   `IsNearBottom()` so a manual scroll-up isn't overridden) so the end-of-turn offset lands against the
   final extent. Both pieces are needed: the spacer fixes *measurement* clipping; the re-scroll fixes
   *timing* undershoot.
+- **Live activity feed (Project mode).** A single-agent project run shows what the agent is doing *live*.
+  Phase 1: the "work" disclosure auto-expands while `MessageViewModel.IsStreaming` (label `WorkLabel`
+  "Working…"/"Activity"), and the `Behaviors/AutoScrollToEnd` attached behavior keeps the box pinned to the
+  newest line (releasing on manual scroll-up). Phase 2 replaces the monospace log with a **structured feed**:
+  `ProjectAgentService.RunAsync` takes an optional `Action<ActivityUpdate>? onActivityStep` and emits, from
+  its loop (not `ExecuteAsync`, which is unchanged), a `Note` for the model's interim narration, a `Started`
+  (icon via `IconFor` + the pure `Describe`) before each tool, and a `Finished` (status via `IsFailure`) after.
+  The VM (single-agent path only) marshals these to `MessageViewModel.ApplyActivity`, backing
+  `ObservableCollection<ActivityStepViewModel>` (`Activities`), rendered as per-tool rows (icon · title ·
+  target · ⏳/✓/✗ status · expandable result) + italic note lines. `ShowWorkBlock = HasWork && !HasActivities`
+  hides the old monospace block for project runs (chat-with-thinking still uses it). **Orchestrator unchanged:**
+  `DelegateAsync` passes `onActivityStep: null`, so delegated specialists keep their delegation-card activity.
+  Status ✓ uses the themeable `AppSuccessBrush` (added to `App.axaml` ThemeDictionaries). `IconFor`/`IsFailure`
+  are `internal static` (unit-tested). (Lead/delegated structured feeds are a possible later phase.)
 - **Design-time stubs** in `ViewModels/DesignTimeServices.cs` back the parameterless VM constructors so
   the XAML previewer works. If you add a service dependency to a container-resolved VM, add a matching
   stub (and update the VM's design-time constructor).

@@ -30,6 +30,7 @@ public interface IProjectAgentService
     /// <param name="allowDocsUpdate">When true (a top-level/main agent run), the <c>update_docs</c> tool is offered so the agent can maintain the project handbook (.AI/AI_DOCS.md). Delegated specialist runs pass false.</param>
     /// <param name="status">Step progress (constructed on the UI thread, so it auto-marshals).</param>
     /// <param name="onActivity">Receives the action log / intermediate reasoning (the "work"). Must marshal to the UI thread.</param>
+    /// <param name="onActivityStep">Optional structured activity feed — one update per tool call (Started/Finished) plus the model's interim narration (Note). Null (e.g. a delegated specialist run) leaves only the <paramref name="onActivity"/> log. Must marshal to the UI thread.</param>
     /// <param name="onAnswer">Receives the final plain-text answer. Must marshal to the UI thread.</param>
     /// <param name="approve">Asked to approve a single tool call; returns false to skip it.</param>
     Task RunAsync(
@@ -48,6 +49,7 @@ public interface IProjectAgentService
         bool allowDocsUpdate,
         IProgress<string> status,
         Action<string> onActivity,
+        Action<ActivityUpdate>? onActivityStep,
         Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct);

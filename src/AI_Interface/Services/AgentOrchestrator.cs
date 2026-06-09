@@ -258,6 +258,9 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 allowDocsUpdate: false,
                 status,
                 SpecialistActivity,
+                // Delegated specialists keep their monospace activity inside the delegation card (via
+                // SpecialistActivity); the single-agent structured feed isn't used for delegated runs.
+                onActivityStep: null,
                 CaptureAnswer,
                 approve,
                 ct).ConfigureAwait(false);

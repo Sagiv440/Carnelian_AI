@@ -44,6 +44,7 @@
                     <SolidColorBrush x:Key="AppInputBackground" Color="#3C3C3C"/>
                     <SolidColorBrush x:Key="AppTextPrimary" Color="#D4D4D4"/>
                     <SolidColorBrush x:Key="AppTextSecondary" Color="#858585"/>
+                    <SolidColorBrush x:Key="AppSuccessBrush" Color="#3FB950"/>
                 </ResourceDictionary>
 
                 <!-- LIGHT -->
@@ -54,6 +55,7 @@
                     <SolidColorBrush x:Key="AppInputBackground" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="AppTextPrimary" Color="#1F1F1F"/>
                     <SolidColorBrush x:Key="AppTextSecondary" Color="#6E6E6E"/>
+                    <SolidColorBrush x:Key="AppSuccessBrush" Color="#2DA44E"/>
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>

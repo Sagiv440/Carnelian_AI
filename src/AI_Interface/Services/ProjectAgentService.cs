@@ -87,6 +87,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         bool allowDocsUpdate,
         IProgress<string> status,
         Action<string> onActivity,
+        Action<ActivityUpdate>? onActivityStep,
         Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct)
@@ -107,6 +108,10 @@ public sealed class ProjectAgentService : IProjectAgentService
         };
         messages.AddRange(conversation);
 
+        // 0-based counter correlating each tool call's Started/Finished structured update (mirrors the
+        // orchestrator's delegation index). Notes consume an index too so each lands in the feed in order.
+        var activityIndex = 0;
+
         for (var step = 0; step < maxSteps; step++)
         {
             ct.ThrowIfCancellationRequested();
@@ -125,15 +130,34 @@ public sealed class ProjectAgentService : IProjectAgentService
             messages.Add(new ChatMessage(ChatRole.Assistant, turn.Content) { ToolCalls = turn.ToolCalls });
             // Any text the model emits alongside a tool call is part of its "work", not the final answer.
             if (!string.IsNullOrWhiteSpace(turn.Content))
+            {
                 onActivity(turn.Content + "\n");
+                // Structured feed: the interim narration as a lightweight "note" line.
+                onActivityStep?.Invoke(new ActivityUpdate(
+                    ActivityPhase.Note, activityIndex++, "", "", "", turn.Content.Trim(), false));
+            }
 
             foreach (var call in turn.ToolCalls)
             {
                 ct.ThrowIfCancellationRequested();
+
+                // Structured feed: emit a "Started" row before running the tool (derived from the same pure
+                // Describe(...) the inline log uses). ExecuteAsync itself is unchanged — it still emits the
+                // 🔧 strings via onActivity, which the VM hides for project runs once the structured feed exists.
+                var (summary, detail, _) = Describe(project, call, GetString(call.Arguments, "path"));
+                var idx = activityIndex++;
+                onActivityStep?.Invoke(new ActivityUpdate(
+                    ActivityPhase.Started, idx, IconFor(call.Name), summary, detail, "", false));
+
                 var result = await ExecuteAsync(
                     project, call, approvalMode, allowedTools, installPermission, allowDocsUpdate,
                     status, onActivity, approve, ct)
                     .ConfigureAwait(false);
+
+                // Structured feed: resolve the row with this tool's result + success/failure status.
+                onActivityStep?.Invoke(new ActivityUpdate(
+                    ActivityPhase.Finished, idx, "", "", "", result, IsFailure(result)));
+
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
         }
@@ -266,6 +290,50 @@ public sealed class ProjectAgentService : IProjectAgentService
         "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
         "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName, true),
         _ => (call.Name, "", true)
+    };
+
+    /// <summary>Tool glyph for the structured activity feed's "Started" row.</summary>
+    internal static string IconFor(string tool) => tool switch
+    {
+        "list_directory"   => "📂",
+        "read_file"        => "📄",
+        "write_file"       => "✏️",
+        "create_folder"    => "📁",
+        "delete_file"      => "🗑",
+        "delete_folder"    => "🗑",
+        "run_command"      => "⌘",
+        "install_software" => "📦",
+        "remember"         => "💾",
+        "create_skill"     => "✨",
+        "update_docs"      => "📘",
+        _                  => "🔧"
+    };
+
+    /// <summary>
+    /// Whether a tool <paramref name="result"/> string indicates the call didn't succeed (drives the ✗ vs ✓
+    /// status glyph). Heuristic on the markers <see cref="ExecuteAsync"/> and the tool helpers return: an
+    /// "Error:" prefix, the refusal/guard phrases (declined, not permitted, disabled, refusing, handbook-guard),
+    /// and the operational failures (not-found, command-start failure, timeout, sandbox-escape block). Markers
+    /// are deliberately distinctive (e.g. "not found:" with the colon) to avoid matching file/command output
+    /// that merely mentions the words.
+    /// </summary>
+    internal static bool IsFailure(string result)
+    {
+        if (string.IsNullOrEmpty(result))
+            return false;
+        if (result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
+            return true;
+        foreach (var marker in FailureMarkers)
+            if (result.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    private static readonly string[] FailureMarkers =
+    {
+        "declined to run", "not permitted", "is disabled", "Refusing to",
+        "can only be changed with the update_docs",
+        "not found:", "Failed to start command", "timed out after", "was blocked"
     };
 
     /// <summary>Persists a fact to memory. <c>scope</c> "user" → global; anything else (default) → this project.</summary>

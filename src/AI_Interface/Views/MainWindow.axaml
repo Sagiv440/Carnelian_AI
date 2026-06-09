@@ -157,7 +157,7 @@
             <Setter Property="Width" Value="7"/>
             <Setter Property="Height" Value="7"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Fill" Value="#3FB950"/>
+            <Setter Property="Fill" Value="{DynamicResource AppSuccessBrush}"/>
         </Style>
         <Style Selector="Ellipse.delegationStatus.running">
             <Setter Property="Fill" Value="{DynamicResource AppAccentBrush}"/>
@@ -176,6 +176,86 @@
             <Setter Property="Padding" Value="0,8,0,0"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
             <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        </Style>
+
+        <!-- ====================================================================
+             Single-agent activity feed rows — a compact, scannable log of tool
+             calls (icon · title · target · status) + interim notes. Flat/hairline;
+             aligned icon gutter; only resultful rows look clickable. Sits just
+             above the delegation cards, so it borrows their disclosure visuals
+             but stays tighter (it's a log, not a stack of cards).
+             ==================================================================== -->
+
+        <!-- Row toggle: flat, full-width; faint hover only when there's a result to reveal -->
+        <Style Selector="ToggleButton.activityRow">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="3,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
+        </Style>
+        <Style Selector="ToggleButton.activityRow /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.activityRow:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <!-- Only an expandable (enabled) row gets a pointer + hover tint; resultless rows stay inert -->
+        <Style Selector="ToggleButton.activityRow:enabled">
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="ToggleButton.activityRow:enabled:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#10808080"/>
+        </Style>
+        <!-- The in-progress action: a faint translucent-accent band so the current step stands out -->
+        <Style Selector="ToggleButton.activityRow.running /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#14F2542D"/>
+        </Style>
+
+        <!-- Fixed-width, centered icon gutter so titles left-align across rows regardless of glyph width -->
+        <Style Selector="TextBlock.activityIcon">
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Disclosure caret: shown only when there's a result to expand (resultless rows hide it) -->
+        <Style Selector="TextBlock.activityCaret">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+        </Style>
+
+        <!-- Status glyph, tinted by state: muted while running, faint green when done, accent on failure -->
+        <Style Selector="TextBlock.activityStatus">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+        </Style>
+        <Style Selector="TextBlock.activityStatus.done">
+            <Setter Property="Foreground" Value="{DynamicResource AppSuccessBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.activityStatus.failed">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- Result body: hairline-bordered card indented to the title gutter, tight padding -->
+        <Style Selector="Border.activityResult">
+            <Setter Property="Margin" Value="34,2,0,4"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSurfaceBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="3"/>
         </Style>
 
         <!-- Copy-message button: visibility is bound to the bubble's hover state (see template) -->
@@ -246,7 +326,7 @@
             <Setter Property="Fill" Value="#6E6E6E"/>
         </Style>
         <Style Selector="Ellipse.status.online">
-            <Setter Property="Fill" Value="#3FB950"/>
+            <Setter Property="Fill" Value="{DynamicResource AppSuccessBrush}"/>
         </Style>
 
         <!-- Composer text box blends into its card -->
@@ -479,8 +559,10 @@
                                                    Foreground="{DynamicResource AppTextPrimary}"
                                                    ToolTip.Tip="{Binding ModelName}"/>
 
-                                        <!-- Collapsible reasoning / action log ("how it got to the answer") -->
-                                        <StackPanel IsVisible="{Binding HasWork}" Margin="0,1">
+                                        <!-- Collapsible reasoning / action log ("how it got to the answer").
+                                             Raw monospace block: shown only when there's no structured feed
+                                             (e.g. chat-with-thinking); single-agent project runs use the feed below. -->
+                                        <StackPanel IsVisible="{Binding ShowWorkBlock}" Margin="0,1">
                                             <ToggleButton Classes="reasoning" HorizontalAlignment="Left"
                                                           IsChecked="{Binding IsWorkExpanded}"
                                                           ToolTip.Tip="Show what the AI did to reach this answer">
@@ -496,6 +578,94 @@
                                                     <SelectableTextBlock Text="{Binding Work}" TextWrapping="Wrap"
                                                                          FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"
                                                                          Foreground="{DynamicResource AppTextSecondary}"/>
+                                                </ScrollViewer>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!-- Structured activity feed (single-agent project runs): one row per
+                                             tool call (icon · title · target · running/done status, with an
+                                             expandable result) plus the model's interim narration as note lines.
+                                             Reuses the Phase-1 disclosure (WorkLabel + IsWorkExpanded + autoscroll). -->
+                                        <StackPanel IsVisible="{Binding HasActivities}" Margin="0,1">
+                                            <ToggleButton Classes="reasoning" HorizontalAlignment="Left"
+                                                          IsChecked="{Binding IsWorkExpanded}"
+                                                          ToolTip.Tip="Show what the AI did to reach this answer">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="▸" IsVisible="{Binding !IsWorkExpanded}"/>
+                                                    <TextBlock Text="▾" IsVisible="{Binding IsWorkExpanded}"/>
+                                                    <TextBlock Text="{Binding WorkLabel}"/>
+                                                </StackPanel>
+                                            </ToggleButton>
+                                            <Border Classes="reasoningBody" IsVisible="{Binding IsWorkExpanded}">
+                                                <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled"
+                                                              beh:AutoScrollToEnd.Enabled="True">
+                                                    <ItemsControl ItemsSource="{Binding Activities}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate><StackPanel Spacing="1"/></ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:ActivityStepViewModel">
+                                                                <Panel>
+                                                                    <!-- Note: the model's interim narration, muted + italic, indented to
+                                                                         the title gutter so it lines up with the tool rows' text -->
+                                                                    <SelectableTextBlock IsVisible="{Binding IsNote}"
+                                                                                         Text="{Binding Text}" TextWrapping="Wrap"
+                                                                                         FontStyle="Italic" Margin="34,3,0,3"
+                                                                                         Foreground="{DynamicResource AppTextSecondary}"/>
+
+                                                                    <!-- Tool call: a compact row (caret · icon · title · target · status),
+                                                                         clickable to reveal the result only when there is one -->
+                                                                    <StackPanel IsVisible="{Binding !IsNote}">
+                                                                        <ToggleButton Classes="activityRow"
+                                                                                      Classes.running="{Binding IsRunning}"
+                                                                                      IsChecked="{Binding IsExpanded}"
+                                                                                      IsEnabled="{Binding HasResult}"
+                                                                                      ToolTip.Tip="{Binding Detail}">
+                                                                            <Grid ColumnDefinitions="16,Auto,Auto,*,Auto"
+                                                                                  VerticalAlignment="Center">
+                                                                                <!-- Caret: only present when there's a result to expand;
+                                                                                     resultless rows hide it entirely so they look inert -->
+                                                                                <TextBlock Grid.Column="0" Classes="activityCaret"
+                                                                                           Text="▸"
+                                                                                           IsVisible="{Binding ShowCollapsedCaret}"/>
+                                                                                <TextBlock Grid.Column="0" Classes="activityCaret"
+                                                                                           Text="▾"
+                                                                                           IsVisible="{Binding IsExpanded}"/>
+                                                                                <!-- Fixed-width centered icon gutter keeps titles aligned -->
+                                                                                <TextBlock Grid.Column="1" Classes="activityIcon"
+                                                                                           Text="{Binding Icon}"/>
+                                                                                <!-- Title -->
+                                                                                <TextBlock Grid.Column="2" Text="{Binding Title}"
+                                                                                           FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                                           Margin="6,0,0,0"
+                                                                                           Foreground="{DynamicResource AppTextPrimary}"/>
+                                                                                <!-- Target/command: muted monospace, one line, ellipsis -->
+                                                                                <TextBlock Grid.Column="3" Text="{Binding Detail}"
+                                                                                           Classes="muted" VerticalAlignment="Center"
+                                                                                           FontFamily="Cascadia Code,Consolas,monospace"
+                                                                                           FontSize="12" TextTrimming="CharacterEllipsis"
+                                                                                           Margin="8,0,8,0"/>
+                                                                                <!-- Status glyph, tinted by state (running/done/failed) -->
+                                                                                <TextBlock Grid.Column="4" Classes="activityStatus"
+                                                                                           Classes.done="{Binding Done}"
+                                                                                           Classes.failed="{Binding Failed}"
+                                                                                           Text="{Binding StatusGlyph}"/>
+                                                                            </Grid>
+                                                                        </ToggleButton>
+
+                                                                        <!-- Result body (when expanded): a tight hairline card, monospace -->
+                                                                        <Border Classes="activityResult"
+                                                                                IsVisible="{Binding IsExpanded}">
+                                                                            <SelectableTextBlock Text="{Binding Result}" TextWrapping="Wrap"
+                                                                                                 FontFamily="Cascadia Code,Consolas,monospace"
+                                                                                                 FontSize="12"
+                                                                                                 Foreground="{DynamicResource AppTextSecondary}"/>
+                                                                        </Border>
+                                                                    </StackPanel>
+                                                                </Panel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
                                                 </ScrollViewer>
                                             </Border>
                                         </StackPanel>

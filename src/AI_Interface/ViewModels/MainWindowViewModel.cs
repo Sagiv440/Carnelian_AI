@@ -759,6 +759,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             RequestScroll();
         });
 
+        // Single-agent-only: structured per-tool-call updates → the structured activity feed in the work
+        // block (one row per tool call + interim narration notes). The orchestrator branch doesn't pass it.
+        void OnActivityStep(ActivityUpdate u) => Dispatcher.UIThread.Post(() =>
+        {
+            assistant.ApplyActivity(u);
+            RequestScroll();
+        });
+
         // Orchestrator-only: structured per-delegation updates → per-delegation cards in the transcript.
         void OnDelegation(DelegationUpdate u) => Dispatcher.UIThread.Post(() =>
         {
@@ -811,7 +819,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 SelectedAgent?.Tools ?? new AgentTools(),
                 PersonaPrefix(), directives, ProjectContext(), _settings.Current.SoftwareInstall, MemoryActive(),
                 allowDocsUpdate: true, progress,
-                OnActivity, OnAnswer, RequestToolApprovalAsync, ct);
+                OnActivity, OnActivityStep, OnAnswer, RequestToolApprovalAsync, ct);
         }
 
         // The turn may have created/edited project skills (create_skill, or write_file under .AI/skills) —
