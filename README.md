@@ -184,6 +184,14 @@ You can also have the agent **write one for you**: in a project, ask *"create a 
 conventions"* and it uses its `create_skill` tool to author a structured skill file under `.AI/skills/`.
 The new skill loads as guidance on the next turn.
 
+### Project handbook (`AI_DOCS.md`)
+
+For a single, authoritative *"how this project works"* brief, drop an **`.AI/AI_DOCS.md`** file in the
+project — the app's equivalent of a CLAUDE.md. When you're in **Project mode**, its contents are injected
+into the agent's system prompt (the single agent, the **Lead**, and any specialists the Lead delegates to)
+and treated as authoritative project instructions. It's loaded only in Project mode — never in Chat, Web
+Search, or Deep Research — and the active-project card shows **📄 AI_DOCS loaded** when present.
+
 **Custom agents** are stored as portable **Markdown files** (Claude-Code-style frontmatter + a persona
 body), so you can move them between tools:
 

@@ -119,6 +119,7 @@ public partial class App : Application
         // built-in "Lead") via IProjectAgentService — the "agents as tools" pattern.
         services.AddSingleton<IAgentOrchestrator, AgentOrchestrator>();
         services.AddSingleton<IProjectSkillService, ProjectSkillService>();
+        services.AddSingleton<IProjectDocsService, ProjectDocsService>();
         services.AddSingleton<IHardwareService, HardwareService>();
         services.AddSingleton<IAgentService, AgentService>();
         services.AddSingleton<IMemoryService, MemoryService>();

@@ -158,6 +158,17 @@ see **Project skills**).
   (one JSON per session) via `IChatHistoryService.LoadFrom/SaveTo`; opening a project loads them,
   exiting restores the global log (`%APPDATA%/AI_Interface/chats.json`). The VM routes every save/load
   through `SaveLog()` / `LoadLog()`.
+- **`AI_DOCS.md` project handbook.** `IProjectDocsService`/`ProjectDocsService` reads `<project>/.AI/AI_DOCS.md`
+  — the app's equivalent of how Claude Code reads CLAUDE.md: a hand-authored, authoritative per-project
+  handbook the **Project-mode agent follows**. Loaded off the UI thread in `LoadProjectSkillsAsync` (so an
+  edit is picked up on the next turn) and reset on project exit; best-effort (missing/unreadable ⇒ `""`),
+  capped at 24 000 chars (it's injected on every turn). The VM folds it into the existing `projectSkills`
+  system-prompt channel via `ProjectContext()` = `ProjectDocsContext()` (docs first) + `ProjectSkillsContext()`,
+  passed at **both** project-agent call sites in `RunProjectAgentAsync` — so it reaches the single agent, the
+  Lead, **and** delegated specialists (the orchestrator threads `projectSkills` into each delegated run) with
+  no `ProjectAgentService`/`AgentOrchestrator` signature change. **Project mode only** — it is *not* added to
+  the Chat / Web Search / Deep Research prompts (those use `PersonaPrefix()`, left untouched). The active-project
+  card shows a `📄 AI_DOCS loaded` indicator (`HasProjectDocs`).
 - **Project skills.** On activation `IProjectSkillService` scans the project for skill files (`SKILL.md`,
   `*.skill.md`, or any markdown under a `skills` folder; bounded, skipping `.AI`/`.git`/`node_modules`/…)
   and their text is appended to the agent's system prompt. The project's own **`.AI/skills/`** folder is

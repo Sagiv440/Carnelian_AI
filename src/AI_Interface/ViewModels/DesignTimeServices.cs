@@ -193,6 +193,11 @@ internal sealed class DesignProjectSkillService : IProjectSkillService
     public IReadOnlyList<ProjectSkill> Load(string projectDirectory) => Array.Empty<ProjectSkill>();
 }
 
+internal sealed class DesignProjectDocsService : IProjectDocsService
+{
+    public string Load(string projectDirectory) => "";
+}
+
 internal sealed class DesignHardwareService : IHardwareService
 {
     public Task<HardwareInfo> ScanAsync(CancellationToken ct = default) =>

@@ -31,12 +31,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IProjectAgentService _agent;
     private readonly IAgentOrchestrator _orchestrator;
     private readonly IProjectSkillService _skills;
+    private readonly IProjectDocsService _projectDocs;
     private readonly ISpeechService _speech;
     private readonly IAgentService _agents;
     private readonly IMemoryService _memory;
 
     /// <summary>Skill files loaded from the active project (empty when not in a project).</summary>
     private IReadOnlyList<ProjectSkill> _projectSkills = Array.Empty<ProjectSkill>();
+
+    /// <summary>The active project's AI_DOCS.md handbook text ("" when absent or not in a project).</summary>
+    private string _projectDocsText = "";
 
     private CancellationTokenSource? _cts;
 
@@ -146,6 +150,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool HasProjectSkills => ProjectSkillCount > 0;
     public string ProjectSkillSummary => ProjectSkillCount == 1 ? "1 skill loaded" : $"{ProjectSkillCount} skills loaded";
 
+    /// <summary>True when the active project ships an AI_DOCS.md handbook (shown in the project card).</summary>
+    [ObservableProperty]
+    private bool _hasProjectDocs;
+
     /// <summary>Sidebar tab state (only meaningful while a project is loaded): false = Chat Log, true = Files.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsChatLogTabSelected))]
@@ -168,6 +176,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IProjectAgentService agent,
         IAgentOrchestrator orchestrator,
         IProjectSkillService skills,
+        IProjectDocsService projectDocs,
         ISpeechService speech,
         IAgentService agents,
         IMemoryService memory)
@@ -181,6 +190,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _agent = agent;
         _orchestrator = orchestrator;
         _skills = skills;
+        _projectDocs = projectDocs;
         _speech = speech;
         _agents = agents;
         _memory = memory;
@@ -215,7 +225,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                new DesignDeepResearchService(), new DesignSettingsService(),
                new DesignAttachmentService(), new DesignChatHistoryService(),
                new DesignProjectAgentService(), new DesignAgentOrchestrator(),
-               new DesignProjectSkillService(),
+               new DesignProjectSkillService(), new DesignProjectDocsService(),
                new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService())
     {
     }
@@ -773,9 +783,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // via the existing project-agent loop with its own persona/tools/model. The single global approval
             // setting governs the whole coordination loop and every delegated run (its read tools are gated by
             // Tools). The lead's reasoning goes to the work block (OnActivity); each delegation to a card.
+            // ProjectContext() = the AI_DOCS.md handbook + project skills, injected only in Project mode
+            // (the lead passes it on to every delegated specialist run).
             await _orchestrator.RunAsync(
                 SelectedAgent, client, model, ActiveProject, conversation,
-                MemoryBlock(), MemoryActive(), ProjectSkillsContext(), ThinkingDirective(),
+                MemoryBlock(), MemoryActive(), ProjectContext(), ThinkingDirective(),
                 _settings.Current.SoftwareInstall, _settings.Current.AgentApproval,
                 progress, OnActivity, OnAnswer, OnDelegation,
                 RequestToolApprovalAsync, ct);
@@ -791,10 +803,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // slots in alongside the Thinking directive (both lead with their own blank line, both may be empty).
             var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(approvalMode);
 
+            // ProjectContext() = the AI_DOCS.md handbook + project skills, injected only in Project mode.
             await _agent.RunAsync(
                 client, ActiveProject, model, conversation, approval, maxSteps,
                 SelectedAgent?.Tools ?? new AgentTools(),
-                PersonaPrefix(), directives, ProjectSkillsContext(), _settings.Current.SoftwareInstall, MemoryActive(), progress,
+                PersonaPrefix(), directives, ProjectContext(), _settings.Current.SoftwareInstall, MemoryActive(), progress,
                 OnActivity, OnAnswer, RequestToolApprovalAsync, ct);
         }
 
@@ -997,6 +1010,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ActiveProject = null;             // global store is now active
         _projectSkills = Array.Empty<ProjectSkill>();
         ProjectSkillCount = 0;
+        _projectDocsText = "";
+        HasProjectDocs = false;
         ShowProjectFiles = false;
         FileTree.Clear();
         LoadLog();                        // reload the global chat log
@@ -1004,12 +1019,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SetMode(AppMode.Chat);
     }
 
-    /// <summary>Loads the active project's skill files off the UI thread and updates the count.</summary>
+    /// <summary>
+    /// Loads the active project's skill files and AI_DOCS.md handbook off the UI thread, updating the
+    /// sidebar count + flag. Both are project-mode context only (see <see cref="ProjectContext"/>).
+    /// </summary>
     private async Task LoadProjectSkillsAsync(Project project)
     {
         var skills = await Task.Run(() => _skills.Load(project.Directory)).ConfigureAwait(true);
         _projectSkills = skills;
         ProjectSkillCount = skills.Count;
+
+        _projectDocsText = await Task.Run(() => _projectDocs.Load(project.Directory)).ConfigureAwait(true);
+        HasProjectDocs = _projectDocsText.Length > 0;
     }
 
     /// <summary>Replaces the sidebar chat log with the currently active store's sessions.</summary>
@@ -1067,6 +1088,34 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// The project handbook (.AI/AI_DOCS.md) text appended to the agent's system prompt (empty when none) —
+    /// the app's equivalent of how Claude Code reads CLAUDE.md. Treated as authoritative project context.
+    /// </summary>
+    private string ProjectDocsContext()
+    {
+        if (_projectDocsText.Length == 0)
+            return "";
+
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine();
+        sb.AppendLine("The user has provided a project handbook (.AI/AI_DOCS.md). Treat it as authoritative instructions and");
+        sb.AppendLine("context for this project and follow it:");
+        sb.AppendLine();
+        sb.AppendLine("--- AI_DOCS.md ---");
+        sb.AppendLine(_projectDocsText);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The full Project-mode context appended to the agent's system prompt: the AI_DOCS.md handbook first
+    /// (more prominent/authoritative), then any project SKILL.md guidance. Injected only in Project mode —
+    /// the single agent, the Lead orchestrator, and its delegated specialists all receive it via this one
+    /// string. It is never threaded into the Chat / Web Search / Deep Research prompts.
+    /// </summary>
+    private string ProjectContext() => ProjectDocsContext() + ProjectSkillsContext();
 
     /// <summary>Open a saved conversation from the chat log.</summary>
     [RelayCommand]
