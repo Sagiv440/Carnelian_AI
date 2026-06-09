@@ -770,25 +770,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (SelectedAgent?.IsOrchestrator == true)
         {
             // Lead/orchestrator: it reads the roster and delegates subtasks to specialist agents, each run
-            // via the existing project-agent loop with its own persona/tools/autonomy/model. The lead's own
-            // autonomy bounds the coordination loop inside the orchestrator (its read tools are gated by Tools).
-            // The lead's reasoning goes to the work block (OnActivity); each delegation to a card (OnDelegation).
+            // via the existing project-agent loop with its own persona/tools/model. The single global approval
+            // setting governs the whole coordination loop and every delegated run (its read tools are gated by
+            // Tools). The lead's reasoning goes to the work block (OnActivity); each delegation to a card.
             await _orchestrator.RunAsync(
                 SelectedAgent, client, model, ActiveProject, conversation,
                 MemoryBlock(), MemoryActive(), ProjectSkillsContext(), ThinkingDirective(),
-                _settings.Current.SoftwareInstall, progress, OnActivity, OnAnswer, OnDelegation,
+                _settings.Current.SoftwareInstall, _settings.Current.AgentApproval,
+                progress, OnActivity, OnAnswer, OnDelegation,
                 RequestToolApprovalAsync, ct);
         }
         else
         {
-            // Single-agent path (unchanged): the active agent's autonomy is authoritative for the run — it
-            // overrides the global approval mode and sets the step budget (Ask → confirm-everything/8,
-            // Guided → confirm-destructive/24, Autonomous → auto-run/40). SoftwareInstall stays independent.
-            var autonomy = SelectedAgent?.Autonomy ?? AutonomyLevel.Guided;
-            var (approval, maxSteps) = AutonomyMap.ForRun(autonomy);
-            // An Autonomous agent gets a plan-then-execute directive appended to the system prompt; it slots
-            // in alongside the Thinking directive (both lead with their own blank line, both may be empty).
-            var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(autonomy);
+            // Single-agent path: the global approval setting is authoritative for the run — it sets the
+            // approval mode and step budget (ConfirmEverything → confirm-everything/8, ConfirmDestructive →
+            // confirm-destructive/24, AutoRun → auto-run/40). SoftwareInstall stays independent.
+            var approvalMode = _settings.Current.AgentApproval;
+            var (approval, maxSteps) = AutonomyMap.ForApprovalMode(approvalMode);
+            // Under AutoRun the agent gets a plan-then-execute directive appended to the system prompt; it
+            // slots in alongside the Thinking directive (both lead with their own blank line, both may be empty).
+            var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(approvalMode);
 
             await _agent.RunAsync(
                 client, ActiveProject, model, conversation, approval, maxSteps,

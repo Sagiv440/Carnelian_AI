@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 namespace AI_Interface.Models;
 
 /// <summary>
-/// An agent profile: a persona (and, in later phases, a skill set, tool allow-list, autonomy level,
-/// and memory) that parameterizes the existing prompt-build + tool loop rather than forking it.
+/// An agent profile: a persona (and, in later phases, a skill set, tool allow-list, and memory) that
+/// parameterizes the existing prompt-build + tool loop rather than forking it.
 /// Serialized to JSON (global agents in app-data, project agents under <c>.AI/agents</c>); built-ins
 /// are an embedded read-only seed. In Phase 1 only <see cref="Persona"/> is wired into behaviour; the
 /// other fields are carried for forward-compatibility.
@@ -36,14 +36,6 @@ public sealed class Agent
 
     /// <summary>Per-tool allow-list (Phase 2 — persisted only for now).</summary>
     public AgentTools Tools { get; set; } = new();
-
-    /// <summary>
-    /// Autonomy level. Authoritative for a project-agent run: it sets the effective approval mode + step
-    /// budget (<see cref="AutonomyMap.ForRun"/>) and, for <see cref="AutonomyLevel.Autonomous"/>, adds a
-    /// plan-then-execute directive. Software-install permission stays an independent gate.
-    /// </summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public AutonomyLevel Autonomy { get; set; } = AutonomyLevel.Guided;
 
     /// <summary>Whether persistent memory is enabled for this agent (Phase 4 — persisted only for now).</summary>
     public bool MemoryEnabled { get; set; } = true;

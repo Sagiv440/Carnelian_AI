@@ -17,10 +17,10 @@ namespace AI_Interface.Tests;
 public class AgentOrchestratorTests
 {
     private static Agent Make(string id, string name, string persona = "", string? description = null,
-        AgentTools? tools = null, AutonomyLevel autonomy = AutonomyLevel.Guided, bool isOrchestrator = false) => new()
+        AgentTools? tools = null, bool isOrchestrator = false) => new()
     {
         Id = id, Name = name, Persona = persona, Description = description ?? "",
-        Tools = tools ?? new AgentTools(), Autonomy = autonomy, IsOrchestrator = isOrchestrator
+        Tools = tools ?? new AgentTools(), IsOrchestrator = isOrchestrator
     };
 
     // --- BuildRoster (no-nested-orchestration invariant) ---------------------------------------
@@ -115,16 +115,14 @@ public class AgentOrchestratorTests
     }
 
     [Fact]
-    public void BuildRosterCatalog_OneLinePerAgent_IncludesIdNameAutonomy()
+    public void BuildRosterCatalog_OneLinePerAgent_IncludesIdNameDescriptionTools()
     {
         var roster = new List<Agent>
         {
             Make("code-buddy", "Code Buddy", description: "Careful engineer.",
-                tools: new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = false },
-                autonomy: AutonomyLevel.Guided),
+                tools: new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = false }),
             Make("researcher", "Researcher", description: "Cites sources.",
-                tools: new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false },
-                autonomy: AutonomyLevel.Ask)
+                tools: new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false })
         };
 
         var catalog = AgentOrchestrator.BuildRosterCatalog(roster);
@@ -132,9 +130,9 @@ public class AgentOrchestratorTests
 
         Assert.Equal(2, lines.Length);
         Assert.StartsWith("- code-buddy (Code Buddy): Careful engineer.", lines[0]);
-        Assert.Contains("Autonomy: Guided.", lines[0]);
+        Assert.Contains("Can: read, write, delete, run commands.", lines[0]);
         Assert.StartsWith("- researcher (Researcher): Cites sources.", lines[1]);
-        Assert.Contains("Autonomy: Ask.", lines[1]);
+        Assert.Contains("Can: read.", lines[1]);
     }
 
     // --- ShortDescription ----------------------------------------------------------------------
@@ -250,4 +248,144 @@ public class AgentOrchestratorTests
         var key = AgentOrchestrator.DelegationKey(null!, null!);
         Assert.Equal(" ", key);
     }
+
+    // --- CapTools (the delegation permission ceiling) ------------------------------------------
+    // Every CapTools result is an EXPLICIT allow-list (AllowAll = false) so the per-group bool props and
+    // Allows(group) agree; the tests assert via Allows(group) for the "post-cap effective" reading.
+
+    private static AgentTools ReadOnly() => new()
+    {
+        AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false,
+        RunCommands = false, InstallSoftware = false
+    };
+
+    private static AgentTools WriteOnly() => new()
+    {
+        AllowAll = false, ReadFiles = false, WriteFiles = true, DeleteFiles = false,
+        RunCommands = false, InstallSoftware = false
+    };
+
+    private static AgentTools RunOnly() => new()
+    {
+        AllowAll = false, ReadFiles = false, WriteFiles = false, DeleteFiles = false,
+        RunCommands = true, InstallSoftware = false
+    };
+
+    /// <summary>Built-in-Lead-style ceiling: read/write/delete/run permitted, install withheld.</summary>
+    private static AgentTools LeadStyle() => new()
+    {
+        AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true,
+        RunCommands = true, InstallSoftware = false
+    };
+
+    /// <summary>Autopilot-style specialist: every group permitted, including install.</summary>
+    private static AgentTools AutopilotStyle() => new()
+    {
+        AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true,
+        RunCommands = true, InstallSoftware = true
+    };
+
+    [Fact]
+    public void CapTools_ReadOnlyCeiling_UnrestrictedSpecialist_ClampedToCeiling()
+    {
+        // The key bypass guard: an unrestricted specialist (AllowAll = true) is clamped to a read-only ceiling.
+        var result = AgentOrchestrator.CapTools(ReadOnly(), new AgentTools());
+
+        Assert.False(result.AllowAll);
+        Assert.True(result.Allows(AgentToolGroup.ReadFiles));
+        Assert.False(result.Allows(AgentToolGroup.WriteFiles));
+        Assert.False(result.Allows(AgentToolGroup.DeleteFiles));
+        Assert.False(result.Allows(AgentToolGroup.RunCommands));
+        Assert.False(result.Allows(AgentToolGroup.InstallSoftware));
+    }
+
+    [Fact]
+    public void CapTools_UnrestrictedCeiling_RestrictedSpecialist_KeepsSpecialistSet()
+    {
+        // An unrestricted ceiling (AllowAll = true) lets the (more restrictive) specialist set pass through.
+        var result = AgentOrchestrator.CapTools(new AgentTools(), WriteOnly());
+
+        Assert.False(result.AllowAll);
+        Assert.False(result.Allows(AgentToolGroup.ReadFiles));
+        Assert.True(result.Allows(AgentToolGroup.WriteFiles));
+        Assert.False(result.Allows(AgentToolGroup.DeleteFiles));
+        Assert.False(result.Allows(AgentToolGroup.RunCommands));
+        Assert.False(result.Allows(AgentToolGroup.InstallSoftware));
+    }
+
+    [Fact]
+    public void CapTools_LeadStyleCeiling_AutopilotSpecialist_WithholdsInstall()
+    {
+        // Lead permits read/write/delete/run but not install; the autopilot specialist wants all five.
+        // The intersection grants the four the lead allows and withholds install.
+        var result = AgentOrchestrator.CapTools(LeadStyle(), AutopilotStyle());
+
+        Assert.False(result.AllowAll);
+        Assert.True(result.Allows(AgentToolGroup.ReadFiles));
+        Assert.True(result.Allows(AgentToolGroup.WriteFiles));
+        Assert.True(result.Allows(AgentToolGroup.DeleteFiles));
+        Assert.True(result.Allows(AgentToolGroup.RunCommands));
+        Assert.False(result.Allows(AgentToolGroup.InstallSoftware));
+    }
+
+    [Fact]
+    public void CapTools_DisjointRestrictedSets_GrantNothing()
+    {
+        // Read-only ceiling vs run-only specialist: no group is allowed by BOTH, so all are denied.
+        var result = AgentOrchestrator.CapTools(ReadOnly(), RunOnly());
+
+        Assert.False(result.AllowAll);
+        Assert.False(result.Allows(AgentToolGroup.ReadFiles));
+        Assert.False(result.Allows(AgentToolGroup.WriteFiles));
+        Assert.False(result.Allows(AgentToolGroup.DeleteFiles));
+        Assert.False(result.Allows(AgentToolGroup.RunCommands));
+        Assert.False(result.Allows(AgentToolGroup.InstallSoftware));
+    }
+
+    [Fact]
+    public void CapTools_NullArgs_DoNotThrow_AndStayExplicit()
+    {
+        // Both null: each is treated as new AgentTools() (AllowAll = true), so the intersection is all-on,
+        // but the result is still an EXPLICIT allow-list (AllowAll = false).
+        var both = AgentOrchestrator.CapTools(null!, null!);
+        Assert.False(both.AllowAll);
+        Assert.True(both.Allows(AgentToolGroup.ReadFiles));
+        Assert.True(both.Allows(AgentToolGroup.WriteFiles));
+        Assert.True(both.Allows(AgentToolGroup.DeleteFiles));
+        Assert.True(both.Allows(AgentToolGroup.RunCommands));
+        Assert.True(both.Allows(AgentToolGroup.InstallSoftware));
+
+        // Null ceiling (= unrestricted) capped by a read-only request → read-only survives.
+        var nullCeiling = AgentOrchestrator.CapTools(null!, ReadOnly());
+        Assert.False(nullCeiling.AllowAll);
+        Assert.True(nullCeiling.Allows(AgentToolGroup.ReadFiles));
+        Assert.False(nullCeiling.Allows(AgentToolGroup.WriteFiles));
+        Assert.False(nullCeiling.Allows(AgentToolGroup.DeleteFiles));
+        Assert.False(nullCeiling.Allows(AgentToolGroup.RunCommands));
+        Assert.False(nullCeiling.Allows(AgentToolGroup.InstallSoftware));
+
+        // Read-only ceiling with a null (= unrestricted) request → still capped to the ceiling.
+        var nullRequest = AgentOrchestrator.CapTools(ReadOnly(), null!);
+        Assert.False(nullRequest.AllowAll);
+        Assert.True(nullRequest.Allows(AgentToolGroup.ReadFiles));
+        Assert.False(nullRequest.Allows(AgentToolGroup.WriteFiles));
+        Assert.False(nullRequest.Allows(AgentToolGroup.DeleteFiles));
+        Assert.False(nullRequest.Allows(AgentToolGroup.RunCommands));
+        Assert.False(nullRequest.Allows(AgentToolGroup.InstallSoftware));
+    }
+
+    [Fact]
+    public void CapTools_IsSymmetricPerGroup()
+    {
+        // The cap is a per-group AND of two allow-lists, so the result's group flags are order-independent.
+        var a = LeadStyle();      // read/write/delete/run, no install
+        var b = AutopilotStyle(); // all five
+
+        var ab = AgentOrchestrator.CapTools(a, b);
+        var ba = AgentOrchestrator.CapTools(b, a);
+
+        foreach (var group in System.Enum.GetValues<AgentToolGroup>())
+            Assert.Equal(ab.Allows(group), ba.Allows(group));
+    }
+
 }

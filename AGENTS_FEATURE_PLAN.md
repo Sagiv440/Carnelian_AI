@@ -348,6 +348,12 @@ project's `SKILL.md` names; checking specific ones narrows what's loaded in Proj
 
 ## ✅ Phase 3 status — IMPLEMENTED (builds clean: 0 warnings, 0 errors)
 
+> **⚠️ SUPERSEDED (2026-06):** Per-agent autonomy was later removed. Autonomy is now a **single global
+> setting** (`AppSettings.AgentApproval`, Settings → Autonomy & Memory) that governs **every** run —
+> single-agent and Lead-delegated alike. The `AutonomyLevel` enum, `Agent.Autonomy`, `AutonomyMap.ForRun`,
+> and `FromApprovalMode` no longer exist; `AutonomyMap.ForApprovalMode(AgentApprovalMode)` is the current
+> mapping. Per-agent **Tools** permissions are unchanged. The description below is kept for history only.
+
 **The active agent's `Autonomy` is authoritative for a project-agent run** (overrides the global approval
 mode), mapping to approval + step budget + planning:
 

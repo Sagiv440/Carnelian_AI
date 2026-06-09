@@ -132,18 +132,18 @@ see **Project skills**).
 - **Approval.** `AgentApprovalMode` (`AutoRun` / `ConfirmDestructive` / `ConfirmEverything`) is passed to
   `RunAsync` per turn. The service awaits an `approve` callback; the VM raises `ToolApprovalRequested`,
   the code-behind shows `ToolApprovalWindow`, and the decision returns via a `TaskCompletionSource<bool>`.
-  **Phase 3:** the approval mode + step budget are no longer the global setting — they're derived from the
-  active agent's `Autonomy` (see *Autonomy* below).
-- **Autonomy (Phase 3).** The active agent's `AutonomyLevel` is **authoritative** for a project-agent run.
-  `MainWindowViewModel.RunProjectAgentAsync` derives `(approval, maxSteps)` via `AutonomyMap.ForRun` and
-  passes them to `RunAsync` **instead of** the global `AppSettings.AgentApproval`: `Ask`→
-  (`ConfirmEverything`, 8), `Guided`→(`ConfirmDestructive`, 24 = today's behaviour), `Autonomous`→
-  (`AutoRun`, 40). For `Autonomous` only, `AgentPromptBuilder.PlanningDirective` adds a plan-then-execute
-  directive (folded into the `thinkingDirective` arg, so it's a prompt directive — not a separate planning
-  round). `SoftwareInstallPermission` remains an **independent** gate (both autonomy auto-run **and** the
-  install permission must allow). The global `AppSettings.AgentApproval` (Settings → Autonomy & Memory) now
-  only seeds the **default autonomy for newly created custom agents** (`AutonomyMap.FromApprovalMode` in
-  `AgentsViewModel.New()`).
+  The mode is the **single global setting** `AppSettings.AgentApproval` (Settings → Autonomy & Memory) — see
+  *Autonomy* below.
+- **Autonomy (global).** The global `AppSettings.AgentApproval` (Settings → Autonomy & Memory) is the
+  **single authoritative** approval policy for **every** project-agent run — both the single-agent path and
+  Lead-delegated runs. There is **no per-agent autonomy** (the `AutonomyLevel` enum and `Agent.Autonomy` were
+  removed; only per-agent *Tools* remain). `MainWindowViewModel.RunProjectAgentAsync` derives
+  `(approval, maxSteps)` via `AutonomyMap.ForApprovalMode(AppSettings.AgentApproval)`: `ConfirmEverything`→
+  (`ConfirmEverything`, 8), `ConfirmDestructive`→(`ConfirmDestructive`, 24 = default), `AutoRun`→
+  (`AutoRun`, 40). For `AutoRun` only, `AgentPromptBuilder.PlanningDirective(AgentApprovalMode)` adds a
+  plan-then-execute directive (folded into the `thinkingDirective` arg, so it's a prompt directive — not a
+  separate planning round; applied on the single-agent path only). `SoftwareInstallPermission` remains an
+  **independent** gate (both auto-run **and** the install permission must allow).
 - **Software install permission.** `AppSettings.SoftwareInstall` (`SoftwareInstallPermission`:
   `Never` / `Ask` / `Allow`). Under `Never`, `install_software` is withheld and `run_command` refuses
   machine-wide package-manager installs (winget/apt/brew/`npm -g`/…) while still allowing project-local
@@ -173,7 +173,8 @@ see **Project skills**).
   "create a skill for &lt;subject&gt;" — the model authors thorough, structured guidance and the tool persists it.
 
 **Project mode — the orchestrator / lead agent** (`IAgentOrchestrator`/`AgentOrchestrator`). A built-in
-**Lead** agent (`Id="lead"`, glyph 🧭, `IsOrchestrator=true`, read-only `Tools`, `Autonomy=Guided`) doesn't
+**Lead** agent (`Id="lead"`, glyph 🧭, `IsOrchestrator=true`, and a build-capable
+`Tools` ceiling — read/write/delete/run, **no install**) doesn't
 do the work in a single tool loop — it **delegates**. This is the "agents as tools" pattern: the lead is a
 tool-calling loop (modelled on `ProjectAgentService.RunAsync`) whose main tool runs a *nested* specialist.
 `MainWindowViewModel.RunProjectAgentAsync` routes to `_orchestrator.RunAsync(...)` when
@@ -185,21 +186,35 @@ tool-calling loop (modelled on `ProjectAgentService.RunAsync`) whose main tool r
   (`AgentsViewModel.EditIsOrchestrator`, loaded/persisted exactly like `EditProactive`; copied by Duplicate),
   so any custom agent can be made a lead — not just the built-in Lead.
 - **Lead tools.** `delegate_task(agent_id, task)` (always offered) + read-only `list_directory`/`read_file`
-  (gated by the lead's own `Tools` — the built-in Lead is read-only). **Finish convention is reused:** a
-  lead reply with **no** tool calls is its final plain-text summary (no separate `finish` tool).
+  (advertised by `BuildLeadTools` when the lead's own `Tools` allow `ReadFiles`). The lead never gets
+  write/delete/run/install tools **directly** — its broader allow-list is the team's *ceiling* (see below),
+  not its own hands. **Finish convention is reused:** a lead reply with **no** tool calls is its final
+  plain-text summary (no separate `finish` tool).
 - **Roster.** `_agents.ListAgents(project.Directory)` filtered to `!IsOrchestrator && Id != lead.Id` — an
   orchestrator can **never** delegate to another orchestrator (hard rule → no nested orchestration). The
   roster is injected into the lead's service-owned system prompt via `BuildRosterCatalog` (one line per
   agent: id, name, description-or-first-persona-sentence, tools summary, autonomy).
 - **`delegate_task` execution.** Resolves the specialist by `agent_id` (missing ⇒ a `"No agent 'X'.
   Available: …"` tool result), builds its model from `DefaultModel` ("{provider}:{id}" via `_router.For`;
-  unset/unparseable ⇒ the lead's client+model), computes `(approval, maxSteps) = AutonomyMap.ForRun(specialist
-  .Autonomy)`, then runs the **existing** `IProjectAgentService.RunAsync` with a one-message conversation
-  (the `task` brief as a `ChatMessage.User`), `PersonaPrefix(specialist, memoryBlock)`, the specialist's
-  own `Tools`, and `specialist.MemoryEnabled && memoryEnabled`. The specialist's final answer is **captured
-  via the `onAnswer` callback** (a capturing lambda — `ProjectAgentService`'s signature is unchanged),
-  truncated ~6000 chars, and returned to the lead as the tool result. The specialist's activity flows into
-  the delegation's structured card (see *Structured delegation UI* below), not the lead's work log.
+  unset/unparseable ⇒ the lead's client+model), then runs the **existing** `IProjectAgentService.RunAsync`
+  with a one-message conversation (the `task` brief as a `ChatMessage.User`),
+  `PersonaPrefix(specialist, memoryBlock)`, and `specialist.MemoryEnabled && memoryEnabled`. The specialist's
+  final answer is **captured via the `onAnswer` callback** (a capturing lambda — `ProjectAgentService`'s
+  signature is unchanged), truncated ~6000 chars, and returned to the lead as the tool result. The
+  specialist's activity flows into the delegation's structured card (see *Structured delegation UI* below),
+  not the lead's work log.
+- **Tools are a ceiling; autonomy is the global setting.** `DelegateAsync` resolves a delegated run two
+  ways. **Tools (ceiling):** `CapTools(lead.Tools, specialist.Tools)` — a NEW explicit allow-list whose every
+  group flag is `lead.Allows(g) && specialist.Allows(g)` (resolved via `AgentTools.Allows`, so `AllowAll`
+  works on either side); a specialist can do **at most** what the lead is allowed. **Autonomy (global):**
+  the run uses `AutonomyMap.ForApprovalMode(approval)`, where `approval` is the global
+  `AppSettings.AgentApproval` threaded into `IAgentOrchestrator.RunAsync` by the VM (added after
+  `installPermission`). So the single Settings → Autonomy & Memory mode governs the lead loop **and** every
+  delegated specialist run — neither the lead nor the specialist carries its own autonomy anymore.
+  `install_software` stays **double-gated**: it needs the capped `InstallSoftware` (both lead and specialist
+  allow it) **and** the global `SoftwareInstallPermission` (passed through unchanged). The built-in Lead's tool
+  ceiling is read/write/delete/run with **no install**, so its team can build but installs require raising the
+  ceiling. `BuildLeadTools` is unchanged — the lead still only wields delegate + read-only itself.
 - **Guards.** A `MaxDelegations` cap (12) on the lead loop; exceeding it forces a wrap-up
   (`onAnswer("_(stopped after N delegations …)_")`). A **repeat guard** (`DelegationKey` = lowercased,
   trimmed `agent_id` + `task`) returns the prior result instead of re-running an identical subtask, to break
@@ -219,15 +234,17 @@ tool-calling loop (modelled on `ProjectAgentService.RunAsync`) whose main tool r
   a body that shows the specialist's `Activity` (monospace) + `Result`. A failed specialist emits a
   `Finished` update with the error text. The lead's plain-text summary still goes to the answer bubble.
 - **Testable helpers** (`internal static`, via `InternalsVisibleTo`): `BuildRosterCatalog`,
-  `ShortDescription`, `ToolsSummary`, `DelegationKey` (see `AgentOrchestratorTests`).
+  `ShortDescription`, `ToolsSummary`, `DelegationKey`, and `CapTools` (the tool-ceiling intersection) —
+  see `AgentOrchestratorTests`.
 - **Triggering it:** pick **Lead** in the top-bar agent picker, enter a project, send a goal. Needs a
   tool-calling-capable model for both the lead and the specialists.
 - **DI:** `AddSingleton<IAgentOrchestrator, AgentOrchestrator>()` (next to `IProjectAgentService`); the
   orchestrator injects `IProjectAgentService` + `IModelRouter` + `IAgentService`.
 
 **Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
-An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2) +
-**Autonomy** (Phase 3 — wired into the project-agent run; see *Autonomy* above) + **MemoryEnabled**
+An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2;
+autonomy is **not** per-agent — it's the single global `AppSettings.AgentApproval`, see *Autonomy* above) +
+**MemoryEnabled**
 (Phase 4 — per-agent opt-out for persistent memory; see *Memory* below) + **Proactive** (Phase 5 —
 next-step suggestion chips; see *Proactive* below) + **IsOrchestrator** (the lead/delegation flag; see
 *Project mode — the orchestrator / lead agent* above). The registry
@@ -245,8 +262,9 @@ skills apply in **all four modes**. The assistant `MessageViewModel` carries `Ag
 transcript header shows the agent's glyph + name (model id moves to a tooltip). Settings → AI Features →
 **Agents** is a master/detail panel (`AgentsViewModel`): list with a built-in badge, **＋ New** / **Duplicate**
 (always a global custom) / **Delete** (disabled for built-ins), editing Name / Glyph / Persona / Default model
-/ **Tool permissions** (checkboxes) / **Autonomy** (Ask/Guided/Autonomous radios, Phase 3) / **Proactive**
-(checkbox, Phase 5) / **Skills** (checklist; built-in + project). The main window calls
+/ **Tool permissions** (checkboxes) / **Proactive**
+(checkbox, Phase 5) / **Skills** (checklist; built-in + project) — autonomy is no longer edited per agent
+(it's the global Settings → Autonomy & Memory approval mode). The main window calls
 `AgentsPanel.Initialize(projectDir)` before opening
 Settings and `vm.LoadAgents()` after it closes.
 

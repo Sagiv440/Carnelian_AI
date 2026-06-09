@@ -14,10 +14,11 @@ namespace AI_Interface.Services;
 /// Default <see cref="IAgentOrchestrator"/>. Runs the lead agent as a tool-calling loop (modelled on
 /// <see cref="ProjectAgentService"/>): the lead inspects the project with read-only tools, then
 /// <c>delegate_task(agent_id, task)</c>s subtasks to specialist agents from the roster. Each delegation
-/// runs the EXISTING <see cref="IProjectAgentService.RunAsync"/> for that specialist (its own persona,
-/// tools, autonomy, and model), capturing the specialist's final answer via the <c>onAnswer</c> callback
-/// and returning it to the lead as the tool result. When the lead replies with no tool calls, that text
-/// is the final summary — the same finish convention as the single-agent loop.
+/// runs the EXISTING <see cref="IProjectAgentService.RunAsync"/> for that specialist (its own persona and
+/// model), capturing the specialist's final answer via the <c>onAnswer</c> callback and returning it to
+/// the lead as the tool result. The single global approval setting (passed in by the VM) governs the run.
+/// When the lead replies with no tool calls, that text is the final summary — the same finish convention as
+/// the single-agent loop.
 /// </summary>
 public sealed class AgentOrchestrator : IAgentOrchestrator
 {
@@ -49,6 +50,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         string projectSkills,
         string thinkingDirective,
         SoftwareInstallPermission installPermission,
+        AgentApprovalMode approval,
         IProgress<string> status,
         Action<string> onActivity,
         Action<string> onAnswer,
@@ -104,7 +106,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 ct.ThrowIfCancellationRequested();
                 var result = await ExecuteAsync(
                     call, lead, leadClient, leadModel, project, roster, memoryBlock, memoryEnabled,
-                    projectSkills, thinkingDirective, installPermission, done, nextIndex,
+                    projectSkills, thinkingDirective, installPermission, approval, done, nextIndex,
                     status, onActivity, onDelegation, approve, ct).ConfigureAwait(false);
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
@@ -119,7 +121,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
     private async Task<string> ExecuteAsync(
         AgentToolCall call, Agent lead, IChatClient leadClient, string leadModel, Project project,
         IReadOnlyList<Agent> roster, string memoryBlock, bool memoryEnabled, string projectSkills,
-        string thinkingDirective, SoftwareInstallPermission installPermission,
+        string thinkingDirective, SoftwareInstallPermission installPermission, AgentApprovalMode approval,
         IDictionary<string, string> done, int[] nextIndex,
         IProgress<string> status, Action<string> onActivity, Action<DelegationUpdate> onDelegation,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
@@ -145,7 +147,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
             case "delegate_task":
                 return await DelegateAsync(
                     call, lead, leadClient, leadModel, project, roster, memoryBlock, memoryEnabled,
-                    projectSkills, thinkingDirective, installPermission, done, nextIndex,
+                    projectSkills, thinkingDirective, installPermission, approval, done, nextIndex,
                     status, onActivity, onDelegation, approve, ct).ConfigureAwait(false);
             default:
                 return $"Unknown tool '{call.Name}'.";
@@ -154,13 +156,16 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
 
     /// <summary>
     /// Runs the requested specialist agent for the given task via the existing project-agent loop, capturing
-    /// its final answer and returning it to the lead as the tool result. Honors the specialist's own model,
-    /// persona, tool allow-list, and autonomy (approval mode + step budget).
+    /// its final answer and returning it to the lead as the tool result. Honors the specialist's own model and
+    /// persona, but its <b>tools</b> are CAPPED to the lead's (the lead/specialist intersection,
+    /// <see cref="CapTools"/>) and the run uses the single <b>global approval setting</b> passed in by the VM
+    /// (not the lead's or specialist's), so a sub-agent can never use a tool the lead lacks, and the user's
+    /// approval policy governs every delegated run.
     /// </summary>
     private async Task<string> DelegateAsync(
         AgentToolCall call, Agent lead, IChatClient leadClient, string leadModel, Project project,
         IReadOnlyList<Agent> roster, string memoryBlock, bool memoryEnabled, string projectSkills,
-        string thinkingDirective, SoftwareInstallPermission installPermission,
+        string thinkingDirective, SoftwareInstallPermission installPermission, AgentApprovalMode approval,
         IDictionary<string, string> done, int[] nextIndex,
         IProgress<string> status, Action<string> onActivity, Action<DelegationUpdate> onDelegation,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
@@ -194,8 +199,11 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         // The specialist's model: parse its "{provider}:{id}" preference; fall back to the lead's client+model.
         var (specialistClient, specialistModel) = ResolveSpecialistModel(specialist, leadClient, leadModel);
 
-        // The specialist's autonomy drives its own approval mode + step budget.
-        var (approval, maxSteps) = AutonomyMap.ForRun(specialist.Autonomy);
+        // Approval is a run-level policy from the single global user setting (Settings → Autonomy & Memory),
+        // passed in by the VM: the delegated run uses it for both the approval mode and the step budget — NOT
+        // the lead's or specialist's own (there is no per-agent autonomy anymore). Tools, by contrast, stay a
+        // ceiling (CapTools below) — a specialist still can't exceed what the lead is allowed to touch.
+        var maxSteps = AutonomyMap.ForApprovalMode(approval).MaxSteps;
 
         // The specialist can't see this conversation — the brief must be self-contained (the lead is told so).
         var subConversation = new List<ChatMessage> { ChatMessage.User(task) };
@@ -218,7 +226,9 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 subConversation,
                 approval,
                 maxSteps,
-                specialist.Tools ?? new AgentTools(),
+                // Tool ceiling: the specialist may do AT MOST what the lead is allowed (per-group intersection).
+                // install_software stays double-gated by the global SoftwareInstallPermission passed below.
+                CapTools(lead.Tools ?? new AgentTools(), specialist.Tools ?? new AgentTools()),
                 AgentPromptBuilder.PersonaPrefix(specialist, memoryBlock),
                 thinkingDirective,
                 projectSkills,
@@ -294,7 +304,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
 
     /// <summary>
     /// A compact catalog of the agents the lead may delegate to — one line per agent: id, name, a short
-    /// description (or the first sentence of the persona), a tools summary, and the autonomy level.
+    /// description (or the first sentence of the persona), and a tools summary.
     /// </summary>
     internal static string BuildRosterCatalog(IReadOnlyList<Agent> roster)
     {
@@ -305,7 +315,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         foreach (var a in roster)
             sb.Append("- ").Append(a.Id).Append(" (").Append(a.Name).Append("): ")
               .Append(ShortDescription(a)).Append(". Can: ").Append(ToolsSummary(a.Tools))
-              .Append(". Autonomy: ").Append(a.Autonomy).Append(".\n");
+              .Append(".\n");
         return sb.ToString().TrimEnd();
     }
 
@@ -343,6 +353,29 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
     /// <summary>Normalised key for the repeat guard: a delegated subtask is "the same" by (id, trimmed task) ignoring case.</summary>
     internal static string DelegationKey(string agentId, string task) =>
         (agentId ?? "").Trim().ToLowerInvariant() + " " + (task ?? "").Trim().ToLowerInvariant();
+
+    // ---- delegation ceiling (the lead's permissions cap every sub-agent) -------------------
+
+    /// <summary>
+    /// Caps a specialist's requested tool allow-list to the lead's, so a delegated sub-agent may do AT MOST
+    /// what the lead is allowed: each group is permitted only when BOTH the ceiling and the request allow it.
+    /// Resolves through <see cref="AgentTools.Allows"/> (not the raw flags) so <c>AllowAll</c> on either side
+    /// is handled, and returns an explicit (<c>AllowAll = false</c>) allow-list. Both args are null-safe.
+    /// </summary>
+    internal static AgentTools CapTools(AgentTools ceiling, AgentTools requested)
+    {
+        var cap = ceiling ?? new AgentTools();
+        var req = requested ?? new AgentTools();
+        return new AgentTools
+        {
+            AllowAll = false,
+            ReadFiles = cap.Allows(AgentToolGroup.ReadFiles) && req.Allows(AgentToolGroup.ReadFiles),
+            WriteFiles = cap.Allows(AgentToolGroup.WriteFiles) && req.Allows(AgentToolGroup.WriteFiles),
+            DeleteFiles = cap.Allows(AgentToolGroup.DeleteFiles) && req.Allows(AgentToolGroup.DeleteFiles),
+            RunCommands = cap.Allows(AgentToolGroup.RunCommands) && req.Allows(AgentToolGroup.RunCommands),
+            InstallSoftware = cap.Allows(AgentToolGroup.InstallSoftware) && req.Allows(AgentToolGroup.InstallSoftware)
+        };
+    }
 
     // ---- read-only project tools (confined to the project directory) -----------------------
 
@@ -434,9 +467,10 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
     // ---- lead tools + system prompt --------------------------------------------------------
 
     /// <summary>
-    /// The lead's tools: the always-present <c>delegate_task</c> plus the read-only <c>list_directory</c> /
-    /// <c>read_file</c> for situational awareness — those two are gated by the lead's own
-    /// <see cref="AgentTools"/> allow-list (the built-in Lead is read-only, so they're offered).
+    /// The lead's <b>direct</b> tools: the always-present <c>delegate_task</c> plus the read-only
+    /// <c>list_directory</c> / <c>read_file</c> for situational awareness (gated by the lead's
+    /// <see cref="AgentToolGroup.ReadFiles"/> permission). The lead never writes/deletes/runs directly — its
+    /// broader <see cref="AgentTools"/> allow-list serves only as the delegation ceiling for its specialists.
     /// </summary>
     private static IReadOnlyList<AgentTool> BuildLeadTools(AgentTools leadTools)
     {
@@ -495,6 +529,10 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         - Review each specialist's returned result and delegate follow-ups as needed (for example, have a
           reviewer or tester check an implementer's work). Do not re-delegate an identical subtask.
         - Be efficient: delegate only what is necessary; don't over-delegate or fragment trivial work.
+        - Your TOOL permissions are the team's CEILING: each specialist you delegate to is capped to YOUR OWN tool
+          allow-list (it can do at most what you can — it can't write/delete/run/install unless you're allowed
+          that too). The approval policy is a single global user setting (Settings → Autonomy & Memory) that
+          governs the whole run — you don't set it. Plan within your tool limits.
         - When the goal is complete, STOP calling tools and reply with a short plain-text summary of what the
           team accomplished. (A reply with no tool call is treated as your final answer.)
 

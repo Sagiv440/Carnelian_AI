@@ -20,7 +20,7 @@ public interface IAgentOrchestrator
     /// Drives the lead agent to completion for one user turn: plan → delegate subtasks → review → repeat
     /// until it replies in plain text (the final summary).
     /// </summary>
-    /// <param name="lead">The active orchestrator agent (its persona, read tools, and autonomy govern the lead loop).</param>
+    /// <param name="lead">The active orchestrator agent (its persona and read tools drive the lead loop; tool permissions are the team's ceiling).</param>
     /// <param name="leadClient">The chat client serving the lead's model (must support tool calling).</param>
     /// <param name="leadModel">Model id for the lead loop (must support tool calling).</param>
     /// <param name="project">The active project (name + sandbox directory) shared by lead and specialists.</param>
@@ -30,6 +30,7 @@ public interface IAgentOrchestrator
     /// <param name="projectSkills">Project skill files appended to a specialist's system prompt (empty = none).</param>
     /// <param name="thinkingDirective">Extra planning instruction appended to system prompts (empty = off).</param>
     /// <param name="installPermission">Whether/how a delegated specialist may install software machine-wide.</param>
+    /// <param name="approval">The single global approval setting that governs the lead loop and every delegated run.</param>
     /// <param name="status">Step progress (constructed on the UI thread, so it auto-marshals).</param>
     /// <param name="onActivity">Receives the LEAD's own reasoning log (the "work"). Must marshal to the UI thread.</param>
     /// <param name="onAnswer">Receives the lead's final plain-text summary. Must marshal to the UI thread.</param>
@@ -49,6 +50,7 @@ public interface IAgentOrchestrator
         string projectSkills,
         string thinkingDirective,
         SoftwareInstallPermission installPermission,
+        AgentApprovalMode approval,
         IProgress<string> status,
         Action<string> onActivity,
         Action<string> onAnswer,

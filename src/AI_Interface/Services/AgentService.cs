@@ -181,7 +181,6 @@ public sealed class AgentService : IAgentService
             Glyph = "🤖",
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
-            Autonomy = AutonomyLevel.Guided,
             // Read-only in Project mode: a neutral helper inspects but doesn't change the project.
             Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false },
             Persona =
@@ -195,7 +194,6 @@ public sealed class AgentService : IAgentService
             Glyph = "🔬",
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
-            Autonomy = AutonomyLevel.Guided,
             // Read-only: a research assistant inspects and cites, it doesn't mutate the project.
             Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false },
             Skills = new List<string> { "cited-research" },
@@ -211,7 +209,6 @@ public sealed class AgentService : IAgentService
             Glyph = "👨‍💻",
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
-            Autonomy = AutonomyLevel.Guided,
             // Full file + command tools, but no machine-wide installs (kept off by default).
             Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = false },
             Skills = new List<string> { "careful-coding" },
@@ -227,7 +224,6 @@ public sealed class AgentService : IAgentService
             Glyph = "🚀",
             IsBuiltIn = true,
             Scope = AgentScope.BuiltIn,
-            Autonomy = AutonomyLevel.Autonomous,
             // The full toolset, including installs (still independently gated by SoftwareInstallPermission).
             Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = true },
             Skills = new List<string> { "step-by-step" },
@@ -248,15 +244,23 @@ public sealed class AgentService : IAgentService
             // The lead coordinates a team: in Project mode it reads the roster and delegates subtasks to
             // specialist agents (run by AgentOrchestrator) rather than doing the work itself.
             IsOrchestrator = true,
-            Autonomy = AutonomyLevel.Guided,
-            // Read-only: the lead inspects to scope the work and delegates; it doesn't write/run directly.
-            Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = false, DeleteFiles = false, RunCommands = false, InstallSoftware = false },
+            // The lead's tool allow-list is the team's permission CEILING: every specialist it delegates to is
+            // capped to this set (AgentOrchestrator.CapTools). The approval policy, by contrast, is a single
+            // global user setting (Settings → Autonomy & Memory) that governs every run — the lead doesn't
+            // carry its own autonomy. The lead still doesn't write/run DIRECTLY — BuildLeadTools only gives it
+            // delegate + read-only — but allowing read/write/delete/run lets its team build. Install stays off
+            // (an explicit opt-in: raise this ceiling to let the team install software, still double-gated by
+            // the global permission).
+            Tools = new AgentTools { AllowAll = false, ReadFiles = true, WriteFiles = true, DeleteFiles = true, RunCommands = true, InstallSoftware = false },
             Persona =
                 "You are a lead engineer and coordinator. You don't do the hands-on work yourself — you " +
                 "scope the goal, break it into well-defined subtasks, delegate each to the best-fit " +
                 "specialist on your team, review their results, and follow up (e.g. ask a reviewer to check " +
-                "an implementer's work) until the goal is met. Be efficient: delegate only what's needed and " +
-                "give each specialist a clear, self-contained brief."
+                "an implementer's work) until the goal is met. Your tool permissions are the team's ceiling (a " +
+                "specialist can only use tools you're allowed), and the approval policy is a single global user " +
+                "setting (Settings → Autonomy & Memory) that governs the whole run — so plan within your tool " +
+                "limits. Be efficient: delegate only what's needed and give each specialist a clear, " +
+                "self-contained brief."
         }
     };
 }

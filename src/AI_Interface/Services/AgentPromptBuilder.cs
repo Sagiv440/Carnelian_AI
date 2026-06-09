@@ -76,13 +76,14 @@ public static class AgentPromptBuilder
     }
 
     /// <summary>
-    /// The plan-then-execute directive added to the Project-agent system prompt for an
-    /// <see cref="AutonomyLevel.Autonomous"/> agent, so it outlines a short plan before acting and then
-    /// summarizes. Empty for <see cref="AutonomyLevel.Ask"/> / <see cref="AutonomyLevel.Guided"/> (no
-    /// planning pass). Led by a blank line so it slots after preceding system-prompt content. This is a
-    /// prompt directive only — it reuses the existing tool loop rather than adding a separate planning round.
+    /// The plan-then-execute directive added to the Project-agent system prompt when the global approval
+    /// mode is <see cref="AgentApprovalMode.AutoRun"/>, so the agent outlines a short plan before acting and
+    /// then summarizes. Empty for <see cref="AgentApprovalMode.ConfirmDestructive"/> /
+    /// <see cref="AgentApprovalMode.ConfirmEverything"/> (no planning pass). Led by a blank line so it slots
+    /// after preceding system-prompt content. This is a prompt directive only — it reuses the existing tool
+    /// loop rather than adding a separate planning round.
     /// </summary>
-    public static string PlanningDirective(AutonomyLevel autonomy) => autonomy == AutonomyLevel.Autonomous
+    public static string PlanningDirective(AgentApprovalMode approval) => approval == AgentApprovalMode.AutoRun
         ? "\n\nWork autonomously: first outline a short numbered plan of the steps you'll take, then " +
           "execute it step by step (calling tools as needed), and finish with a brief summary of what you did."
         : "";

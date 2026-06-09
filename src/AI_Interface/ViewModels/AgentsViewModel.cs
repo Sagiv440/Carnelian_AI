@@ -14,7 +14,7 @@ namespace AI_Interface.ViewModels;
 /// <summary>
 /// Backs the Settings → AI Features → Agents master/detail panel. Lists the roster (built-in + global +
 /// the active project's customs), edits a selected agent's Name / Glyph / Persona / Default model /
-/// <b>tool permissions</b> / <b>skills</b> / <b>autonomy</b>, and persists via <see cref="IAgentService"/>.
+/// <b>tool permissions</b> / <b>skills</b>, and persists via <see cref="IAgentService"/>.
 /// Built-ins are read-only but can be duplicated into an editable global custom. (The Memory editor is a
 /// later phase — omitted here.)
 /// </summary>
@@ -23,7 +23,6 @@ public sealed partial class AgentsViewModel : ViewModelBase
     private readonly IAgentService _agents;
     private readonly IModelRouter _router;
     private readonly IProjectSkillService _projectSkills;
-    private readonly ISettingsService _settings;
     private string? _projectDir;
     private bool _loadingDetail;
 
@@ -65,50 +64,21 @@ public sealed partial class AgentsViewModel : ViewModelBase
     [ObservableProperty] private bool _toolRunCommands = true;
     [ObservableProperty] private bool _toolInstallSoftware;
 
-    // --- autonomy (bound to the radio group; the three bools are mutually exclusive views of Autonomy) ---
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsAutonomyAsk))]
-    [NotifyPropertyChangedFor(nameof(IsAutonomyGuided))]
-    [NotifyPropertyChangedFor(nameof(IsAutonomyAutonomous))]
-    private AutonomyLevel _autonomy = AutonomyLevel.Guided;
-
-    /// <summary>Ask — confirm every action; small step budget. (Radio option.)</summary>
-    public bool IsAutonomyAsk
-    {
-        get => Autonomy == AutonomyLevel.Ask;
-        set { if (value) Autonomy = AutonomyLevel.Ask; }
-    }
-
-    /// <summary>Guided — confirm destructive actions; normal step budget (today's default). (Radio option.)</summary>
-    public bool IsAutonomyGuided
-    {
-        get => Autonomy == AutonomyLevel.Guided;
-        set { if (value) Autonomy = AutonomyLevel.Guided; }
-    }
-
-    /// <summary>Autonomous — auto-run multi-step within the tool allow-list + sandbox; plan-then-execute. (Radio option.)</summary>
-    public bool IsAutonomyAutonomous
-    {
-        get => Autonomy == AutonomyLevel.Autonomous;
-        set { if (value) Autonomy = AutonomyLevel.Autonomous; }
-    }
-
     /// <summary>True when a custom agent is selected (built-ins are read-only).</summary>
     public bool IsEditable => SelectedAgent is { IsBuiltIn: false };
 
     /// <summary>True when the selected agent is a read-only built-in (drives the "Built-in" badge + disabled fields).</summary>
     public bool IsBuiltInSelected => SelectedAgent is { IsBuiltIn: true };
 
-    public AgentsViewModel(IAgentService agents, IModelRouter router, IProjectSkillService projectSkills, ISettingsService settings)
+    public AgentsViewModel(IAgentService agents, IModelRouter router, IProjectSkillService projectSkills)
     {
         _agents = agents;
         _router = router;
         _projectSkills = projectSkills;
-        _settings = settings;
     }
 
     // Design-time constructor for the XAML previewer.
-    public AgentsViewModel() : this(new DesignAgentService(), new DesignModelRouter(), new DesignProjectSkillService(), new DesignSettingsService())
+    public AgentsViewModel() : this(new DesignAgentService(), new DesignModelRouter(), new DesignProjectSkillService())
     {
         Initialize(null);
     }
@@ -165,7 +135,6 @@ public sealed partial class AgentsViewModel : ViewModelBase
         ToolRunCommands = tools.Allows(AgentToolGroup.RunCommands);
         ToolInstallSoftware = tools.Allows(AgentToolGroup.InstallSoftware);
 
-        Autonomy = value?.Autonomy ?? AutonomyLevel.Guided;
         EditProactive = value?.Proactive ?? false;
         EditIsOrchestrator = value?.IsOrchestrator ?? false;
 
@@ -258,8 +227,6 @@ public sealed partial class AgentsViewModel : ViewModelBase
     partial void OnToolRunCommandsChanged(bool value) => PersistTool(t => t.RunCommands = value);
     partial void OnToolInstallSoftwareChanged(bool value) => PersistTool(t => t.InstallSoftware = value);
 
-    partial void OnAutonomyChanged(AutonomyLevel value) => Persist(a => a.Autonomy = value);
-
     partial void OnEditProactiveChanged(bool value) => Persist(a => a.Proactive = value);
 
     partial void OnEditIsOrchestratorChanged(bool value) => Persist(a => a.IsOrchestrator = value);
@@ -291,9 +258,6 @@ public sealed partial class AgentsViewModel : ViewModelBase
             Name = "New Agent",
             Glyph = "🤖",
             Persona = "",
-            // Seed autonomy from the global approval mode (Settings → AI Features → Autonomy & Memory),
-            // which now acts as the default autonomy for newly created custom agents.
-            Autonomy = AutonomyMap.FromApprovalMode(_settings.Current.AgentApproval),
             Scope = AgentScope.Global,
             IsBuiltIn = false
         };
@@ -328,7 +292,6 @@ public sealed partial class AgentsViewModel : ViewModelBase
                 RunCommands = src.Tools.RunCommands,
                 InstallSoftware = src.Tools.InstallSoftware
             },
-            Autonomy = src.Autonomy,
             MemoryEnabled = src.MemoryEnabled,
             Proactive = src.Proactive,
             IsOrchestrator = src.IsOrchestrator,
