@@ -90,6 +90,21 @@ public sealed partial class MessageViewModel : ObservableObject
     [ObservableProperty]
     private bool _isStreaming;
 
+    /// <summary>
+    /// Auto-reveal the activity log while the turn runs (so the user sees what the agent is doing live),
+    /// and collapse it back to the tidy default when the turn finishes. The two-way <c>IsChecked</c>
+    /// binding still lets the user toggle it manually mid-run; nothing re-opens it until the next run.
+    /// When <see cref="HasWork"/> is false the block is hidden anyway, so this is a no-op there.
+    /// </summary>
+    partial void OnIsStreamingChanged(bool value)
+    {
+        IsWorkExpanded = value;
+        OnPropertyChanged(nameof(WorkLabel));
+    }
+
+    /// <summary>Disclosure label for the activity block: "Working…" while live, "Activity" once done.</summary>
+    public string WorkLabel => IsStreaming ? "Working…" : "Activity";
+
     /// <summary>True while this message is being read aloud (drives the speak button's glyph).</summary>
     [ObservableProperty]
     private bool _isSpeaking;

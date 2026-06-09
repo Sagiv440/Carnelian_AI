@@ -3,6 +3,7 @@
         xmlns:vm="using:AI_Interface.ViewModels"
         xmlns:models="using:AI_Interface.Models"
         xmlns:conv="using:AI_Interface.Converters"
+        xmlns:beh="using:AI_Interface.Behaviors"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
@@ -486,11 +487,12 @@
                                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                                     <TextBlock Text="▸" IsVisible="{Binding !IsWorkExpanded}"/>
                                                     <TextBlock Text="▾" IsVisible="{Binding IsWorkExpanded}"/>
-                                                    <TextBlock Text="Thinking"/>
+                                                    <TextBlock Text="{Binding WorkLabel}"/>
                                                 </StackPanel>
                                             </ToggleButton>
                                             <Border Classes="reasoningBody" IsVisible="{Binding IsWorkExpanded}">
-                                                <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
+                                                <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled"
+                                                              beh:AutoScrollToEnd.Enabled="True">
                                                     <SelectableTextBlock Text="{Binding Work}" TextWrapping="Wrap"
                                                                          FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"
                                                                          Foreground="{DynamicResource AppTextSecondary}"/>
