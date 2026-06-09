@@ -63,7 +63,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         SoftwareInstallPermission installPermission,
         AgentApprovalMode approval,
         IProgress<string> status,
-        Action<string> onActivity,
+        Action<ActivityUpdate> onActivityStep,
         Action<string> onAnswer,
         Action<DelegationUpdate> onDelegation,
         Func<ToolApprovalRequest, Task<bool>> approve,
@@ -95,6 +95,11 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         // shares the same Index; advanced only when a specialist actually runs.
         var nextIndex = new int[1];
 
+        // 0-based counter for the LEAD's OWN structured steps (its read/scan tools + interim narration),
+        // which feed the message's single-agent-style activity feed. Independent of the delegation index
+        // space (nextIndex above), which keys the separate per-delegation cards.
+        var leadActivityIndex = 0;
+
         for (var step = 0; step < MaxDelegations; step++)
         {
             ct.ThrowIfCancellationRequested();
@@ -111,16 +116,40 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
 
             // Record the assistant turn (with its tool calls) so the lead sees its own request next round.
             messages.Add(new ChatMessage(ChatRole.Assistant, turn.Content) { ToolCalls = turn.ToolCalls });
+            // The lead's interim narration → a note row in its structured feed.
             if (!string.IsNullOrWhiteSpace(turn.Content))
-                onActivity(turn.Content + "\n");
+                onActivityStep(new ActivityUpdate(
+                    ActivityPhase.Note, leadActivityIndex++, "", "", "", turn.Content.Trim(), false));
 
             foreach (var call in turn.ToolCalls)
             {
                 ct.ThrowIfCancellationRequested();
-                var result = await ExecuteAsync(
-                    call, lead, leadClient, leadModel, project, roster, memoryBlock, memoryEnabled,
-                    projectSkills, thinkingDirective, installPermission, approval, done, nextIndex,
-                    status, onActivity, onDelegation, approve, ct).ConfigureAwait(false);
+
+                string result;
+                if (string.Equals(call.Name, "delegate_task", StringComparison.Ordinal))
+                {
+                    // Delegations render as their own per-delegation cards (not the lead's own feed).
+                    result = await DelegateAsync(
+                        call, lead, leadClient, leadModel, project, roster, memoryBlock, memoryEnabled,
+                        projectSkills, thinkingDirective, installPermission, approval, done, nextIndex,
+                        status, onDelegation, approve, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    // The lead's OWN read/scan/handbook step → a structured row in its feed (mirrors the
+                    // single agent): Started before, Finished (with success/failure) after.
+                    var (summary, detail) = DescribeLeadTool(call);
+                    var idx = leadActivityIndex++;
+                    onActivityStep(new ActivityUpdate(
+                        ActivityPhase.Started, idx, ProjectAgentService.IconFor(call.Name), summary, detail, "", false));
+                    status.Report(ProjectAgentService.CurrentActionLabel(call.Name, summary, detail));
+
+                    result = ExecuteLeadTool(call, project);
+
+                    onActivityStep(new ActivityUpdate(
+                        ActivityPhase.Finished, idx, "", "", "", result, ProjectAgentService.IsFailure(result)));
+                }
+
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
         }
@@ -129,50 +158,34 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         onAnswer($"_(stopped after {MaxDelegations} delegations — the task may be unfinished)_");
     }
 
-    // ---- the lead loop's single-tool step --------------------------------------------------
+    // ---- the lead's own (non-delegation) tools ---------------------------------------------
 
-    private async Task<string> ExecuteAsync(
-        AgentToolCall call, Agent lead, IChatClient leadClient, string leadModel, Project project,
-        IReadOnlyList<Agent> roster, string memoryBlock, bool memoryEnabled, string projectSkills,
-        string thinkingDirective, SoftwareInstallPermission installPermission, AgentApprovalMode approval,
-        IDictionary<string, string> done, int[] nextIndex,
-        IProgress<string> status, Action<string> onActivity, Action<DelegationUpdate> onDelegation,
-        Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+    /// <summary>
+    /// Runs one of the lead's OWN tools — read-only situational awareness (<c>list_directory</c>/
+    /// <c>read_file</c>) plus the handbook writer (<c>update_docs</c>) — and returns the truncated result.
+    /// The lead never writes/deletes/runs project files directly; <c>delegate_task</c> is handled separately
+    /// in the loop (it has its own per-delegation card, not the lead's structured feed).
+    /// </summary>
+    private string ExecuteLeadTool(AgentToolCall call, Project project) => call.Name switch
     {
-        switch (call.Name)
-        {
-            case "list_directory":
-            {
-                var path = GetString(call.Arguments, "path");
-                onActivity($"\n🔧 List directory  `{path ?? "."}`\n");
-                var result = ListDirectory(project, path);
-                onActivity(IndentForDisplay(result) + "\n");
-                return Truncate(result);
-            }
-            case "read_file":
-            {
-                var path = GetString(call.Arguments, "path");
-                onActivity($"\n🔧 Read file  `{path ?? ""}`\n");
-                var result = ReadFile(project, path);
-                onActivity(IndentForDisplay(result) + "\n");
-                return Truncate(result);
-            }
-            case "update_docs":
-            {
-                onActivity($"\n🔧 Update project handbook  `.AI/{ProjectDocsService.FileName}`\n");
-                var result = UpdateDocs(project, GetString(call.Arguments, "content"));
-                onActivity(IndentForDisplay(result) + "\n");
-                return Truncate(result);
-            }
-            case "delegate_task":
-                return await DelegateAsync(
-                    call, lead, leadClient, leadModel, project, roster, memoryBlock, memoryEnabled,
-                    projectSkills, thinkingDirective, installPermission, approval, done, nextIndex,
-                    status, onActivity, onDelegation, approve, ct).ConfigureAwait(false);
-            default:
-                return $"Unknown tool '{call.Name}'.";
-        }
-    }
+        "list_directory" => Truncate(ListDirectory(project, GetString(call.Arguments, "path"))),
+        "read_file"      => Truncate(ReadFile(project, GetString(call.Arguments, "path"))),
+        "update_docs"    => Truncate(UpdateDocs(project, GetString(call.Arguments, "content"))),
+        _                => $"Unknown tool '{call.Name}'."
+    };
+
+    /// <summary>
+    /// Summary + target for the lead's own structured activity row (mirrors the single agent's Describe).
+    /// Widened from <c>private static</c> to <c>internal static</c> for testing (no logic change), mirroring
+    /// how <c>IconFor</c>/<c>IsFailure</c>/<c>IsHandbookPath</c> are exposed via <c>InternalsVisibleTo</c>.
+    /// </summary>
+    internal static (string Summary, string Detail) DescribeLeadTool(AgentToolCall call) => call.Name switch
+    {
+        "list_directory" => ("List directory", GetString(call.Arguments, "path") ?? "."),
+        "read_file"      => ("Read file", GetString(call.Arguments, "path") ?? ""),
+        "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName),
+        _                => (call.Name, "")
+    };
 
     /// <summary>
     /// Runs the requested specialist agent for the given task via the existing project-agent loop, capturing
@@ -187,7 +200,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         IReadOnlyList<Agent> roster, string memoryBlock, bool memoryEnabled, string projectSkills,
         string thinkingDirective, SoftwareInstallPermission installPermission, AgentApprovalMode approval,
         IDictionary<string, string> done, int[] nextIndex,
-        IProgress<string> status, Action<string> onActivity, Action<DelegationUpdate> onDelegation,
+        IProgress<string> status, Action<DelegationUpdate> onDelegation,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         var agentId = (GetString(call.Arguments, "agent_id") ?? "").Trim();
@@ -232,10 +245,11 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         var captured = new StringBuilder();
         void CaptureAnswer(string text) => captured.Append(text);
 
-        // Route the specialist's activity into THIS delegation's card (no name-prefixing needed — the card
-        // header already identifies the specialist).
-        void SpecialistActivity(string line) =>
-            onDelegation(new DelegationUpdate(DelegationPhase.Activity, idx, specialist.Name, specialist.Glyph, task, line));
+        // Route the specialist's STRUCTURED steps (tool calls + interim narration, in its own per-run index
+        // space) into THIS delegation's card, which renders the same structured feed as a single-agent run.
+        // No name-prefixing needed — the card header already identifies the specialist.
+        void SpecialistStep(ActivityUpdate u) =>
+            onDelegation(new DelegationUpdate(DelegationPhase.Activity, idx, specialist.Name, specialist.Glyph, task, "", u));
 
         try
         {
@@ -257,10 +271,10 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 // Delegated specialists never get update_docs — only the main agent (the lead) owns the handbook.
                 allowDocsUpdate: false,
                 status,
-                SpecialistActivity,
-                // Delegated specialists keep their monospace activity inside the delegation card (via
-                // SpecialistActivity); the single-agent structured feed isn't used for delegated runs.
-                onActivityStep: null,
+                // The specialist's monospace narration is fully superseded by its structured steps (the Note
+                // rows + tool rows below carry everything), so discard the legacy onActivity channel.
+                _ => { },
+                onActivityStep: SpecialistStep,
                 CaptureAnswer,
                 approve,
                 ct).ConfigureAwait(false);
@@ -503,14 +517,6 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
 
     private static string Truncate(string s) =>
         s.Length <= MaxResultChars ? s : s[..MaxResultChars] + "\n…(truncated)";
-
-    /// <summary>Indents a tool result two spaces per line for a readable inline transcript log.</summary>
-    private static string IndentForDisplay(string s)
-    {
-        var trimmed = Truncate(s.TrimEnd());
-        var lines = trimmed.Split('\n');
-        return string.Join('\n', lines.Select(l => "   " + l));
-    }
 
     // ---- lead tools + system prompt --------------------------------------------------------
 

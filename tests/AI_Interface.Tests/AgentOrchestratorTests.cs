@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using AI_Interface.Models;
 using AI_Interface.Services;
 using Xunit;
@@ -388,4 +389,67 @@ public class AgentOrchestratorTests
             Assert.Equal(ab.Allows(group), ba.Allows(group));
     }
 
+    // --- DescribeLeadTool (summary + target for the lead's own structured activity row) ---------
+    // Pure mapping of an AgentToolCall to a (Summary, Detail) tuple. The "path"/"content" args are read
+    // from the call's JsonElement Arguments; an absent "path" falls back to "." (list) or "" (read).
+
+    /// <summary>Builds an AgentToolCall whose Arguments is the JSON object serialized from <paramref name="args"/>.</summary>
+    private static AgentToolCall Call(string name, object args) =>
+        new(name, JsonSerializer.SerializeToElement(args));
+
+    /// <summary>Builds an AgentToolCall with no arguments object (a JSON null element).</summary>
+    private static AgentToolCall CallNoArgs(string name) =>
+        new(name, JsonSerializer.SerializeToElement<object?>(null));
+
+    [Fact]
+    public void DescribeLeadTool_ListDirectory_WithPath_UsesPath()
+    {
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(Call("list_directory", new { path = "src" }));
+        Assert.Equal("List directory", summary);
+        Assert.Equal("src", detail);
+    }
+
+    [Fact]
+    public void DescribeLeadTool_ListDirectory_NoPath_DefaultsToDot()
+    {
+        // GetString returns null for an absent "path" arg, so list_directory's detail falls back to ".".
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(CallNoArgs("list_directory"));
+        Assert.Equal("List directory", summary);
+        Assert.Equal(".", detail);
+    }
+
+    [Fact]
+    public void DescribeLeadTool_ReadFile_WithPath_UsesPath()
+    {
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(Call("read_file", new { path = "README.md" }));
+        Assert.Equal("Read file", summary);
+        Assert.Equal("README.md", detail);
+    }
+
+    [Fact]
+    public void DescribeLeadTool_ReadFile_NoPath_DefaultsToEmpty()
+    {
+        // Unlike list_directory, read_file's fallback is "" (not ".").
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(CallNoArgs("read_file"));
+        Assert.Equal("Read file", summary);
+        Assert.Equal("", detail);
+    }
+
+    [Fact]
+    public void DescribeLeadTool_UpdateDocs_PointsAtHandbookPath()
+    {
+        // Detail is the fixed handbook path ".AI/" + ProjectDocsService.FileName ("AI_DOCS.md").
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(Call("update_docs", new { content = "irrelevant" }));
+        Assert.Equal("Update project handbook", summary);
+        Assert.Equal(".AI/" + ProjectDocsService.FileName, detail);
+        Assert.Equal(".AI/AI_DOCS.md", detail); // pin the literal so a FileName change is caught here too
+    }
+
+    [Fact]
+    public void DescribeLeadTool_UnknownTool_EchoesNameWithEmptyDetail()
+    {
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(Call("delegate_task", new { agent_id = "x", task = "y" }));
+        Assert.Equal("delegate_task", summary);
+        Assert.Equal("", detail);
+    }
 }

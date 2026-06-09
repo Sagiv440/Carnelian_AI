@@ -21,6 +21,70 @@
     <Window.Resources>
         <conv:PathToBitmapConverter x:Key="PathToBitmap"/>
         <conv:ProviderTagConverter x:Key="ProviderTag"/>
+
+        <!-- One row of a structured activity feed: a tool call (caret · icon · title · target · status,
+             expandable to its result) or the model's interim narration (a muted note). Shared by the
+             single-agent feed AND each delegation card's feed (Phase 3B) so they render identically. -->
+        <DataTemplate x:Key="ActivityRowTemplate" x:DataType="vm:ActivityStepViewModel">
+            <Panel>
+                <!-- Note: the model's interim narration, muted + italic, indented to the title
+                     gutter so it lines up with the tool rows' text -->
+                <SelectableTextBlock IsVisible="{Binding IsNote}"
+                                     Text="{Binding Text}" TextWrapping="Wrap"
+                                     FontStyle="Italic" Margin="34,3,0,3"
+                                     Foreground="{DynamicResource AppTextSecondary}"/>
+
+                <!-- Tool call: a compact row (caret · icon · title · target · status),
+                     clickable to reveal the result only when there is one -->
+                <StackPanel IsVisible="{Binding !IsNote}">
+                    <ToggleButton Classes="activityRow"
+                                  Classes.running="{Binding IsRunning}"
+                                  IsChecked="{Binding IsExpanded}"
+                                  IsEnabled="{Binding HasResult}"
+                                  ToolTip.Tip="{Binding Detail}">
+                        <Grid ColumnDefinitions="16,Auto,Auto,*,Auto"
+                              VerticalAlignment="Center">
+                            <!-- Caret: only present when there's a result to expand;
+                                 resultless rows hide it entirely so they look inert -->
+                            <TextBlock Grid.Column="0" Classes="activityCaret"
+                                       Text="▸"
+                                       IsVisible="{Binding ShowCollapsedCaret}"/>
+                            <TextBlock Grid.Column="0" Classes="activityCaret"
+                                       Text="▾"
+                                       IsVisible="{Binding IsExpanded}"/>
+                            <!-- Fixed-width centered icon gutter keeps titles aligned -->
+                            <TextBlock Grid.Column="1" Classes="activityIcon"
+                                       Text="{Binding Icon}"/>
+                            <!-- Title -->
+                            <TextBlock Grid.Column="2" Text="{Binding Title}"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Margin="6,0,0,0"
+                                       Foreground="{DynamicResource AppTextPrimary}"/>
+                            <!-- Target/command: muted monospace, one line, ellipsis -->
+                            <TextBlock Grid.Column="3" Text="{Binding Detail}"
+                                       Classes="muted" VerticalAlignment="Center"
+                                       FontFamily="Cascadia Code,Consolas,monospace"
+                                       FontSize="12" TextTrimming="CharacterEllipsis"
+                                       Margin="8,0,8,0"/>
+                            <!-- Status glyph, tinted by state (running/done/failed) -->
+                            <TextBlock Grid.Column="4" Classes="activityStatus"
+                                       Classes.done="{Binding Done}"
+                                       Classes.failed="{Binding Failed}"
+                                       Text="{Binding StatusGlyph}"/>
+                        </Grid>
+                    </ToggleButton>
+
+                    <!-- Result body (when expanded): a tight hairline card, monospace -->
+                    <Border Classes="activityResult"
+                            IsVisible="{Binding IsExpanded}">
+                        <SelectableTextBlock Text="{Binding Result}" TextWrapping="Wrap"
+                                             FontFamily="Cascadia Code,Consolas,monospace"
+                                             FontSize="12"
+                                             Foreground="{DynamicResource AppTextSecondary}"/>
+                    </Border>
+                </StackPanel>
+            </Panel>
+        </DataTemplate>
     </Window.Resources>
 
     <Window.Styles>
@@ -599,72 +663,11 @@
                                             <Border Classes="reasoningBody" IsVisible="{Binding IsWorkExpanded}">
                                                 <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled"
                                                               beh:AutoScrollToEnd.Enabled="True">
-                                                    <ItemsControl ItemsSource="{Binding Activities}">
+                                                    <ItemsControl ItemsSource="{Binding Activities}"
+                                                                  ItemTemplate="{StaticResource ActivityRowTemplate}">
                                                         <ItemsControl.ItemsPanel>
                                                             <ItemsPanelTemplate><StackPanel Spacing="1"/></ItemsPanelTemplate>
                                                         </ItemsControl.ItemsPanel>
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate x:DataType="vm:ActivityStepViewModel">
-                                                                <Panel>
-                                                                    <!-- Note: the model's interim narration, muted + italic, indented to
-                                                                         the title gutter so it lines up with the tool rows' text -->
-                                                                    <SelectableTextBlock IsVisible="{Binding IsNote}"
-                                                                                         Text="{Binding Text}" TextWrapping="Wrap"
-                                                                                         FontStyle="Italic" Margin="34,3,0,3"
-                                                                                         Foreground="{DynamicResource AppTextSecondary}"/>
-
-                                                                    <!-- Tool call: a compact row (caret · icon · title · target · status),
-                                                                         clickable to reveal the result only when there is one -->
-                                                                    <StackPanel IsVisible="{Binding !IsNote}">
-                                                                        <ToggleButton Classes="activityRow"
-                                                                                      Classes.running="{Binding IsRunning}"
-                                                                                      IsChecked="{Binding IsExpanded}"
-                                                                                      IsEnabled="{Binding HasResult}"
-                                                                                      ToolTip.Tip="{Binding Detail}">
-                                                                            <Grid ColumnDefinitions="16,Auto,Auto,*,Auto"
-                                                                                  VerticalAlignment="Center">
-                                                                                <!-- Caret: only present when there's a result to expand;
-                                                                                     resultless rows hide it entirely so they look inert -->
-                                                                                <TextBlock Grid.Column="0" Classes="activityCaret"
-                                                                                           Text="▸"
-                                                                                           IsVisible="{Binding ShowCollapsedCaret}"/>
-                                                                                <TextBlock Grid.Column="0" Classes="activityCaret"
-                                                                                           Text="▾"
-                                                                                           IsVisible="{Binding IsExpanded}"/>
-                                                                                <!-- Fixed-width centered icon gutter keeps titles aligned -->
-                                                                                <TextBlock Grid.Column="1" Classes="activityIcon"
-                                                                                           Text="{Binding Icon}"/>
-                                                                                <!-- Title -->
-                                                                                <TextBlock Grid.Column="2" Text="{Binding Title}"
-                                                                                           FontWeight="SemiBold" VerticalAlignment="Center"
-                                                                                           Margin="6,0,0,0"
-                                                                                           Foreground="{DynamicResource AppTextPrimary}"/>
-                                                                                <!-- Target/command: muted monospace, one line, ellipsis -->
-                                                                                <TextBlock Grid.Column="3" Text="{Binding Detail}"
-                                                                                           Classes="muted" VerticalAlignment="Center"
-                                                                                           FontFamily="Cascadia Code,Consolas,monospace"
-                                                                                           FontSize="12" TextTrimming="CharacterEllipsis"
-                                                                                           Margin="8,0,8,0"/>
-                                                                                <!-- Status glyph, tinted by state (running/done/failed) -->
-                                                                                <TextBlock Grid.Column="4" Classes="activityStatus"
-                                                                                           Classes.done="{Binding Done}"
-                                                                                           Classes.failed="{Binding Failed}"
-                                                                                           Text="{Binding StatusGlyph}"/>
-                                                                            </Grid>
-                                                                        </ToggleButton>
-
-                                                                        <!-- Result body (when expanded): a tight hairline card, monospace -->
-                                                                        <Border Classes="activityResult"
-                                                                                IsVisible="{Binding IsExpanded}">
-                                                                            <SelectableTextBlock Text="{Binding Result}" TextWrapping="Wrap"
-                                                                                                 FontFamily="Cascadia Code,Consolas,monospace"
-                                                                                                 FontSize="12"
-                                                                                                 Foreground="{DynamicResource AppTextSecondary}"/>
-                                                                        </Border>
-                                                                    </StackPanel>
-                                                                </Panel>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
                                                 </ScrollViewer>
                                             </Border>
@@ -729,11 +732,15 @@
                                                                                                      IsVisible="{Binding Task, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                                                                      Foreground="{DynamicResource AppTextPrimary}"
                                                                                                      Margin="0,0,0,6"/>
-                                                                                <!-- Growing monospace activity log -->
-                                                                                <SelectableTextBlock Text="{Binding Activity}" TextWrapping="Wrap"
-                                                                                                     IsVisible="{Binding Activity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                                                                     FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"
-                                                                                                     Foreground="{DynamicResource AppTextSecondary}"/>
+                                                                                <!-- The specialist's structured activity feed — same rows as a
+                                                                                     single-agent run (Phase 3B), via the shared row template -->
+                                                                                <ItemsControl ItemsSource="{Binding Activities}"
+                                                                                              IsVisible="{Binding HasActivities}"
+                                                                                              ItemTemplate="{StaticResource ActivityRowTemplate}">
+                                                                                    <ItemsControl.ItemsPanel>
+                                                                                        <ItemsPanelTemplate><StackPanel Spacing="1"/></ItemsPanelTemplate>
+                                                                                    </ItemsControl.ItemsPanel>
+                                                                                </ItemsControl>
                                                                                 <!-- Final summary, set apart by a hairline divider + label -->
                                                                                 <Border Classes="delegationResult"
                                                                                         IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -886,13 +893,17 @@
                 </ScrollViewer>
             </Grid>
 
-            <!-- Status line (only while busy) — kept aligned with the centered composer -->
+            <!-- Status line (only while busy) — kept aligned with the centered composer. Shows the live
+                 "current action" (Phase 3A): in Project mode StatusText carries the icon · step · target
+                 of the running tool, so the user sees what's happening without opening the activity feed. -->
             <Border Grid.Row="2" Classes="card" CornerRadius="4" Margin="0,4" Padding="14,7"
                     MaxWidth="760" IsVisible="{Binding IsBusy}">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding StatusText}" Classes="muted" VerticalAlignment="Center"/>
-                </StackPanel>
+                <Grid ColumnDefinitions="Auto,*">
+                    <ProgressBar Grid.Column="0" IsIndeterminate="True" Width="120"
+                                 VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" Classes="muted"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </Grid>
             </Border>
 
             <!-- Composer: centered at the bottom, capped width (not edge-to-edge) -->

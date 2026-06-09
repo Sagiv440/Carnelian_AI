@@ -32,7 +32,11 @@ public interface IAgentOrchestrator
     /// <param name="installPermission">Whether/how a delegated specialist may install software machine-wide.</param>
     /// <param name="approval">The single global approval setting that governs the lead loop and every delegated run.</param>
     /// <param name="status">Step progress (constructed on the UI thread, so it auto-marshals).</param>
-    /// <param name="onActivity">Receives the LEAD's own reasoning log (the "work"). Must marshal to the UI thread.</param>
+    /// <param name="onActivityStep">
+    /// Receives the LEAD's own structured steps — its read/scan tool calls (Started/Finished, keyed by a
+    /// 0-based index) plus its interim narration (Note) — rendered as the message's structured activity feed,
+    /// the same one a single-agent run uses. Must marshal to the UI thread.
+    /// </param>
     /// <param name="onAnswer">Receives the lead's final plain-text summary. Must marshal to the UI thread.</param>
     /// <param name="onDelegation">
     /// Receives structured per-delegation updates (start/activity/finish, keyed by a 0-based index) so the UI
@@ -52,7 +56,7 @@ public interface IAgentOrchestrator
         SoftwareInstallPermission installPermission,
         AgentApprovalMode approval,
         IProgress<string> status,
-        Action<string> onActivity,
+        Action<ActivityUpdate> onActivityStep,
         Action<string> onAnswer,
         Action<DelegationUpdate> onDelegation,
         Func<ToolApprovalRequest, Task<bool>> approve,

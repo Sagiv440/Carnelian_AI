@@ -744,7 +744,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var conversation = BuildAgentConversation(assistant);
 
         // The agent/lead runs on background threads; marshal its callbacks back to the UI.
-        // Activity (the 🔧 / 🤝 action log) goes to the collapsible "work" block; the final reply to the answer.
+        // OnActivity is the legacy monospace "work" block channel — used only by the single-agent path now
+        // (and even there the block is suppressed once the structured feed has rows; see ShowWorkBlock).
         void OnActivity(string activity) => Dispatcher.UIThread.Post(() =>
         {
             assistant.AppendWork(activity);
@@ -759,8 +760,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             RequestScroll();
         });
 
-        // Single-agent-only: structured per-tool-call updates → the structured activity feed in the work
-        // block (one row per tool call + interim narration notes). The orchestrator branch doesn't pass it.
+        // Structured per-step updates → the message's structured activity feed (one row per tool call +
+        // interim narration notes). The single-agent path passes this for the agent's own steps; the
+        // orchestrator path passes it for the LEAD's own read/scan steps (each delegation's steps go to its
+        // card instead, via OnDelegation below).
         void OnActivityStep(ActivityUpdate u) => Dispatcher.UIThread.Post(() =>
         {
             assistant.ApplyActivity(u);
@@ -768,6 +771,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         });
 
         // Orchestrator-only: structured per-delegation updates → per-delegation cards in the transcript.
+        // A delegation's Activity carries the specialist's structured step (u.Step), routed into the card's
+        // own feed so it renders identically to a single-agent run.
         void OnDelegation(DelegationUpdate u) => Dispatcher.UIThread.Post(() =>
         {
             switch (u.Phase)
@@ -776,7 +781,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     assistant.StartDelegation(u.Index, u.AgentName, u.Glyph, u.Task);
                     break;
                 case DelegationPhase.Activity:
-                    assistant.AppendDelegationActivity(u.Index, u.Text);
+                    if (u.Step is not null)
+                        assistant.ApplyDelegationActivity(u.Index, u.Step);
                     break;
                 case DelegationPhase.Finished:
                     assistant.FinishDelegation(u.Index, u.Text);
@@ -790,14 +796,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // Lead/orchestrator: it reads the roster and delegates subtasks to specialist agents, each run
             // via the existing project-agent loop with its own persona/tools/model. The single global approval
             // setting governs the whole coordination loop and every delegated run (its read tools are gated by
-            // Tools). The lead's reasoning goes to the work block (OnActivity); each delegation to a card.
+            // Tools). The lead's own steps (narration + read/scan/update_docs) go to the structured activity
+            // feed (OnActivityStep); each delegation renders as its own card (OnDelegation).
             // ProjectContext() = the AI_DOCS.md handbook + project skills, injected only in Project mode
             // (the lead passes it on to every delegated specialist run).
             await _orchestrator.RunAsync(
                 SelectedAgent, client, model, ActiveProject, conversation,
                 MemoryBlock(), MemoryActive(), ProjectContext(), ThinkingDirective(),
                 _settings.Current.SoftwareInstall, _settings.Current.AgentApproval,
-                progress, OnActivity, OnAnswer, OnDelegation,
+                progress, OnActivityStep, OnAnswer, OnDelegation,
                 RequestToolApprovalAsync, ct);
         }
         else

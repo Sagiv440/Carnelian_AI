@@ -94,7 +94,7 @@ public sealed class MessageViewModelActivityTests
         var msg = NewAssistant();
         msg.ApplyActivity(Started(0, "✏️", "Write file", "src/App.jsx"));
 
-        // No row at index 99 -> FindActivity returns null and the call is a no-op (early return).
+        // No row at index 99 -> ActivityFeed.FindStarted returns null and the call is a no-op (early return).
         msg.ApplyActivity(Finished(99, "stray"));
 
         var row = Assert.Single(msg.Activities);

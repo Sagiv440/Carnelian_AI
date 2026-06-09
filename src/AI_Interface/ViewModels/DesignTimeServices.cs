@@ -230,7 +230,7 @@ internal sealed class DesignAgentOrchestrator : IAgentOrchestrator
         IReadOnlyList<ChatMessage> conversation, string memoryBlock, bool memoryEnabled, string projectSkills,
         string thinkingDirective, SoftwareInstallPermission installPermission, AgentApprovalMode approval,
         IProgress<string> status,
-        Action<string> onActivity, Action<string> onAnswer, Action<DelegationUpdate> onDelegation,
+        Action<ActivityUpdate> onActivityStep, Action<string> onAnswer, Action<DelegationUpdate> onDelegation,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         onAnswer("Design-time orchestrator response.");

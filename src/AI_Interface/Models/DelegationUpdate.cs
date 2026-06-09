@@ -19,7 +19,11 @@ public enum DelegationPhase
 
 /// <summary>
 /// One structured update about a delegated subtask. <paramref name="Index"/> is a 0-based per-run counter
-/// so the UI maps every update to the right card; <paramref name="Text"/> is the activity line (Activity)
-/// or the final answer/error (Finished), and empty for Started.
+/// so the UI maps every update to the right card; <paramref name="Text"/> is the final answer/error
+/// (Finished) and empty otherwise; <paramref name="Step"/> carries the specialist's structured activity
+/// step on the <see cref="DelegationPhase.Activity"/> phase (its own per-specialist-run index space), so the
+/// card body renders the same structured feed (icon · status · expandable result) as a single-agent run.
 /// </summary>
-public sealed record DelegationUpdate(DelegationPhase Phase, int Index, string AgentName, string Glyph, string Task, string Text);
+public sealed record DelegationUpdate(
+    DelegationPhase Phase, int Index, string AgentName, string Glyph, string Task, string Text,
+    ActivityUpdate? Step = null);

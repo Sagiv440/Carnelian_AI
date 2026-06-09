@@ -244,20 +244,32 @@ tool-calling loop (modelled on `ProjectAgentService.RunAsync`) whose main tool r
   (`onAnswer("_(stopped after N delegations …)_")`). A **repeat guard** (`DelegationKey` = lowercased,
   trimmed `agent_id` + `task`) returns the prior result instead of re-running an identical subtask, to break
   trivial loops. `OperationCanceledException` propagates.
-- **Structured delegation UI.** `RunAsync` takes an `Action<DelegationUpdate> onDelegation` (right before
-  `approve`). The lead's **own** reasoning still flows to the collapsible "work" block via `onActivity`; each
-  **delegation** instead emits structured `DelegationUpdate`s (`Models/DelegationUpdate.cs`:
-  `DelegationPhase Started/Activity/Finished`, a 0-based `Index`, agent name/glyph, task, text). The
-  orchestrator owns the counter at the `RunAsync` level (a single-element `int[]` holder — a `ref` can't flow
-  into the async `DelegateAsync`); `DelegateAsync` consumes `nextIndex[0]++` **only past** the missing-agent /
-  repeat-guard early returns, so every Started/Activity/Finished of one delegation shares the same `Index`.
-  The VM marshals `onDelegation` via `Dispatcher.UIThread.Post` and dispatches by phase to the assistant
-  `MessageViewModel`'s `StartDelegation`/`AppendDelegationActivity`/`FinishDelegation` (keyed by `Index`,
-  robust if not found), which back an `ObservableCollection<DelegationStepViewModel>` (`Delegations`, plus
-  `HasDelegations`). Each step renders as a **collapsible per-delegation card** (`MainWindow.axaml`, between
-  the work block and the answer `Segments`): header (glyph + name + task + running/done indicator) toggling
-  a body that shows the specialist's `Activity` (monospace) + `Result`. A failed specialist emits a
+- **Structured delegation UI (Phase 3B — structured feed everywhere).** `RunAsync` takes an
+  `Action<DelegationUpdate> onDelegation` (right before `approve`) **and** an `Action<ActivityUpdate>
+  onActivityStep` (replacing the old monospace `onActivity` — the orchestrator no longer has a monospace
+  channel). The lead's **own** steps now feed the **structured activity feed** on the message (the same
+  single-agent feed): interim narration is emitted as an `ActivityPhase.Note`, and each of its own
+  read/scan/`update_docs` tools as a `Started`/`Finished` pair, via `onActivityStep` on a `leadActivityIndex`
+  counter **independent** of the delegation counter. Each **delegation** emits structured `DelegationUpdate`s
+  (`Models/DelegationUpdate.cs`: `DelegationPhase Started/Activity/Finished`, a 0-based `Index`, agent
+  name/glyph, task, text, **plus an optional `ActivityUpdate? Step`** carrying the specialist's structured
+  step on the `Activity` phase). The orchestrator owns the delegation counter at the `RunAsync` level (a
+  single-element `int[]` holder — a `ref` can't flow into the async `DelegateAsync`); `DelegateAsync` consumes
+  `nextIndex[0]++` **only past** the missing-agent / repeat-guard early returns, so every
+  Started/Activity/Finished of one delegation shares the same `Index`. `DelegateAsync` passes the specialist
+  a real `onActivityStep` (`SpecialistStep`, which wraps each `ActivityUpdate` into a `DelegationUpdate` with
+  `Step` set) and a **discarding** `onActivity` (`_ => { }`) — the specialist's own per-run index space lands
+  in that delegation card's **own** feed. The VM marshals `onDelegation` via `Dispatcher.UIThread.Post` and
+  dispatches by phase to the assistant `MessageViewModel`'s
+  `StartDelegation`/`ApplyDelegationActivity`(routes `u.Step` into the card's feed)/`FinishDelegation` (keyed
+  by `Index`, robust if not found), which back an `ObservableCollection<DelegationStepViewModel>`
+  (`Delegations`, plus `HasDelegations`). Each step renders as a **collapsible per-delegation card**
+  (`MainWindow.axaml`, between the work block and the answer `Segments`): header (glyph + name + task +
+  running/done indicator) toggling a body that shows the specialist's **structured `Activities` feed** (the
+  shared `ActivityRowTemplate`, identical to a single-agent run) + `Result`. A failed specialist emits a
   `Finished` update with the error text. The lead's plain-text summary still goes to the answer bubble.
+  `ActivityFeed.Apply(feed, update)` (`ViewModels/ActivityFeed.cs`, `internal static`) is the **shared** feed
+  logic behind both `MessageViewModel.ApplyActivity` and `DelegationStepViewModel.ApplyActivity`.
 - **Testable helpers** (`internal static`, via `InternalsVisibleTo`): `BuildRosterCatalog`,
   `ShortDescription`, `ToolsSummary`, `DelegationKey`, and `CapTools` (the tool-ceiling intersection) —
   see `AgentOrchestratorTests`.
@@ -455,20 +467,30 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   `IsNearBottom()` so a manual scroll-up isn't overridden) so the end-of-turn offset lands against the
   final extent. Both pieces are needed: the spacer fixes *measurement* clipping; the re-scroll fixes
   *timing* undershoot.
-- **Live activity feed (Project mode).** A single-agent project run shows what the agent is doing *live*.
+- **Live activity feed (Project mode).** A project run shows what the agent is doing *live*.
   Phase 1: the "work" disclosure auto-expands while `MessageViewModel.IsStreaming` (label `WorkLabel`
   "Working…"/"Activity"), and the `Behaviors/AutoScrollToEnd` attached behavior keeps the box pinned to the
   newest line (releasing on manual scroll-up). Phase 2 replaces the monospace log with a **structured feed**:
   `ProjectAgentService.RunAsync` takes an optional `Action<ActivityUpdate>? onActivityStep` and emits, from
   its loop (not `ExecuteAsync`, which is unchanged), a `Note` for the model's interim narration, a `Started`
   (icon via `IconFor` + the pure `Describe`) before each tool, and a `Finished` (status via `IsFailure`) after.
-  The VM (single-agent path only) marshals these to `MessageViewModel.ApplyActivity`, backing
+  The VM marshals these to `MessageViewModel.ApplyActivity`, backing
   `ObservableCollection<ActivityStepViewModel>` (`Activities`), rendered as per-tool rows (icon · title ·
-  target · ⏳/✓/✗ status · expandable result) + italic note lines. `ShowWorkBlock = HasWork && !HasActivities`
-  hides the old monospace block for project runs (chat-with-thinking still uses it). **Orchestrator unchanged:**
-  `DelegateAsync` passes `onActivityStep: null`, so delegated specialists keep their delegation-card activity.
-  Status ✓ uses the themeable `AppSuccessBrush` (added to `App.axaml` ThemeDictionaries). `IconFor`/`IsFailure`
-  are `internal static` (unit-tested). (Lead/delegated structured feeds are a possible later phase.)
+  target · ⏳/✓/✗ status · expandable result) + italic note lines via the shared `ActivityRowTemplate`
+  (`MainWindow.axaml` `Window.Resources`). `ShowWorkBlock = HasWork && !HasActivities`
+  hides the old monospace block for project runs (chat-with-thinking still uses it). Status ✓ uses the
+  themeable `AppSuccessBrush` (added to `App.axaml` ThemeDictionaries). `IconFor`/`IsFailure` are
+  `internal static` (unit-tested).
+  - **Phase 3A — always-on current action.** The busy status bar (bottom of `MainWindow`, `IsBusy`) shows the
+    live step (icon · summary · target) instead of just "Working…": `ExecuteAsync` (and the lead's own-tool
+    loop) report `ProjectAgentService.CurrentActionLabel(tool, summary, detail)` (`internal static`, unit-tested
+    — collapses newlines, caps the target at 80 chars) to `IProgress<string> status`. The status `TextBlock`
+    is in a 2-col `Grid` with `TextTrimming` so a long label ellipsizes.
+  - **Phase 3B — structured feed for the Lead + specialists.** The orchestrator path is no longer monospace:
+    the Lead's own steps feed the message's structured `Activities`, and each delegation card renders the
+    specialist's structured feed (same `ActivityRowTemplate`). See *Structured delegation UI* under
+    *Project mode — the orchestrator / lead agent* for the `onActivityStep` / `DelegationUpdate.Step` /
+    `ActivityFeed.Apply` wiring.
 - **Design-time stubs** in `ViewModels/DesignTimeServices.cs` back the parameterless VM constructors so
   the XAML previewer works. If you add a service dependency to a container-resolved VM, add a matching
   stub (and update the VM's design-time constructor).

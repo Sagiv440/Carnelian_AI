@@ -229,7 +229,9 @@ public sealed class ProjectAgentService : IProjectAgentService
             }
         }
 
-        status.Report(summary + "…");
+        // Live "current action" (Phase 3A): show the actual step (icon · summary · target) in the busy
+        // status bar, so the user can see what's running without opening the activity feed.
+        status.Report(CurrentActionLabel(call.Name, summary, detail));
 
         string result;
         try
@@ -291,6 +293,25 @@ public sealed class ProjectAgentService : IProjectAgentService
         "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName, true),
         _ => (call.Name, "", true)
     };
+
+    /// <summary>
+    /// A compact one-line label for the live "current action" status bar (Phase 3A): the tool's glyph +
+    /// summary, plus a shortened target/command when present — e.g. "⌘ Run command · npm run build". Pure
+    /// and deterministic: the detail is collapsed to a single line and capped so a long command can't blow
+    /// out the status line (the bar also ellipsizes, but the cap keeps the string itself bounded).
+    /// </summary>
+    internal static string CurrentActionLabel(string tool, string summary, string detail)
+    {
+        var icon = IconFor(tool);
+        var d = (detail ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (d.Length == 0)
+            return $"{icon} {summary}";
+
+        const int max = 80;
+        if (d.Length > max)
+            d = d[..max] + "…";
+        return $"{icon} {summary} · {d}";
+    }
 
     /// <summary>Tool glyph for the structured activity feed's "Started" row.</summary>
     internal static string IconFor(string tool) => tool switch

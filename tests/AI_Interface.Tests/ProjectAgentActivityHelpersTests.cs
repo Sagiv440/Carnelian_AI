@@ -76,4 +76,82 @@ public sealed class ProjectAgentActivityHelpersTests
         // Guarded by string.IsNullOrEmpty at the top of the method.
         Assert.False(ProjectAgentService.IsFailure(result!));
     }
+
+    // ---- CurrentActionLabel: live "current action" status-bar string ---------------------------
+    // Pure/deterministic: glyph (from IconFor) + summary, plus a single-line, length-capped detail when
+    // present. No I/O. The icon prefix is asserted via IconFor's known mappings.
+
+    [Theory]
+    [InlineData("read_file", "Read file", "📄 Read file")]
+    [InlineData("list_directory", "List directory", "📂 List directory")]
+    [InlineData("write_file", "Write file", "✏️ Write file")]
+    [InlineData("unknown_tool", "Do a thing", "🔧 Do a thing")]
+    public void CurrentActionLabel_EmptyDetail_OmitsSeparator(string tool, string summary, string expected)
+    {
+        // Empty detail -> "{icon} {summary}" with NO " · " separator.
+        Assert.Equal(expected, ProjectAgentService.CurrentActionLabel(tool, summary, ""));
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("\t")]
+    [InlineData("\r\n")]
+    [InlineData(null)]
+    public void CurrentActionLabel_WhitespaceOrNullDetail_OmitsSeparator(string? detail)
+    {
+        // Whitespace/null collapses to empty after Replace+Trim -> no separator (same as empty detail).
+        Assert.Equal("📄 Read file", ProjectAgentService.CurrentActionLabel("read_file", "Read file", detail!));
+    }
+
+    [Fact]
+    public void CurrentActionLabel_NonEmptyDetail_AppendsWithMiddotSeparator()
+    {
+        var label = ProjectAgentService.CurrentActionLabel("run_command", "Run command", "npm run build");
+        Assert.Equal("⌘ Run command · npm run build", label);
+    }
+
+    [Fact]
+    public void CurrentActionLabel_MultiLineDetail_CollapsesToOneTrimmedLine()
+    {
+        // \r and \n in the detail become spaces and the whole thing is trimmed (a multi-line command
+        // collapses onto one status line). The interior newline-turned-space stays a single space here
+        // since the input has exactly one separator between the two parts.
+        var label = ProjectAgentService.CurrentActionLabel("run_command", "Run command", "  echo hi\r\n");
+        Assert.Equal("⌘ Run command · echo hi", label);
+    }
+
+    [Fact]
+    public void CurrentActionLabel_MultiLineDetail_EachLineBreakBecomesSpace()
+    {
+        // Two line breaks inside the body become two spaces (Replace is per-char, no whitespace collapsing).
+        var label = ProjectAgentService.CurrentActionLabel("run_command", "Run command", "a\nb\nc");
+        Assert.Equal("⌘ Run command · a b c", label);
+    }
+
+    [Fact]
+    public void CurrentActionLabel_LongDetail_TruncatedTo80CharsPlusOneEllipsis()
+    {
+        // A 200-char detail is capped to exactly the first 80 chars + a single ellipsis character.
+        var detail = new string('x', 200);
+        var label = ProjectAgentService.CurrentActionLabel("run_command", "Run command", detail);
+
+        const string prefix = "⌘ Run command · ";
+        Assert.StartsWith(prefix, label);
+
+        var shown = label[prefix.Length..];
+        Assert.Equal(81, shown.Length);          // 80 chars + 1 ellipsis char
+        Assert.EndsWith("…", shown);
+        Assert.Equal(new string('x', 80) + "…", shown);
+    }
+
+    [Fact]
+    public void CurrentActionLabel_DetailExactly80Chars_NotTruncated()
+    {
+        // The cap triggers only when length > 80, so exactly 80 is shown verbatim (no ellipsis).
+        var detail = new string('y', 80);
+        var label = ProjectAgentService.CurrentActionLabel("run_command", "Run command", detail);
+
+        Assert.Equal("⌘ Run command · " + detail, label);
+        Assert.DoesNotContain("…", label);
+    }
 }

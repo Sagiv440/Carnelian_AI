@@ -49,46 +49,55 @@ public class MessageViewModelDelegationTests
         Assert.Equal("Researcher", msg.Delegations[0].Header);
     }
 
-    // --- AppendDelegationActivity --------------------------------------------------------------
+    // --- ApplyDelegationActivity (structured specialist steps, Phase 3B) -----------------------
 
     [Fact]
-    public void AppendDelegationActivity_AppendsInPlace_GrowsActivity()
+    public void ApplyDelegationActivity_StartedThenFinished_AddsResolvedStructuredRow()
     {
         var msg = NewAssistant();
         msg.StartDelegation(0, "Code Buddy", "🛠", "do the thing");
 
-        msg.AppendDelegationActivity(0, "line1");
-        msg.AppendDelegationActivity(0, "line2");
+        // The specialist's structured steps land in THIS card's own feed (its own per-run index space).
+        msg.ApplyDelegationActivity(0, new ActivityUpdate(ActivityPhase.Started, 0, "✏️", "Write file", "App.jsx", "", false));
+        msg.ApplyDelegationActivity(0, new ActivityUpdate(ActivityPhase.Finished, 0, "", "", "", "Wrote 10 chars.", false));
 
-        // AppendActivity concatenates verbatim (no separator inserted).
-        Assert.Equal("line1line2", msg.Delegations[0].Activity);
+        var card = msg.Delegations[0];
+        Assert.True(card.HasActivities);
+        var row = Assert.Single(card.Activities);
+        Assert.Equal("Write file", row.Title);
+        Assert.Equal("App.jsx", row.Detail);
+        Assert.Equal("Wrote 10 chars.", row.Result);
+        Assert.False(row.IsRunning);
+        Assert.False(row.Failed);
     }
 
     [Fact]
-    public void AppendDelegationActivity_EmptyOrNullText_IsNoOp_DoesNotThrow()
+    public void ApplyDelegationActivity_Note_AddsMutedNoteRow()
     {
         var msg = NewAssistant();
         msg.StartDelegation(0, "Code Buddy", "🛠", "do the thing");
-        msg.AppendDelegationActivity(0, "seed");
 
-        msg.AppendDelegationActivity(0, "");
-        msg.AppendDelegationActivity(0, null!);
+        msg.ApplyDelegationActivity(0, new ActivityUpdate(ActivityPhase.Note, 0, "", "", "", "planning the edit", false));
 
-        // The empty/null guard in AppendActivity means the activity is unchanged.
-        Assert.Equal("seed", msg.Delegations[0].Activity);
+        var card = msg.Delegations[0];
+        Assert.True(card.HasActivities);
+        var row = Assert.Single(card.Activities);
+        Assert.True(row.IsNote);
+        Assert.Equal("planning the edit", row.Text);
     }
 
     [Fact]
-    public void AppendDelegationActivity_UnknownIndex_IsNoOp_DoesNotThrow()
+    public void ApplyDelegationActivity_UnknownIndex_IsNoOp_DoesNotThrow()
     {
         var msg = NewAssistant();
         msg.StartDelegation(0, "Code Buddy", "🛠", "do the thing");
 
         // No card at index 99 -> FindDelegation returns null and the call is a no-op (null-conditional).
-        msg.AppendDelegationActivity(99, "x");
+        msg.ApplyDelegationActivity(99, new ActivityUpdate(ActivityPhase.Started, 0, "✏️", "Write file", "x", "", false));
 
         Assert.Single(msg.Delegations);
-        Assert.Equal("", msg.Delegations[0].Activity);
+        Assert.False(msg.Delegations[0].HasActivities);
+        Assert.Empty(msg.Delegations[0].Activities);
     }
 
     // --- FinishDelegation ----------------------------------------------------------------------

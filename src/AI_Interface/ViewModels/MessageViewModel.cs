@@ -207,11 +207,11 @@ public sealed partial class MessageViewModel : ObservableObject
         HasDelegations = true;
     }
 
-    /// <summary>Appends an activity line to the delegation card with the given index. Call on the UI thread.</summary>
-    public void AppendDelegationActivity(int index, string text)
+    /// <summary>Routes a structured specialist step into the delegation card with the given index. Call on the UI thread.</summary>
+    public void ApplyDelegationActivity(int index, ActivityUpdate step)
     {
-        var step = FindDelegation(index);
-        step?.AppendActivity(text);
+        var card = FindDelegation(index);
+        card?.ApplyActivity(step);
     }
 
     /// <summary>Marks the delegation card with the given index finished and records its result. Call on the UI thread.</summary>
@@ -240,39 +240,8 @@ public sealed partial class MessageViewModel : ObservableObject
     /// </summary>
     public void ApplyActivity(ActivityUpdate u)
     {
-        switch (u.Phase)
-        {
-            case ActivityPhase.Note:
-                Activities.Add(new ActivityStepViewModel { Index = u.Index, IsNote = true, Text = u.Text });
-                HasActivities = true;
-                break;
-
-            case ActivityPhase.Started:
-                Activities.Add(new ActivityStepViewModel
-                {
-                    Index = u.Index, Icon = u.Icon, Title = u.Title, Detail = u.Detail, IsRunning = true
-                });
-                HasActivities = true;
-                break;
-
-            case ActivityPhase.Finished:
-                var step = FindActivity(u.Index);
-                if (step is null)
-                    return;
-                step.Result = u.Text ?? "";
-                step.Failed = u.Failed;
-                step.IsRunning = false;
-                break;
-        }
-    }
-
-    /// <summary>Finds the last non-note activity step with the given index (its Started row to resolve).</summary>
-    private ActivityStepViewModel? FindActivity(int index)
-    {
-        for (var i = Activities.Count - 1; i >= 0; i--)
-            if (!Activities[i].IsNote && Activities[i].Index == index)
-                return Activities[i];
-        return null;
+        ActivityFeed.Apply(Activities, u);
+        HasActivities = Activities.Count > 0;
     }
 
     public void SetSources(IEnumerable<SearchResult> sources)
