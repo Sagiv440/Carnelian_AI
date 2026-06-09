@@ -31,13 +31,24 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
     private readonly IProjectAgentService _projectAgent;
     private readonly IModelRouter _router;
     private readonly IAgentService _agents;
+    private readonly IProjectDocsService _docs;
 
-    public AgentOrchestrator(IProjectAgentService projectAgent, IModelRouter router, IAgentService agents)
+    public AgentOrchestrator(IProjectAgentService projectAgent, IModelRouter router, IAgentService agents, IProjectDocsService docs)
     {
         _projectAgent = projectAgent;
         _router = router;
         _agents = agents;
+        _docs = docs;
     }
+
+    /// <summary>
+    /// Maintenance directive appended to the lead's system prompt — the lead is a main agent that owns the
+    /// project handbook (.AI/AI_DOCS.md) via update_docs. Mirrors the single-agent directive.
+    /// </summary>
+    private const string DocsDirective =
+        "\n\nYou maintain this project's handbook (.AI/AI_DOCS.md) with the update_docs tool: update it when a " +
+        "durable rule, convention, architecture fact, or command changes — keep it concise and accurate. " +
+        "It is rules, not a log (use memory for transient facts).";
 
     public async Task RunAsync(
         Agent lead,
@@ -66,10 +77,12 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
 
         var messages = new List<ChatMessage>
         {
-            // The lead's persona + memory sit on top of the orchestrator's own coordination prompt.
+            // The lead's persona + memory sit on top of the orchestrator's own coordination prompt. As a main
+            // agent the lead owns the handbook, so the maintenance directive is always appended here.
             ChatMessage.System(
                 AgentPromptBuilder.PersonaPrefix(lead, memoryBlock) +
                 SystemPrompt(project, roster) +
+                DocsDirective +
                 thinkingDirective)
         };
         messages.AddRange(conversation);
@@ -141,6 +154,13 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 var path = GetString(call.Arguments, "path");
                 onActivity($"\n🔧 Read file  `{path ?? ""}`\n");
                 var result = ReadFile(project, path);
+                onActivity(IndentForDisplay(result) + "\n");
+                return Truncate(result);
+            }
+            case "update_docs":
+            {
+                onActivity($"\n🔧 Update project handbook  `.AI/{ProjectDocsService.FileName}`\n");
+                var result = UpdateDocs(project, GetString(call.Arguments, "content"));
                 onActivity(IndentForDisplay(result) + "\n");
                 return Truncate(result);
             }
@@ -234,6 +254,8 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 projectSkills,
                 installPermission,
                 specialist.MemoryEnabled && memoryEnabled,
+                // Delegated specialists never get update_docs — only the main agent (the lead) owns the handbook.
+                allowDocsUpdate: false,
                 status,
                 SpecialistActivity,
                 CaptureAnswer,
@@ -412,6 +434,29 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         }
     }
 
+    /// <summary>
+    /// Creates or overwrites the project handbook (.AI/AI_DOCS.md) with the lead's authored Markdown. Errors
+    /// are caught here (the lead loop has no per-tool try/catch) and returned as the tool result so a failed
+    /// write doesn't abort the coordination run.
+    /// </summary>
+    private string UpdateDocs(Project project, string? content)
+    {
+        content = (content ?? "").Trim();
+        if (content.Length == 0)
+            return "Provide non-empty 'content' — the COMPLETE new handbook markdown to write.";
+
+        try
+        {
+            _docs.Save(project.Directory, content);
+            return $"Updated the project handbook (.AI/{ProjectDocsService.FileName}) — {content.Length} chars. " +
+                   "It loads as authoritative project guidance on the next turn.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error: {ex.Message}";
+        }
+    }
+
     private static StringComparison PathComparison =>
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
@@ -491,7 +536,10 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                         task = new { type = "string", description = "A complete, self-contained brief of what the specialist should do, with all needed context and paths." }
                     },
                     required = new[] { "agent_id", "task" }
-                }))
+                })),
+            // The lead is a main agent: it owns the project handbook. update_docs writes only to the fixed
+            // .AI/AI_DOCS.md path (so it isn't allow-list-gated) and is shared verbatim with the single agent.
+            new("update_docs", ProjectAgentService.UpdateDocsToolDescription, ProjectAgentService.UpdateDocsSchema())
         };
 
         if (leadTools.Allows(AgentToolGroup.ReadFiles))

@@ -192,6 +192,11 @@ into the agent's system prompt (the single agent, the **Lead**, and any speciali
 and treated as authoritative project instructions. It's loaded only in Project mode — never in Chat, Web
 Search, or Deep Research — and the active-project card shows **📄 AI_DOCS loaded** when present.
 
+You can write it by hand, or let the **main agent maintain it**: the top-level agent (the one you pick, or
+the **Lead**) has an `update_docs` tool and is told to keep the handbook current — like a developer tending a
+CLAUDE.md — when a durable rule or convention changes (not for running notes; those go to memory). Delegated
+specialists can't touch it, and the file is locked so only `update_docs` can change it.
+
 **Custom agents** are stored as portable **Markdown files** (Claude-Code-style frontmatter + a persona
 body), so you can move them between tools:
 

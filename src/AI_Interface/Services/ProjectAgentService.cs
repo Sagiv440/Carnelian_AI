@@ -28,8 +28,48 @@ public sealed class ProjectAgentService : IProjectAgentService
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(2);
 
     private readonly IMemoryService _memory;
+    private readonly IProjectDocsService _docs;
 
-    public ProjectAgentService(IMemoryService memory) => _memory = memory;
+    public ProjectAgentService(IMemoryService memory, IProjectDocsService docs)
+    {
+        _memory = memory;
+        _docs = docs;
+    }
+
+    /// <summary>
+    /// Maintenance directive appended to the system prompt when the agent owns the handbook (top-level run).
+    /// Mirrors how Claude Code keeps CLAUDE.md: durable rules go here, transient facts go to memory.
+    /// </summary>
+    private const string DocsDirective =
+        "\n\nYou maintain this project's handbook (.AI/AI_DOCS.md) with the update_docs tool: update it when a " +
+        "durable rule, convention, architecture fact, or command changes — keep it concise and accurate. " +
+        "It is rules, not a log (use memory for transient facts).";
+
+    /// <summary>
+    /// The update_docs tool's model-facing description, encoding the CLAUDE.md-maintenance discipline. Shared
+    /// with <see cref="AgentOrchestrator"/> so the lead and the single agent advertise an identical tool.
+    /// </summary>
+    internal const string UpdateDocsToolDescription =
+        "Create or update this project's handbook at .AI/AI_DOCS.md — the authoritative 'how this project " +
+        "works' guide you and other agents read every turn. Submit the COMPLETE new handbook in `content` " +
+        "(it replaces the file). Rules (same discipline a developer uses for a CLAUDE.md): (1) Update only " +
+        "when a DURABLE rule, convention, architecture fact, or build/run/test command changes — things a " +
+        "future run must know. (2) It is RULES/orientation, NOT a log or scratchpad — transient notes and " +
+        "learned facts go to memory (the remember tool), never here. (3) Keep it concise and accurate; a " +
+        "stale or bloated handbook is worse than none. (4) You can see the current handbook in your context " +
+        "— revise it surgically, preserving useful existing content, rather than discarding it. (5) Don't " +
+        "update for trivial or one-off things.";
+
+    /// <summary>The JSON schema for the update_docs tool's single required <c>content</c> argument. Shared with the orchestrator.</summary>
+    internal static JsonElement UpdateDocsSchema() => JsonSerializer.SerializeToElement(new
+    {
+        type = "object",
+        properties = new
+        {
+            content = new { type = "string", description = "The COMPLETE new handbook markdown (it replaces the file)." }
+        },
+        required = new[] { "content" }
+    });
 
     public async Task RunAsync(
         IChatClient client,
@@ -44,6 +84,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         string projectSkills,
         SoftwareInstallPermission installPermission,
         bool memoryEnabled,
+        bool allowDocsUpdate,
         IProgress<string> status,
         Action<string> onActivity,
         Action<string> onAnswer,
@@ -55,12 +96,14 @@ public sealed class ProjectAgentService : IProjectAgentService
         // The step budget is set by the active agent's autonomy level; fall back to the Guided default.
         if (maxSteps <= 0)
             maxSteps = DefaultMaxSteps;
-        var tools = BuildTools(allowedTools, installPermission, memoryEnabled);
+        var tools = BuildTools(allowedTools, installPermission, memoryEnabled, allowDocsUpdate);
 
         var messages = new List<ChatMessage>
         {
-            // The active agent's persona sits on top of the service-owned sandbox prompt.
-            ChatMessage.System(personaPrefix + SystemPrompt(project, installPermission) + thinkingDirective + projectSkills)
+            // The active agent's persona sits on top of the service-owned sandbox prompt. The handbook
+            // maintenance directive is added only when this is a top-level (main) run that owns update_docs.
+            ChatMessage.System(personaPrefix + SystemPrompt(project, installPermission) +
+                (allowDocsUpdate ? DocsDirective : "") + thinkingDirective + projectSkills)
         };
         messages.AddRange(conversation);
 
@@ -88,7 +131,8 @@ public sealed class ProjectAgentService : IProjectAgentService
             {
                 ct.ThrowIfCancellationRequested();
                 var result = await ExecuteAsync(
-                    project, call, approvalMode, allowedTools, installPermission, status, onActivity, approve, ct)
+                    project, call, approvalMode, allowedTools, installPermission, allowDocsUpdate,
+                    status, onActivity, approve, ct)
                     .ConfigureAwait(false);
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
             }
@@ -101,7 +145,7 @@ public sealed class ProjectAgentService : IProjectAgentService
 
     private async Task<string> ExecuteAsync(
         Project project, AgentToolCall call, AgentApprovalMode approvalMode,
-        AgentTools allowedTools, SoftwareInstallPermission installPermission,
+        AgentTools allowedTools, SoftwareInstallPermission installPermission, bool allowDocsUpdate,
         IProgress<string> status, Action<string> onActivity,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
@@ -109,6 +153,15 @@ public sealed class ProjectAgentService : IProjectAgentService
         var (summary, detail, destructive) = Describe(project, call, path);
 
         onActivity($"\n🔧 {summary}{(string.IsNullOrEmpty(detail) ? "" : $"  `{detail}`")}\n");
+
+        // Defense in depth: update_docs is offered only to the top-level (main) agent and isn't gated by the
+        // AgentTools allow-list below, so refuse it here for a delegated specialist that calls it anyway.
+        if (call.Name == "update_docs" && !allowDocsUpdate)
+        {
+            onActivity("   ⛔ blocked — only the main agent may update the project handbook\n");
+            return "Only the main (top-level) agent may update the project handbook (.AI/" +
+                   ProjectDocsService.FileName + "). A delegated specialist can't.";
+        }
 
         // Defense in depth: even though disallowed tools aren't advertised, refuse one if the model calls
         // it anyway (e.g. it hallucinated a tool name) rather than silently running it.
@@ -172,6 +225,7 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "remember"       => Remember(project, GetString(call.Arguments, "text"), GetString(call.Arguments, "scope")),
                 "create_skill"   => CreateSkill(project, GetString(call.Arguments, "name"),
                                         GetString(call.Arguments, "content"), GetString(call.Arguments, "description")),
+                "update_docs"    => UpdateDocs(project, GetString(call.Arguments, "content")),
                 _ => $"Unknown tool '{call.Name}'."
             };
         }
@@ -210,6 +264,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
         "remember"       => ("Remember a note", GetString(call.Arguments, "text") ?? "", false),
         "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
+        "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName, true),
         _ => (call.Name, "", true)
     };
 
@@ -259,6 +314,23 @@ public sealed class ProjectAgentService : IProjectAgentService
                "It loads as project guidance the next time this project is opened.";
     }
 
+    /// <summary>
+    /// Creates or overwrites the project handbook at <c>.AI/AI_DOCS.md</c> with the model-authored Markdown.
+    /// This is the SOLE writer of that file (write_file/delete_file/delete_folder refuse it), so the handbook
+    /// stays under a single sanctioned, approval-gated path. It loads as authoritative project guidance on the
+    /// next turn (the VM re-scans after every project-agent turn).
+    /// </summary>
+    private string UpdateDocs(Project project, string? content)
+    {
+        content = (content ?? "").Trim();
+        if (content.Length == 0)
+            return "Provide non-empty 'content' — the COMPLETE new handbook markdown to write.";
+
+        _docs.Save(project.Directory, content);
+        return $"Updated the project handbook (.AI/{ProjectDocsService.FileName}) — {content.Length} chars. " +
+               "It loads as authoritative project guidance on the next turn.";
+    }
+
     /// <summary>Lowercases a name and reduces it to a safe filename slug (letters/digits → '-' runs collapsed).</summary>
     private static string Slugify(string s)
     {
@@ -299,6 +371,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "delete_file" or "delete_folder"    => AgentToolGroup.DeleteFiles,
         "run_command"                       => AgentToolGroup.RunCommands,
         "install_software"                  => AgentToolGroup.InstallSoftware,
+        "update_docs"                       => null, // writes only to the fixed handbook path — not allow-list-gated
         _                                   => null
     };
 
@@ -344,6 +417,8 @@ public sealed class ProjectAgentService : IProjectAgentService
     {
         if (!TryResolve(project.Directory, path, out var full, out var error))
             return error;
+        if (IsHandbookPath(project, full))
+            return HandbookGuardMessage;
         var dir = Path.GetDirectoryName(full);
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
@@ -363,6 +438,8 @@ public sealed class ProjectAgentService : IProjectAgentService
     {
         if (!TryResolve(project.Directory, path, out var full, out var error))
             return error;
+        if (IsHandbookPath(project, full))
+            return HandbookGuardMessage;
         if (!File.Exists(full))
             return $"File not found: {Rel(project, full)}";
         File.Delete(full);
@@ -373,10 +450,15 @@ public sealed class ProjectAgentService : IProjectAgentService
     {
         if (!TryResolve(project.Directory, path, out var full, out var error))
             return error;
+        if (IsHandbookPath(project, full))
+            return HandbookGuardMessage;
         if (string.Equals(Path.GetFullPath(full).TrimEnd(Path.DirectorySeparatorChar),
                            Path.GetFullPath(project.Directory).TrimEnd(Path.DirectorySeparatorChar),
                            PathComparison))
             return "Refusing to delete the project root directory itself.";
+        if (ContainsHandbook(project, full))
+            return "Refusing to delete the .AI folder — it holds the project handbook (.AI/" +
+                   ProjectDocsService.FileName + "), skills, agents, and memory. Use update_docs to change the handbook.";
         if (!Directory.Exists(full))
             return $"Folder not found: {Rel(project, full)}";
         Directory.Delete(full, recursive: true);
@@ -492,6 +574,36 @@ public sealed class ProjectAgentService : IProjectAgentService
         return rel == "." ? "(project root)" : rel;
     }
 
+    /// <summary>Message returned when a generic write/delete tool targets the handbook (use update_docs instead).</summary>
+    private const string HandbookGuardMessage =
+        "The project handbook (.AI/" + ProjectDocsService.FileName + ") can only be changed with the update_docs tool.";
+
+    /// <summary>
+    /// True when <paramref name="fullPath"/> is the project handbook (.AI/AI_DOCS.md). The generic
+    /// write_file/delete_file/delete_folder tools refuse it so update_docs stays the sole writer — this stops
+    /// any agent (including a delegated specialist that lacks update_docs) from clobbering the handbook.
+    /// </summary>
+    internal static bool IsHandbookPath(Project project, string fullPath)
+    {
+        var handbook = Path.GetFullPath(Path.Combine(project.Directory, ".AI", ProjectDocsService.FileName));
+        return string.Equals(
+            Path.GetFullPath(fullPath).TrimEnd(Path.DirectorySeparatorChar),
+            handbook.TrimEnd(Path.DirectorySeparatorChar),
+            PathComparison);
+    }
+
+    /// <summary>
+    /// True when <paramref name="fullDir"/> is a directory that CONTAINS the handbook (the <c>.AI</c> folder,
+    /// or an ancestor of it). Lets delete_folder refuse wiping the handbook — and the rest of <c>.AI</c>
+    /// (skills, agents, memory, chats) — by deleting a parent folder rather than the file itself.
+    /// </summary>
+    internal static bool ContainsHandbook(Project project, string fullDir)
+    {
+        var handbook = Path.GetFullPath(Path.Combine(project.Directory, ".AI", ProjectDocsService.FileName));
+        var dir = Path.GetFullPath(fullDir).TrimEnd(Path.DirectorySeparatorChar);
+        return handbook.StartsWith(dir + Path.DirectorySeparatorChar, PathComparison);
+    }
+
     private static string? GetString(JsonElement args, string name)
     {
         if (args.ValueKind != JsonValueKind.Object || !args.TryGetProperty(name, out var v))
@@ -542,7 +654,7 @@ public sealed class ProjectAgentService : IProjectAgentService
     /// gates must allow). An unrestricted agent (the default) offers the full set, so behaviour is unchanged
     /// when the user hasn't restricted anything.
     /// </summary>
-    private static IReadOnlyList<AgentTool> BuildTools(AgentTools allowed, SoftwareInstallPermission installPermission, bool memoryEnabled)
+    private static IReadOnlyList<AgentTool> BuildTools(AgentTools allowed, SoftwareInstallPermission installPermission, bool memoryEnabled, bool allowDocsUpdate)
     {
         static JsonElement Schema(object o) => JsonSerializer.SerializeToElement(o);
 
@@ -632,6 +744,12 @@ public sealed class ProjectAgentService : IProjectAgentService
                 },
                 required = new[] { "name", "content" }
             })));
+
+        // update_docs: maintains the project handbook (.AI/AI_DOCS.md). Like create_skill it writes only to a
+        // fixed, controlled path so it isn't gated by the allow-list — but it's offered ONLY to a top-level
+        // (main) agent run (allowDocsUpdate), never to a delegated specialist.
+        if (allowDocsUpdate)
+            tools.Add(new AgentTool("update_docs", UpdateDocsToolDescription, UpdateDocsSchema()));
 
         // remember: not a file/command tool, so it isn't gated by the allow-list — only by the memory switch.
         if (memoryEnabled)

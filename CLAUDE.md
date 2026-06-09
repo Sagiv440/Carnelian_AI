@@ -169,6 +169,18 @@ see **Project skills**).
   no `ProjectAgentService`/`AgentOrchestrator` signature change. **Project mode only** — it is *not* added to
   the Chat / Web Search / Deep Research prompts (those use `PersonaPrefix()`, left untouched). The active-project
   card shows a `📄 AI_DOCS loaded` indicator (`HasProjectDocs`).
+- **`update_docs` tool — the agent can maintain the handbook.** The **main (top-level)** Project-mode agent
+  gets an `update_docs` tool (`IProjectDocsService.Save` writes the full new handbook), offered like
+  `create_skill` (ungated by the `AgentTools` allow-list, approval-gated **destructive** so the global
+  ConfirmDestructive/ConfirmEverything mode asks first). Its tool description carries the CLAUDE.md discipline
+  (durable rules only, *not* a log — transient facts go to memory; revise surgically; keep it accurate). **Only
+  top-level agents get it:** `ProjectAgentService.RunAsync` takes `bool allowDocsUpdate` — the VM's single-agent
+  path passes `true`, the Lead gets it via `BuildLeadTools`, and `AgentOrchestrator.DelegateAsync` passes
+  **`false`** so **delegated specialists can't**. Defense in depth: `ExecuteAsync` *refuses* `update_docs` when
+  `allowDocsUpdate` is false (not merely "not advertised"). The handbook path is **locked** — `write_file`/
+  `delete_file` refuse `.AI/AI_DOCS.md` (`IsHandbookPath`) and `delete_folder` refuses any folder that contains
+  it, i.e. `.AI` itself (`ContainsHandbook`) — so `update_docs` is the *sole* writer. (`IsHandbookPath`/
+  `ContainsHandbook` are `internal static`, unit-tested.)
 - **Project skills.** On activation `IProjectSkillService` scans the project for skill files (`SKILL.md`,
   `*.skill.md`, or any markdown under a `skills` folder; bounded, skipping `.AI`/`.git`/`node_modules`/…)
   and their text is appended to the agent's system prompt. The project's own **`.AI/skills/`** folder is

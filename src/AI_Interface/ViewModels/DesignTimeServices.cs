@@ -196,6 +196,7 @@ internal sealed class DesignProjectSkillService : IProjectSkillService
 internal sealed class DesignProjectDocsService : IProjectDocsService
 {
     public string Load(string projectDirectory) => "";
+    public string Save(string projectDirectory, string content) => "";
 }
 
 internal sealed class DesignHardwareService : IHardwareService
@@ -213,8 +214,8 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
         IChatClient client, Project project, string model, IReadOnlyList<ChatMessage> conversation,
         AgentApprovalMode approvalMode, int maxSteps, AgentTools allowedTools, string personaPrefix,
         string thinkingDirective, string projectSkills, SoftwareInstallPermission installPermission,
-        bool memoryEnabled, IProgress<string> status, Action<string> onActivity, Action<string> onAnswer,
-        Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+        bool memoryEnabled, bool allowDocsUpdate, IProgress<string> status, Action<string> onActivity,
+        Action<string> onAnswer, Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         onAnswer("Design-time project agent response.");
         return Task.CompletedTask;

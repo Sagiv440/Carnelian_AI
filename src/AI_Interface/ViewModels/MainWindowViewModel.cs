@@ -804,10 +804,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(approvalMode);
 
             // ProjectContext() = the AI_DOCS.md handbook + project skills, injected only in Project mode.
+            // allowDocsUpdate: true — the active top-level agent is the main agent and may maintain the
+            // handbook via update_docs (delegated specialists, run from the orchestrator, get false).
             await _agent.RunAsync(
                 client, ActiveProject, model, conversation, approval, maxSteps,
                 SelectedAgent?.Tools ?? new AgentTools(),
-                PersonaPrefix(), directives, ProjectContext(), _settings.Current.SoftwareInstall, MemoryActive(), progress,
+                PersonaPrefix(), directives, ProjectContext(), _settings.Current.SoftwareInstall, MemoryActive(),
+                allowDocsUpdate: true, progress,
                 OnActivity, OnAnswer, RequestToolApprovalAsync, ct);
         }
 

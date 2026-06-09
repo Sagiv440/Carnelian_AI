@@ -43,4 +43,14 @@ public sealed class ProjectDocsService : IProjectDocsService
             return "";
         }
     }
+
+    public string Save(string projectDirectory, string content)
+    {
+        // Let exceptions propagate (caught by the tool's ExecuteAsync) — unlike Load, a failed write must be
+        // surfaced to the agent rather than silently swallowed. update_docs is the sole writer of this file.
+        var path = FilePath(projectDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+        return path;
+    }
 }

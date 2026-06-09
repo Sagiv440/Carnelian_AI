@@ -115,4 +115,57 @@ public sealed class ProjectDocsServiceTests : IDisposable
         // Assert: best-effort — returns empty, no exception.
         Assert.Equal("", result);
     }
+
+    [Fact]
+    public void Save_NoAiFolder_CreatesFolderWritesFileAndReturnsAbsolutePath()
+    {
+        // Arrange: a fresh temp dir with no .AI folder.
+        var aiDir = Path.Combine(_tempDir, ".AI");
+        var expectedPath = Path.Combine(_tempDir, ".AI", ProjectDocsService.FileName);
+        Assert.False(Directory.Exists(aiDir)); // precondition
+
+        // Act
+        var returned = _sut.Save(_tempDir, "doc");
+
+        // Assert: .AI created, file exists, returned path is the expected absolute path.
+        Assert.True(Directory.Exists(aiDir));
+        Assert.True(File.Exists(expectedPath));
+        Assert.Equal(expectedPath, returned);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsContent()
+    {
+        // Act
+        _sut.Save(_tempDir, "hello");
+        var loaded = _sut.Load(_tempDir);
+
+        // Assert
+        Assert.Equal("hello", loaded);
+    }
+
+    [Fact]
+    public void Save_CalledTwice_SecondWins()
+    {
+        // Act
+        _sut.Save(_tempDir, "first");
+        _sut.Save(_tempDir, "second");
+
+        // Assert: overwrites, not appends.
+        Assert.Equal("second", _sut.Load(_tempDir));
+    }
+
+    [Fact]
+    public void Save_WritesContentVerbatim()
+    {
+        // Arrange: leading/trailing whitespace that Save must NOT alter (Load trims on read, so assert
+        // against the file directly for the verbatim view).
+        const string content = "  # Handbook\nrules\n  ";
+
+        // Act
+        var path = _sut.Save(_tempDir, content);
+
+        // Assert: the bytes on disk are exactly what was passed in.
+        Assert.Equal(content, File.ReadAllText(path));
+    }
 }
