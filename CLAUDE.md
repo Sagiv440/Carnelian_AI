@@ -116,11 +116,13 @@ same name when re-serialising the running conversation. Gemini has no system rol
 
 **Project mode — the agent** (`ProjectAgentService`). Loop: advertise tools → run the tools the model
 requests → feed each result back as a `ChatRole.Tool` message → repeat until the model replies in plain
-text (step-budget cap — a `maxSteps` arg to `RunAsync`, set by the active agent's autonomy; `≤0` falls back
-to `DefaultMaxSteps`=24). Tools: `list_directory`, `read_file`, `write_file`, `create_folder`,
+text (step-budget cap — a `maxSteps` arg to `RunAsync`, derived from the global approval setting via
+`AutonomyMap.ForApprovalMode`; `≤0` falls back to `DefaultMaxSteps`=24). Tools: `list_directory`,
+`read_file`, `write_file`, `create_folder`,
 `delete_file`, `delete_folder`, `run_command`, `install_software` (offered only when permitted),
-`remember` (offered only when memory is on — see **Memory**), and `create_skill` (always offered —
-see **Project skills**).
+`remember` (offered only when memory is on — see **Memory**), `create_skill` (always offered —
+see **Project skills**), and `update_docs` (offered only to the top-level/main agent when
+`allowDocsUpdate` — see **`update_docs` tool**).
 - **Per-agent tool allow-list (Phase 2).** `RunAsync` takes the active agent's `AgentTools`; `BuildTools`
   advertises **only the permitted groups** (ReadFiles→list/read, WriteFiles→write/create, DeleteFiles→
   delete, RunCommands→run_command, InstallSoftware→install_software). `ExecuteAsync` refuses a disallowed
