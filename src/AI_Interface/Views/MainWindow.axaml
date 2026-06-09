@@ -452,7 +452,10 @@
 
             <!-- Transcript -->
             <Grid Grid.Row="1" Margin="0,0,0,4">
-                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,8,14">
+                <!-- Bottom padding is a safety margin so the last line always clears the composer even if a
+                     late layout pass is missed; the real fix for last-line clipping is in the code-behind's
+                     OnScrollToEndRequested (re-scroll once the layout settles). -->
+                <ScrollViewer x:Name="TranscriptScroll" Padding="6,4,8,18">
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:MessageViewModel">

@@ -7,7 +7,6 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using Avalonia.Threading;
 using AI_Interface.Models;
 using AI_Interface.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -170,12 +169,51 @@ public partial class MainWindow : Window
             _vm.SpeakMessageCommand.Execute(message);
     }
 
+    // A re-scroll is queued for the next settled layout pass (see OnScrollToEndRequested).
+    private bool _scrollPending;
+
     private void OnScrollToEndRequested(object? sender, EventArgs e)
     {
-        // Defer so layout reflects the just-added/extended message before we scroll.
-        Dispatcher.UIThread.Post(
-            () => TranscriptScroll.Offset = TranscriptScroll.Offset.WithY(TranscriptScroll.Extent.Height),
-            DispatcherPriority.Background);
+        // The VM only raises this during an active turn (each streamed delta, activity/answer update,
+        // and once in the turn's finally), i.e. every call means "follow the bottom" — so we always
+        // scroll to the end here, which preserves the streaming auto-scroll behaviour.
+        TranscriptScroll.ScrollToEnd();
+
+        // …then re-scroll once the layout pass actually settles. Why both: the offset that pins the
+        // bottom is computed against the ScrollViewer's *current* Extent/Viewport, and at the end of a
+        // turn several layout changes land late and out of order — the final answer Segments rebuild, a
+        // delegation card flipping to "done", and the busy status row collapsing (IsBusy→false) which
+        // grows the viewport. The immediate ScrollToEnd reads a stale (too-short) Extent and undershoots,
+        // so the last line ends up just below the fold, pinned against the composer. Re-scrolling on the
+        // next LayoutUpdated guarantees the Extent is final when we land the offset, so the last line
+        // clears the composer. One-shot + guarded so a deferred re-scroll never yanks the view down if
+        // the user has meanwhile scrolled up to read earlier messages.
+        if (_scrollPending)
+            return;
+        _scrollPending = true;
+        TranscriptScroll.LayoutUpdated += OnTranscriptLayoutUpdated;
+    }
+
+    private void OnTranscriptLayoutUpdated(object? sender, EventArgs e)
+    {
+        TranscriptScroll.LayoutUpdated -= OnTranscriptLayoutUpdated;
+        _scrollPending = false;
+
+        // Only follow the bottom if the view is still near it. If the user dragged the scrollbar up in
+        // the interval since the request, leave them where they are.
+        if (IsNearBottom())
+            TranscriptScroll.ScrollToEnd();
+    }
+
+    // True when the view is effectively pinned to the bottom (within a line's slack), or when the
+    // content is shorter than the viewport (nothing to scroll). The slack absorbs sub-pixel rounding
+    // and the immediate ScrollToEnd's possible undershoot — exactly the gap we're closing.
+    private bool IsNearBottom()
+    {
+        var maxY = TranscriptScroll.Extent.Height - TranscriptScroll.Viewport.Height;
+        if (maxY <= 0)
+            return true;
+        return TranscriptScroll.Offset.Y >= maxY - 64;
     }
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
