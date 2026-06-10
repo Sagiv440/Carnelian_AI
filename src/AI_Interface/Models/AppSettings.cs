@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace AI_Interface.Models;
@@ -93,6 +94,14 @@ public sealed class AppSettings
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public SoftwareInstallPermission SoftwareInstall { get; set; } = SoftwareInstallPermission.Never;
+
+    // --- MCP (Model Context Protocol) servers ---
+
+    /// <summary>
+    /// Configured MCP servers (Settings → AI Features → MCP Servers). Each enabled server's discovered tools
+    /// are offered to the Project-mode agent, namespaced <c>mcp__&lt;id&gt;__&lt;tool&gt;</c>. Empty by default.
+    /// </summary>
+    public List<McpServerConfig> McpServers { get; set; } = new();
 
     // --- Memory ---
 

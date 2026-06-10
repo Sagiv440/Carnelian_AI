@@ -8,6 +8,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using AI_Interface.Models;
+using AI_Interface.Services;
 using AI_Interface.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,6 +38,8 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _vm?.Dispose(); // release the project file watcher / debounce timer if still running
+        // Best-effort: tear down any MCP server child processes we launched this session.
+        try { _ = App.Services.GetService<IMcpService>()?.DisconnectAllAsync(); } catch { /* shutting down */ }
         base.OnClosed(e);
     }
 
@@ -47,6 +50,7 @@ public partial class MainWindow : Window
             _vm.ScrollToEndRequested -= OnScrollToEndRequested;
             _vm.SettingsRequested -= OnSettingsRequested;
             _vm.AttachFilesRequested -= OnAttachFilesRequested;
+            _vm.McpResourcesRequested -= OnMcpResourcesRequested;
             _vm.ProjectRequested -= OnProjectRequested;
             _vm.ToolApprovalRequested -= OnToolApprovalRequested;
         }
@@ -58,6 +62,7 @@ public partial class MainWindow : Window
             _vm.ScrollToEndRequested += OnScrollToEndRequested;
             _vm.SettingsRequested += OnSettingsRequested;
             _vm.AttachFilesRequested += OnAttachFilesRequested;
+            _vm.McpResourcesRequested += OnMcpResourcesRequested;
             _vm.ProjectRequested += OnProjectRequested;
             _vm.ToolApprovalRequested += OnToolApprovalRequested;
         }
@@ -128,6 +133,16 @@ public partial class MainWindow : Window
             _vm?.AddAttachments(picked);
     }
 
+    private async void OnMcpResourcesRequested(object? sender, EventArgs e)
+    {
+        var vm = App.Services.GetRequiredService<McpResourceBrowserViewModel>();
+        vm.Initialize(_vm?.ActiveProjectDirectory);
+        var dialog = new McpResourceBrowserWindow { DataContext = vm };
+        var result = await dialog.ShowDialog<IReadOnlyList<McpAttachedResource>?>(this);
+        if (result is { Count: > 0 })
+            _vm?.AddMcpResources(result);
+    }
+
     private async void OnSettingsRequested(object? sender, EventArgs e)
     {
         var settingsVm = App.Services.GetRequiredService<SettingsViewModel>();
@@ -139,6 +154,7 @@ public partial class MainWindow : Window
         // Scope the Agents panel + memory lists to the active project so its customs/facts appear.
         var projectDir = _vm?.ActiveProjectDirectory is { Length: > 0 } dir ? dir : null;
         settingsVm.AgentsPanel.Initialize(projectDir);
+        settingsVm.McpPanel.Initialize(projectDir);
         settingsVm.InitializeMemory(projectDir);
 
         var settings = new SettingsWindow { DataContext = settingsVm };
@@ -148,6 +164,9 @@ public partial class MainWindow : Window
         _vm?.LoadAgents();
         // Voice may have been installed/changed in Settings — refresh the composer's Auto-read toggle.
         _vm?.RefreshVoiceAvailability();
+        // MCP servers may have changed — re-discover prompt slash-commands for the active project.
+        if (_vm is not null)
+            _ = _vm.RefreshMcpPromptCommandsAsync();
         settingsVm.ConnectRequested -= OnConnect;
     }
 

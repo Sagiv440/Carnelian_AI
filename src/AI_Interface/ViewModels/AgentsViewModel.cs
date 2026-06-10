@@ -63,6 +63,7 @@ public sealed partial class AgentsViewModel : ViewModelBase
     [ObservableProperty] private bool _toolDeleteFiles = true;
     [ObservableProperty] private bool _toolRunCommands = true;
     [ObservableProperty] private bool _toolInstallSoftware;
+    [ObservableProperty] private bool _toolMcp = true;
 
     /// <summary>True when a custom agent is selected (built-ins are read-only).</summary>
     public bool IsEditable => SelectedAgent is { IsBuiltIn: false };
@@ -134,6 +135,7 @@ public sealed partial class AgentsViewModel : ViewModelBase
         ToolDeleteFiles = tools.Allows(AgentToolGroup.DeleteFiles);
         ToolRunCommands = tools.Allows(AgentToolGroup.RunCommands);
         ToolInstallSoftware = tools.Allows(AgentToolGroup.InstallSoftware);
+        ToolMcp = tools.Allows(AgentToolGroup.Mcp);
 
         EditProactive = value?.Proactive ?? false;
         EditIsOrchestrator = value?.IsOrchestrator ?? false;
@@ -226,6 +228,7 @@ public sealed partial class AgentsViewModel : ViewModelBase
     partial void OnToolDeleteFilesChanged(bool value) => PersistTool(t => t.DeleteFiles = value);
     partial void OnToolRunCommandsChanged(bool value) => PersistTool(t => t.RunCommands = value);
     partial void OnToolInstallSoftwareChanged(bool value) => PersistTool(t => t.InstallSoftware = value);
+    partial void OnToolMcpChanged(bool value) => PersistTool(t => t.Mcp = value);
 
     partial void OnEditProactiveChanged(bool value) => Persist(a => a.Proactive = value);
 
@@ -290,7 +293,8 @@ public sealed partial class AgentsViewModel : ViewModelBase
                 WriteFiles = src.Tools.WriteFiles,
                 DeleteFiles = src.Tools.DeleteFiles,
                 RunCommands = src.Tools.RunCommands,
-                InstallSoftware = src.Tools.InstallSoftware
+                InstallSoftware = src.Tools.InstallSoftware,
+                Mcp = src.Tools.Mcp
             },
             MemoryEnabled = src.MemoryEnabled,
             Proactive = src.Proactive,

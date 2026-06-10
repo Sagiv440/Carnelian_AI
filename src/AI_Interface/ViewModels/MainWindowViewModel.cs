@@ -37,6 +37,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly ISpeechService _speech;
     private readonly IAgentService _agents;
     private readonly IMemoryService _memory;
+    private readonly IMcpService _mcp;
 
     /// <summary>Skill files loaded from the active project (empty when not in a project).</summary>
     private IReadOnlyList<ProjectSkill> _projectSkills = Array.Empty<ProjectSkill>();
@@ -57,6 +58,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>Raised when the view should open a file picker for the given attachment kind.</summary>
     public event EventHandler<AttachmentKind>? AttachFilesRequested;
+
+    /// <summary>Raised when the view should open the MCP resource browser (composer 📎 menu → "From MCP server…").</summary>
+    public event EventHandler? McpResourcesRequested;
 
     /// <summary>Raised when the view should open the New Project window (a view-only concern).</summary>
     public event EventHandler? ProjectRequested;
@@ -94,6 +98,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private bool _hasAttachments;
 
+    /// <summary>MCP resources fetched and staged for the next prompt (shown as chips in the composer).</summary>
+    public ObservableCollection<McpAttachedResource> McpResources { get; } = new();
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SendCommand))]
+    private bool _hasMcpResources;
+
     /// <summary>Per-prompt toggle: when on, the model is asked to plan before answering (depth = Effort setting).</summary>
     [ObservableProperty]
     private bool _thinkingEnabled;
@@ -119,6 +130,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>The full command set, built lazily once (its actions reference this VM's commands).</summary>
     private IReadOnlyList<SlashCommand>? _allSlashCommands;
+
+    /// <summary>MCP prompt slash-commands, discovered per project (rebuilt by <see cref="RefreshMcpPromptCommandsAsync"/>).</summary>
+    private IReadOnlyList<SlashCommand> _mcpPromptCommands = Array.Empty<SlashCommand>();
 
     /// <summary>True while the slash palette is showing (the composer starts with "/" and matches commands).</summary>
     [ObservableProperty]
@@ -222,7 +236,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         IProjectDocsService projectDocs,
         ISpeechService speech,
         IAgentService agents,
-        IMemoryService memory)
+        IMemoryService memory,
+        IMcpService mcp)
     {
         _router = router;
         _search = search;
@@ -237,6 +252,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _speech = speech;
         _agents = agents;
         _memory = memory;
+        _mcp = mcp;
         _autoSpeakEnabled = settings.Current.AutoSpeakReplies;
 
         Modes = new[]
@@ -269,7 +285,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                new DesignAttachmentService(), new DesignChatHistoryService(),
                new DesignProjectAgentService(), new DesignAgentOrchestrator(),
                new DesignProjectSkillService(), new DesignProjectDocsService(),
-               new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService())
+               new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService(),
+               new DesignMcpService())
     {
     }
 
@@ -554,7 +571,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     private bool CanSend =>
-        !IsBusy && (!string.IsNullOrWhiteSpace(InputText) || HasAttachments) && SelectedModel is not null;
+        !IsBusy && (!string.IsNullOrWhiteSpace(InputText) || HasAttachments || HasMcpResources) && SelectedModel is not null;
 
     [RelayCommand(CanExecute = nameof(CanSend))]
     private async Task SendAsync()
@@ -572,6 +589,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         var attachments = Attachments.ToList();
         Attachments.Clear();
         HasAttachments = false;
+
+        // Snapshot and clear any staged MCP resources (already-fetched text, folded into the prompt context).
+        var mcpResources = McpResources.ToList();
+        McpResources.Clear();
+        HasMcpResources = false;
 
         // The per-prompt toggle upgrades a plain chat into a web-searched answer.
         var mode = SelectedMode.Mode;
@@ -602,6 +624,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 StatusText = "Reading attachments…";
                 await ProcessAttachmentsAsync(attachments, user, ct);
+            }
+
+            // Fold any staged MCP resources into the user message's attached context (same channel as documents).
+            if (mcpResources.Count > 0)
+            {
+                var block = string.Join("\n\n", mcpResources.Select(r => $"--- {r.Label} ---\n{r.Text}"));
+                user.AttachedContext = string.IsNullOrEmpty(user.AttachedContext)
+                    ? block
+                    : user.AttachedContext + "\n\n" + block;
             }
 
             switch (mode)
@@ -1122,7 +1153,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     // ---- slash (/) command palette --------------------------------------------------------
 
     /// <summary>The slash palette's command set. Actions reference existing VM commands; built once.</summary>
-    private IReadOnlyList<SlashCommand> AllSlashCommands => _allSlashCommands ??= BuildSlashCommands();
+    private IReadOnlyList<SlashCommand> AllSlashCommands =>
+        (_allSlashCommands ??= BuildSlashCommands()).Concat(_mcpPromptCommands).ToList();
 
     private IReadOnlyList<SlashCommand> BuildSlashCommands() => new List<SlashCommand>
     {
@@ -1178,6 +1210,59 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         InputText = prompt;
         if (SendCommand.CanExecute(null))
             SendCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// Discovers the connected MCP servers' prompts and surfaces them as slash-commands (e.g. <c>/code_review</c>)
+    /// for the active project. Best-effort and project-scoped: cleared outside a project. Fire-and-forget from
+    /// project activation and after Settings closes (the servers may have changed).
+    /// </summary>
+    public async Task RefreshMcpPromptCommandsAsync()
+    {
+        if (ActiveProject is null)
+        {
+            _mcpPromptCommands = Array.Empty<SlashCommand>();
+            return;
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            var prompts = await _mcp.ListPromptsAsync(ActiveProject.Directory, cts.Token);
+            _mcpPromptCommands = prompts.Select(p => new SlashCommand
+            {
+                Name = p.Name,
+                Description = $"{p.ServerName}: {(string.IsNullOrWhiteSpace(p.Description) ? "MCP prompt" : p.Description)}",
+                Run = () => ApplyMcpPrompt(p.ServerId, p.Name),
+                IsAvailable = () => ActiveProject is not null && !IsBusy
+            }).ToList();
+        }
+        catch
+        {
+            _mcpPromptCommands = Array.Empty<SlashCommand>(); // best-effort: no prompts on failure
+        }
+    }
+
+    /// <summary>Expands an MCP prompt and drops its text into the composer to edit/send (fire-and-forget).</summary>
+    private void ApplyMcpPrompt(string serverId, string promptName) => _ = ApplyMcpPromptAsync(serverId, promptName);
+
+    private async Task ApplyMcpPromptAsync(string serverId, string promptName)
+    {
+        try
+        {
+            StatusText = $"Fetching prompt “{promptName}”…";
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            var text = await _mcp.GetPromptTextAsync(serverId, promptName, cts.Token);
+            StatusText = "";
+            if (!string.IsNullOrWhiteSpace(text) && !text.StartsWith("Error:", StringComparison.Ordinal))
+                InputText = text; // drop into the composer for the user to edit/send
+            else
+                StatusText = string.IsNullOrWhiteSpace(text) ? "" : text;
+        }
+        catch
+        {
+            StatusText = "";
+        }
     }
 
     /// <summary>Opens/filters/closes the palette for the current composer text. Call on the UI thread.</summary>
@@ -1424,6 +1509,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         await LoadProjectSkillsAsync(project);
+
+        // Discover this project's MCP prompts in the background → they appear as composer slash-commands.
+        _ = RefreshMcpPromptCommandsAsync();
     }
 
     /// <summary>Leave project mode, restore the global chat log, and drop the project's skills.</summary>
@@ -1436,6 +1524,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         StatusText = "";
         ActiveProject = null;             // global store is now active
         _projectSkills = Array.Empty<ProjectSkill>();
+        _mcpPromptCommands = Array.Empty<SlashCommand>(); // drop the project's MCP prompt slash-commands
         ProjectSkillCount = 0;
         _projectDocsText = "";
         HasProjectDocs = false;
@@ -1698,6 +1787,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             Attachments.Add(a);
         }
         HasAttachments = Attachments.Count > 0;
+    }
+
+    // --- MCP resources (composer 📎 → "From MCP server…") ---
+
+    /// <summary>Composer 📎 menu: ask the view to open the MCP resource browser.</summary>
+    [RelayCommand]
+    private void AttachMcpResources() => McpResourcesRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Stages MCP resources fetched in the browser as context chips for the next prompt (called by the view).</summary>
+    public void AddMcpResources(IEnumerable<McpAttachedResource> items)
+    {
+        foreach (var r in items)
+            McpResources.Add(r);
+        HasMcpResources = McpResources.Count > 0;
+    }
+
+    [RelayCommand]
+    private void RemoveMcpResource(McpAttachedResource? resource)
+    {
+        if (resource is not null && McpResources.Remove(resource))
+            HasMcpResources = McpResources.Count > 0;
     }
 
     [RelayCommand]

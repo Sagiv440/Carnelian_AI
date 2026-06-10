@@ -238,6 +238,26 @@ internal sealed class DesignAgentOrchestrator : IAgentOrchestrator
     }
 }
 
+internal sealed class DesignMcpService : IMcpService
+{
+    public Task<IReadOnlyList<AgentTool>> ListToolsAsync(string? projectDir, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<AgentTool>>(Array.Empty<AgentTool>());
+    public Task<string> CallToolAsync(string toolName, System.Text.Json.JsonElement args, CancellationToken ct) =>
+        Task.FromResult("design-time");
+    public bool IsAutoApproved(string toolName) => false;
+    public Task<IReadOnlyList<McpResourceInfo>> ListResourcesAsync(string? projectDir, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<McpResourceInfo>>(Array.Empty<McpResourceInfo>());
+    public Task<string> ReadResourceAsync(string serverId, string uri, CancellationToken ct) =>
+        Task.FromResult("design-time");
+    public Task<IReadOnlyList<McpPromptInfo>> ListPromptsAsync(string? projectDir, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<McpPromptInfo>>(Array.Empty<McpPromptInfo>());
+    public Task<string> GetPromptTextAsync(string serverId, string promptName, CancellationToken ct) =>
+        Task.FromResult("design-time");
+    public Task<McpProbe> TestAsync(McpServerConfig server, CancellationToken ct) =>
+        Task.FromResult(new McpProbe(false, 0, "design-time", Array.Empty<McpToolSummary>()));
+    public Task DisconnectAllAsync() => Task.CompletedTask;
+}
+
 internal sealed class DesignMemoryService : IMemoryService
 {
     public IReadOnlyList<MemoryEntry> Load(MemoryScope scope, string? projectDir) => Array.Empty<MemoryEntry>();

@@ -14,6 +14,7 @@ public enum SettingsCategory
     // --- AI Features ---
     Models,
     Agents,
+    Mcp,
     AutonomyAndMemory,
     WebSearch,
     Voice,

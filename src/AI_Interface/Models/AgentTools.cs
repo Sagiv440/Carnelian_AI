@@ -38,6 +38,13 @@ public sealed class AgentTools
     public bool InstallSoftware { get; set; }
 
     /// <summary>
+    /// May use tools from configured MCP servers (external services). On by default like the file/command
+    /// groups; still gated per call by the approval mode (MCP tools reach outside the project) and by whether
+    /// any MCP server is configured + enabled.
+    /// </summary>
+    public bool Mcp { get; set; } = true;
+
+    /// <summary>
     /// Whether the agent may use the given tool group. When <see cref="AllowAll"/> is set (the default /
     /// unrestricted case) every group is permitted; otherwise the matching per-tool flag decides.
     /// </summary>
@@ -52,6 +59,7 @@ public sealed class AgentTools
             AgentToolGroup.DeleteFiles => DeleteFiles,
             AgentToolGroup.RunCommands => RunCommands,
             AgentToolGroup.InstallSoftware => InstallSoftware,
+            AgentToolGroup.Mcp => Mcp,
             _ => false
         };
     }
@@ -66,7 +74,7 @@ public sealed class AgentTools
         if (!AllowAll)
             return;
         AllowAll = false;
-        ReadFiles = WriteFiles = DeleteFiles = RunCommands = true;
+        ReadFiles = WriteFiles = DeleteFiles = RunCommands = Mcp = true;
         // InstallSoftware stays at its own value (off by default).
     }
 }
@@ -78,5 +86,6 @@ public enum AgentToolGroup
     WriteFiles,
     DeleteFiles,
     RunCommands,
-    InstallSoftware
+    InstallSoftware,
+    Mcp
 }

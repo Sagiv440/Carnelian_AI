@@ -301,6 +301,78 @@ tool-calling loop (modelled on `ProjectAgentService.RunAsync`) whose main tool r
 - **DI:** `AddSingleton<IAgentOrchestrator, AgentOrchestrator>()` (next to `IProjectAgentService`); the
   orchestrator injects `IProjectAgentService` + `IModelRouter` + `IAgentService`.
 
+**MCP (Model Context Protocol) — external tools, resources & prompts** (`IMcpService`/`McpService`,
+`McpConnection`, `McpConfigStore`; Phases 1–3). Lets the Project-mode agent call tools from external MCP
+servers, and lets the user pull in MCP **resources** and **prompts**. Built on the **official `ModelContextProtocol.Core`** NuGet SDK (client only; the umbrella package's
+Hosting/server extensions aren't needed). MCP tools are *just more* `AgentTool`s — no chat-client or
+wire-format change.
+- **Config + transports.** `AppSettings.McpServers` is a `List<McpServerConfig>` (`Models/McpServerConfig.cs`:
+  Id/Name/Enabled/`McpTransport` **Stdio|Http**/Command/Args/Env/Url/Headers/**AutoApprove**). Both transports
+  ship: **stdio** (`McpConnection.BuildStdioTransport` launches `Command`+`Args` as a child process and speaks
+  JSON-RPC over its stdio) and **HTTP** (`BuildHttpTransport` → `HttpClientTransport` with `Endpoint`+
+  `AdditionalHeaders`; `TransportMode` left at AutoDetect = Streamable HTTP, falling back to SSE).
+- **Per-project servers.** A project may ship `<project>/.AI/mcp.json` in **Claude Code's shape**
+  (`{ "mcpServers": { "<name>": { command|url, args, env, headers, type } } }`); `McpConfigStore.Parse`
+  (pure, tolerant, unit-tested) maps each entry to a `McpServerConfig` (transport inferred from `type`/`url`).
+  `McpService.EnabledServers(projectDir)` merges global (Settings) + project, **project overriding global by
+  id**. (The Settings panel edits the **global** set; project servers are config-file only.)
+- **Namespacing.** A server tool is advertised as `mcp__<id>__<tool>` (Claude Code's convention) via the pure
+  `McpToolName` helper (`Make`/`TryParse`/`IsMcp`/`SanitizeId`, `internal static`, unit-tested): the id is
+  reduced to `[a-z0-9-]` (no underscores, so the first `__` after the prefix always splits id from tool), names
+  are sanitized to `[A-Za-z0-9_-]` and length-guarded to 64 chars (OpenAI's limit; a hash suffix keeps long
+  tools distinct). **Routing never re-parses** — `McpConnection` keeps a `namespaced → real tool` map (so
+  truncation can't break a call); `TryParse`/`IsMcp` are for gating + display only.
+- **`McpService`** (DI **singleton**, injected into `ProjectAgentService`). Reads enabled servers from
+  settings, keeps one cached `McpConnection` per server reconciled to the current config each turn
+  (`SyncConnections` drops a server whose launch signature changed → it reconnects), aggregates their tools,
+  and routes a call to the owning server. Best-effort: a server that fails to connect/list contributes
+  **nothing** (its error surfaces via `TestAsync` in Settings), with a 30 s connect timeout so a hung launcher
+  can't block the loop. `ListToolsAsync`/`CallToolAsync`/`IsAutoApproved`/`TestAsync`/`DisconnectAllAsync`;
+  disposing a connection disposes the SDK client, which **kills the child process** (`MainWindow.OnClosed`
+  fires `DisconnectAllAsync` on exit). `McpConnection` flattens the result's content blocks to text — text
+  blocks **and embedded text resources** kept, resource links noted, image/audio placeholdered (Phase 3) — and
+  prefixes `Error:` on `IsError`.
+- **Agent wiring.** `ProjectAgentService.RunAsync` appends MCP tools to `BuildTools`' output **only when**
+  `allowedTools.Allows(AgentToolGroup.Mcp)`; `ExecuteAsync` routes an `IsMcp(call.Name)` tool to
+  `_mcp.CallToolAsync` (else the built-in `switch`). `ToolGroupOf` maps `mcp__…` → the new
+  `AgentToolGroup.Mcp` (defense-in-depth refusal if a disallowed tool is called); `Describe`→`Call <server>`
+  (always destructive, so approval-gated), `IconFor`→🔌. A **trusted** (`AutoApprove`) server bypasses the
+  per-call prompt (`_mcp.IsAutoApproved`). The orchestrator path inherits MCP automatically: specialists run
+  through `ProjectAgentService`, capped by `CapTools` which now intersects the **Mcp** group (the lead's
+  ceiling gates the team). The structured activity feed + delegation cards render MCP calls unchanged.
+- **Per-agent gate.** `AgentTools` gains a `bool Mcp` (default on under `AllowAll`; `Restrict` snapshots it on,
+  `CapTools` intersects it) and an **"MCP tools"** checkbox in the Agents editor.
+- **Settings UI.** A new **MCP Servers** category (`SettingsViewModel.McpPanel` = `McpViewModel`, a master/detail
+  mirroring `AgentsViewModel`; `McpPanel.Initialize(projectDir)` called before the window opens). Add/Edit/
+  Remove a server (Name + **Transport** dropdown → stdio shows Command/Args/Env, HTTP shows URL/Headers; plus
+  Enabled/Trusted) + a **Test connection** button that calls `IMcpService.TestAsync` and shows ✅/🔴 + tool
+  count **and the discovered tools list** (name + description — `McpProbe.Tools` from
+  `McpConnection.ListToolSummariesAsync`, shown via `McpViewModel.DiscoveredTools`/`HasDiscoveredTools`).
+  Because stdio launchers (`npx`/`uvx`/…) must be on PATH, a missing command is the usual failure —
+  `TestAsync` surfaces a clear "couldn't launch" message.
+- **Resources (Phase 3).** A server's **resources** (readable data) can be browsed and attached as prompt
+  context. `IMcpService.ListResourcesAsync`/`ReadResourceAsync` aggregate/route across connected servers
+  (`McpConnection.ListResourcesAsync`/`ReadResourceAsync` → `ReadResourceResult.Contents`, text kept, binary
+  noted). UI: the composer **📎 → "From MCP server…"** raises `McpResourcesRequested`; the code-behind opens
+  `McpResourceBrowserWindow` (`McpResourceBrowserViewModel` — tick resources, fetch, return
+  `IReadOnlyList<McpAttachedResource>`). The VM stages them as composer **chips** (`McpResources` +
+  `HasMcpResources`, `Remove`/`AddMcpResources`) and folds their text into the user message's
+  `AttachedContext` on send (same `[Attached documents]` channel), then clears them. Works in any mode (uses
+  global servers when no project is active).
+- **Prompts as slash-commands (Phase 3).** A server's **prompts** become composer slash-commands.
+  `IMcpService.ListPromptsAsync`/`GetPromptTextAsync` (`McpConnection` → `ListPromptsAsync`/`GetPromptAsync`,
+  messages flattened via the shared `FlattenBlocks`). `MainWindowViewModel.RefreshMcpPromptCommandsAsync`
+  (fire-and-forget on project activation + after Settings closes; cleared on exit) discovers them into
+  `_mcpPromptCommands`; `AllSlashCommands` = the static set **+** these. Picking one runs `ApplyMcpPrompt`
+  → `GetPromptTextAsync` → drops the expanded text into the composer to edit/send (no-arg prompts only).
+- **Content blocks.** `McpConnection.FlattenBlocks` (shared by tool results + prompt messages) keeps text +
+  embedded text resources, notes resource links, and placeholders image/audio (`[image]`/`[audio]` — vision
+  passthrough is future work). **Out of scope (documented future work):** MCP tools in **Chat** mode (would
+  need a Chat tool loop) and **OAuth** for remote servers (static header/bearer auth covers the common case).
+- **DI:** `AddSingleton<IMcpService, McpService>()` (next to `IProjectAgentService`); `AddTransient<McpViewModel>()`
+  + `AddTransient<McpResourceBrowserViewModel>()`. `MainWindowViewModel` injects `IMcpService` (for resources +
+  prompts). Design-time stub `DesignMcpService`.
+
 **Agents — selectable persona + skills + tools** (`IAgentService`/`AgentService`, `AgentPromptBuilder`).
 An *agent is data* (`Models/Agent.cs`): Id/Name/Glyph/**Persona** + **Skills** + **Tools** (Phase 2;
 autonomy is **not** per-agent — it's the single global `AppSettings.AgentApproval`, see *Autonomy* above) +
@@ -432,7 +504,9 @@ entries, and a right `Panel` whose category panels toggle by `IsVisible` bound t
 - **AI FEATURES** — *Models* (Local AI: Ollama URL, *Quick setup*, **Download & install Ollama** — the
   one-click `IOllamaInstaller` flow, confirmed via `ConfirmWindow` then auto-connects, *Test connection*,
   *Model_Config*; and Web Models: per-provider API key + Connect, which persists the key, probes, and raises
-  `ConnectRequested` so the main window reloads the dropdown), **Agents** (the agent roster master/detail), *Autonomy & Memory*
+  `ConnectRequested` so the main window reloads the dropdown), **Agents** (the agent roster master/detail),
+  **MCP Servers** (the MCP server roster master/detail — add/edit/remove + Test connection; see *MCP* above),
+  *Autonomy & Memory*
   (agent approval mode + software-install permission + **persistent-memory** toggle and per-scope fact
   lists, Phase 4), *Web Search* (provider + keys), *Voice* (Piper: *Download & install Piper* + *Browse
   voices* + a manual-paths Advanced expander; raises `VoiceBrowserRequested` to open `VoiceBrowserWindow`),

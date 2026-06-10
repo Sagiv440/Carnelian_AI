@@ -114,6 +114,9 @@ public partial class App : Application
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IAttachmentService, AttachmentService>();
         services.AddSingleton<IChatHistoryService, ChatHistoryService>();
+        // MCP (Model Context Protocol): connects to configured MCP servers and aggregates their tools for the
+        // project agent. Singleton — it caches live connections (stdio servers are child processes).
+        services.AddSingleton<IMcpService, McpService>();
         services.AddSingleton<IProjectAgentService, ProjectAgentService>();
         // Lead/orchestrator: runs a tool-calling loop that delegates subtasks to specialist agents (the
         // built-in "Lead") via IProjectAgentService — the "agents as tools" pattern.
@@ -127,6 +130,8 @@ public partial class App : Application
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<AgentsViewModel>();
+        services.AddTransient<McpViewModel>();
+        services.AddTransient<McpResourceBrowserViewModel>();
         services.AddTransient<ProjectViewModel>();
         services.AddTransient<ModelConfigViewModel>();
         services.AddTransient<VoiceBrowserViewModel>();

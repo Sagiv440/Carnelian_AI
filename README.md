@@ -45,6 +45,14 @@ Cross-cutting extras:
   extracted from PDF, DOCX, ODT and plain-text/code files and folded into the prompt.
 - **Model Config** — a hardware-aware recommender (Settings → AI Features → Models) that scans your
   CPU/RAM and GPU/VRAM and ranks Ollama models by fit, with inline download/remove.
+- **🔌 MCP servers** — connect [Model Context Protocol](https://modelcontextprotocol.io) servers
+  (Settings → AI Features → MCP Servers) to give the **Project** agent extra tools for external services
+  (filesystem, GitHub, databases, …). Add a **local** server by the command the app should launch
+  (e.g. `npx -y @modelcontextprotocol/server-filesystem <dir>`) or a **remote** one by URL, **Test** it, and
+  its tools join the agent's toolset — each call approval-gated unless you mark the server trusted. A project
+  can also ship its own servers in `<project>/.AI/mcp.json` (the same format Claude Code uses). Beyond tools,
+  a server's **resources** can be browsed and attached as context (composer 📎 → *From MCP server…*) and its
+  **prompts** appear in the composer's `/` palette.
 
 Local Ollama models run entirely on your machine; cloud providers are off unless you supply a key. The
 only other network traffic is the web searches and page fetches used by Web Search and Deep Research.

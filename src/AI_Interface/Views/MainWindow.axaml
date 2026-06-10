@@ -1046,6 +1046,33 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
+                    <!-- Staged MCP resource chips -->
+                    <ItemsControl ItemsSource="{Binding McpResources}" IsVisible="{Binding HasMcpResources}"
+                                  Margin="0,4,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:CompileBindings="False">
+                                <Border Background="{DynamicResource AppSurfaceBrush}"
+                                        BorderBrush="{DynamicResource AppSurfaceBorderBrush}" BorderThickness="1"
+                                        CornerRadius="3" Padding="6,2" Margin="0,0,6,4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="🔌" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="220"
+                                                   ToolTip.Tip="{Binding Label}"/>
+                                        <Button Content="✕" Classes="ghost" Padding="3,0" MinWidth="0" FontSize="11"
+                                                ToolTip.Tip="Remove"
+                                                Command="{Binding DataContext.RemoveMcpResourceCommand,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
                     <!-- Slash-command palette: opens when the message starts with "/". Type to filter,
                          ↑/↓ to move, Enter/Tab or click to run (keyboard handled in MainWindow.axaml.cs). -->
                     <Border IsVisible="{Binding IsSlashMenuOpen}" Margin="0,0,0,4"
@@ -1091,6 +1118,7 @@
                                 <MenuFlyout>
                                     <MenuItem Header="🖼  Photos" Command="{Binding AttachPhotosCommand}"/>
                                     <MenuItem Header="📄  Documents &amp; text" Command="{Binding AttachDocumentsCommand}"/>
+                                    <MenuItem Header="🔌  From MCP server…" Command="{Binding AttachMcpResourcesCommand}"/>
                                 </MenuFlyout>
                             </Button.Flyout>
                         </Button>

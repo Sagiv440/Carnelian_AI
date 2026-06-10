@@ -87,6 +87,10 @@
                                 Classes.active="{Binding IsAgents}"
                                 Command="{Binding SelectCategoryCommand}"
                                 CommandParameter="{x:Static vm:SettingsCategory.Agents}"/>
+                        <Button Classes="nav" Content="MCP Servers"
+                                Classes.active="{Binding IsMcp}"
+                                Command="{Binding SelectCategoryCommand}"
+                                CommandParameter="{x:Static vm:SettingsCategory.Mcp}"/>
                         <Button Classes="nav" Content="Autonomy &amp; Memory"
                                 Classes.active="{Binding IsAutonomyAndMemory}"
                                 Command="{Binding SelectCategoryCommand}"
@@ -441,8 +445,10 @@
                                                   ToolTip.Tip="delete_file, delete_folder"/>
                                         <CheckBox Content="Run commands" IsChecked="{Binding ToolRunCommands}" Margin="0,0,12,0"
                                                   ToolTip.Tip="run_command"/>
-                                        <CheckBox Content="Install software" IsChecked="{Binding ToolInstallSoftware}"
+                                        <CheckBox Content="Install software" IsChecked="{Binding ToolInstallSoftware}" Margin="0,0,12,0"
                                                   ToolTip.Tip="install_software (still requires the global software-install permission)"/>
+                                        <CheckBox Content="MCP tools" IsChecked="{Binding ToolMcp}"
+                                                  ToolTip.Tip="Tools from configured MCP servers (Settings → MCP Servers). Each call is still approval-gated."/>
                                     </WrapPanel>
 
                                     <!-- Behaviour -->
@@ -477,6 +483,139 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Grid>
+
+                    <!-- ============ AI FEATURES → MCP SERVERS ============ -->
+                    <Grid IsVisible="{Binding IsMcp}" RowDefinitions="Auto,Auto,*" Margin="0,2">
+                        <TextBlock Grid.Row="0" Classes="section" Text="MCP Servers"/>
+                        <TextBlock Grid.Row="1" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,8" MaxWidth="680"
+                                   HorizontalAlignment="Left"
+                                   Text="Connect Model Context Protocol servers to give the Project-mode agent extra tools (external services). A local (stdio) server is launched from a command (e.g. npx / uvx — the launcher must be on your PATH); a remote (HTTP) server is reached by URL. Each tool call is approval-gated unless you mark a server trusted. A project can also ship its own servers in .AI/mcp.json."/>
+
+                        <Grid Grid.Row="2" ColumnDefinitions="220,*" DataContext="{Binding McpPanel}">
+
+                            <!-- Master list + toolbar -->
+                            <Grid Grid.Column="0" RowDefinitions="*,Auto" Margin="0,0,8,0">
+                                <Border Grid.Row="0" Classes="card" CornerRadius="3" Padding="2">
+                                    <ListBox Classes="agents" ItemsSource="{Binding Servers}"
+                                             SelectedItem="{Binding SelectedServer}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:McpServerConfig">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="🔌" Margin="0,0,8,0"
+                                                               VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    <Border Grid.Column="2" Background="#33808080" CornerRadius="3"
+                                                            Padding="5,1" VerticalAlignment="Center"
+                                                            IsVisible="{Binding !Enabled}">
+                                                        <TextBlock Text="off" FontSize="10"
+                                                                   Foreground="{DynamicResource AppTextSecondary}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Border>
+
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+                                    <Button Classes="cta" Content="＋ Add" Command="{Binding NewCommand}"/>
+                                    <Button Classes="ghost" Content="Delete" Command="{Binding DeleteCommand}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Detail editor -->
+                            <ScrollViewer Grid.Column="1">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Classes="muted" IsVisible="{Binding !HasSelection}"
+                                               Text="No server selected. Click ＋ Add to configure one."/>
+
+                                    <StackPanel Spacing="2" IsVisible="{Binding HasSelection}">
+                                        <TextBlock Classes="label" Text="Name"/>
+                                        <TextBox Width="360" HorizontalAlignment="Left" Text="{Binding EditName}"
+                                                 PlaceholderText="e.g. filesystem"/>
+
+                                        <TextBlock Classes="label" Text="Transport"/>
+                                        <ComboBox Width="200" HorizontalAlignment="Left"
+                                                  ItemsSource="{Binding Transports}" SelectedItem="{Binding EditTransport}"
+                                                  ToolTip.Tip="stdio = launch a local command; HTTP = connect to a remote server"/>
+
+                                        <!-- stdio: the app launches a local command -->
+                                        <StackPanel Spacing="2" IsVisible="{Binding IsStdio}">
+                                            <TextBlock Classes="label" Text="Command"/>
+                                            <TextBox Width="360" HorizontalAlignment="Left" Text="{Binding EditCommand}"
+                                                     PlaceholderText="e.g. npx  (or uvx, docker, an absolute path…)"/>
+
+                                            <TextBlock Classes="label" Text="Arguments (one per line)"/>
+                                            <TextBox Width="440" HorizontalAlignment="Left" Text="{Binding EditArgs}"
+                                                     AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="84" MaxHeight="180"
+                                                     FontFamily="Consolas, Menlo, monospace"
+                                                     PlaceholderText="-y&#x0a;@modelcontextprotocol/server-filesystem&#x0a;C:\Users\me\data"/>
+
+                                            <TextBlock Classes="label" Text="Environment variables (KEY=VALUE, one per line)"/>
+                                            <TextBox Width="440" HorizontalAlignment="Left" Text="{Binding EditEnv}"
+                                                     AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="56" MaxHeight="140"
+                                                     FontFamily="Consolas, Menlo, monospace"
+                                                     PlaceholderText="GITHUB_TOKEN=ghp_…"/>
+                                        </StackPanel>
+
+                                        <!-- http: connect to a remote server (Streamable HTTP / SSE auto-detected) -->
+                                        <StackPanel Spacing="2" IsVisible="{Binding IsHttp}">
+                                            <TextBlock Classes="label" Text="Server URL"/>
+                                            <TextBox Width="440" HorizontalAlignment="Left" Text="{Binding EditUrl}"
+                                                     PlaceholderText="https://example.com/mcp"/>
+
+                                            <TextBlock Classes="label" Text="Headers (KEY=VALUE, one per line)"/>
+                                            <TextBox Width="440" HorizontalAlignment="Left" Text="{Binding EditHeaders}"
+                                                     AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="56" MaxHeight="140"
+                                                     FontFamily="Consolas, Menlo, monospace"
+                                                     PlaceholderText="Authorization=Bearer …"/>
+                                        </StackPanel>
+
+                                        <CheckBox Content="Enabled" IsChecked="{Binding EditEnabled}" Margin="0,6,0,0"/>
+                                        <CheckBox Content="Trusted — auto-approve this server's tool calls"
+                                                  IsChecked="{Binding EditAutoApprove}"/>
+                                        <TextBlock Classes="muted" Margin="22,0,0,4" TextWrapping="Wrap" MaxWidth="418"
+                                                   HorizontalAlignment="Left"
+                                                   Text="When trusted, this server's tools run without the per-call approval prompt. Only enable for servers you fully trust — tool descriptions and results can influence the model."/>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,6,0,0">
+                                            <Button Classes="cta" Content="Test connection" Command="{Binding TestCommand}"/>
+                                            <ProgressBar IsIndeterminate="True" Width="90" VerticalAlignment="Center"
+                                                         IsVisible="{Binding IsTesting}"/>
+                                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" TextWrapping="Wrap"
+                                                       MaxWidth="320"
+                                                       Text="{Binding TestMessage}"
+                                                       IsVisible="{Binding TestMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                       Foreground="{Binding TestColor, Converter={StaticResource StringToBrush}}"/>
+                                        </StackPanel>
+
+                                        <!-- Tools the server exposes (populated by Test connection) -->
+                                        <StackPanel IsVisible="{Binding HasDiscoveredTools}" Margin="0,8,0,0" Spacing="3">
+                                            <TextBlock Classes="label" Text="Tools this server exposes"/>
+                                            <Border Classes="card" CornerRadius="4" Padding="2" MaxHeight="240">
+                                                <ScrollViewer>
+                                                    <ItemsControl ItemsSource="{Binding DiscoveredTools}" Margin="6">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="models:McpToolSummary">
+                                                                <StackPanel Margin="0,2,0,5">
+                                                                    <TextBlock Text="{Binding Name}"
+                                                                               FontFamily="Consolas, Menlo, monospace"
+                                                                               Foreground="{DynamicResource AppTextPrimary}"/>
+                                                                    <TextBlock Text="{Binding Description}" Classes="muted"
+                                                                               FontSize="11" TextWrapping="Wrap"
+                                                                               IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </Border>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
                         </Grid>

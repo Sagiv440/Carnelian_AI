@@ -38,6 +38,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>The Agents (AI Features) master/detail panel.</summary>
     public AgentsViewModel AgentsPanel { get; }
 
+    /// <summary>The MCP Servers (AI Features) master/detail panel.</summary>
+    public McpViewModel McpPanel { get; }
+
     // --- left-rail category navigation (Editor Features / AI Features) ---
 
     [ObservableProperty]
@@ -46,6 +49,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsLayout))]
     [NotifyPropertyChangedFor(nameof(IsModels))]
     [NotifyPropertyChangedFor(nameof(IsAgents))]
+    [NotifyPropertyChangedFor(nameof(IsMcp))]
     [NotifyPropertyChangedFor(nameof(IsAutonomyAndMemory))]
     [NotifyPropertyChangedFor(nameof(IsWebSearch))]
     [NotifyPropertyChangedFor(nameof(IsVoice))]
@@ -57,6 +61,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public bool IsLayout => SelectedCategory == SettingsCategory.Layout;
     public bool IsModels => SelectedCategory == SettingsCategory.Models;
     public bool IsAgents => SelectedCategory == SettingsCategory.Agents;
+    public bool IsMcp => SelectedCategory == SettingsCategory.Mcp;
     public bool IsAutonomyAndMemory => SelectedCategory == SettingsCategory.AutonomyAndMemory;
     public bool IsWebSearch => SelectedCategory == SettingsCategory.WebSearch;
     public bool IsVoice => SelectedCategory == SettingsCategory.Voice;
@@ -409,7 +414,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public SettingsViewModel(
         ISettingsService settings, IThemeService theme, IModelRouter router, IOllamaClient ollama,
         IOpenAiClient openAi, IGeminiClient gemini, IAnthropicClient anthropic,
-        ISpeechService speech, AgentsViewModel agentsPanel, IMemoryService memory,
+        ISpeechService speech, AgentsViewModel agentsPanel, McpViewModel mcpPanel, IMemoryService memory,
         IPiperInstaller piperInstaller, IOllamaInstaller ollamaInstaller)
     {
         _settings = settings;
@@ -424,6 +429,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _piperInstaller = piperInstaller;
         _ollamaInstaller = ollamaInstaller;
         AgentsPanel = agentsPanel;
+        McpPanel = mcpPanel;
 
         _loading = true;
         var s = settings.Current;
@@ -463,7 +469,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         new DesignSettingsService(), new ThemeService(), new DesignModelRouter(), new DesignOllamaClient(),
         new DesignCloudClient(AiProvider.OpenAI), new DesignCloudClient(AiProvider.Gemini),
         new DesignCloudClient(AiProvider.Anthropic), new DesignSpeechService(), new AgentsViewModel(),
-        new DesignMemoryService(), new DesignPiperInstaller(), new DesignOllamaInstaller())
+        new McpViewModel(), new DesignMemoryService(), new DesignPiperInstaller(), new DesignOllamaInstaller())
     {
     }
 

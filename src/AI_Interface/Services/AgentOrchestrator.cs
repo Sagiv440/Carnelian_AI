@@ -421,7 +421,8 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
             WriteFiles = cap.Allows(AgentToolGroup.WriteFiles) && req.Allows(AgentToolGroup.WriteFiles),
             DeleteFiles = cap.Allows(AgentToolGroup.DeleteFiles) && req.Allows(AgentToolGroup.DeleteFiles),
             RunCommands = cap.Allows(AgentToolGroup.RunCommands) && req.Allows(AgentToolGroup.RunCommands),
-            InstallSoftware = cap.Allows(AgentToolGroup.InstallSoftware) && req.Allows(AgentToolGroup.InstallSoftware)
+            InstallSoftware = cap.Allows(AgentToolGroup.InstallSoftware) && req.Allows(AgentToolGroup.InstallSoftware),
+            Mcp = cap.Allows(AgentToolGroup.Mcp) && req.Allows(AgentToolGroup.Mcp)
         };
     }
 

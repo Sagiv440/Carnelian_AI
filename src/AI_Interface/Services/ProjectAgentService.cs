@@ -31,12 +31,14 @@ public sealed class ProjectAgentService : IProjectAgentService
     private readonly IMemoryService _memory;
     private readonly IProjectDocsService _docs;
     private readonly IWebSearchService _search;
+    private readonly IMcpService _mcp;
 
-    public ProjectAgentService(IMemoryService memory, IProjectDocsService docs, IWebSearchService search)
+    public ProjectAgentService(IMemoryService memory, IProjectDocsService docs, IWebSearchService search, IMcpService mcp)
     {
         _memory = memory;
         _docs = docs;
         _search = search;
+        _mcp = mcp;
     }
 
     // ---- limits for the search/find tools --------------------------------------------------
@@ -117,6 +119,20 @@ public sealed class ProjectAgentService : IProjectAgentService
         if (maxSteps <= 0)
             maxSteps = DefaultMaxSteps;
         var tools = BuildTools(allowedTools, installPermission, memoryEnabled, allowDocsUpdate);
+
+        // Append tools from configured MCP servers (external services) when this agent is allowed the MCP group.
+        // Fetched once per run; best-effort — a server that fails to connect simply isn't offered this turn.
+        if (allowedTools.Allows(AgentToolGroup.Mcp))
+        {
+            try
+            {
+                var mcpTools = await _mcp.ListToolsAsync(project.Directory, ct).ConfigureAwait(false);
+                if (mcpTools.Count > 0)
+                    tools = tools.Concat(mcpTools).ToList();
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { /* best-effort: MCP servers that fail to list just aren't advertised this run */ }
+        }
 
         var messages = new List<ChatMessage>
         {
@@ -237,6 +253,10 @@ public sealed class ProjectAgentService : IProjectAgentService
         var needsApproval = NeedsApproval(approvalMode, destructive) ||
             (isInstallAction && installPermission == SoftwareInstallPermission.Ask);
 
+        // A trusted (auto-approve) MCP server bypasses the per-call prompt entirely, even under ConfirmEverything.
+        if (McpToolName.IsMcp(call.Name) && _mcp.IsAutoApproved(call.Name))
+            needsApproval = false;
+
         if (needsApproval)
         {
             var ok = await approve(new ToolApprovalRequest(call.Name, summary, detail, destructive))
@@ -255,7 +275,11 @@ public sealed class ProjectAgentService : IProjectAgentService
         string result;
         try
         {
-            result = call.Name switch
+            // MCP tools (namespaced mcp__server__tool) are routed to their server via the MCP service; everything
+            // else is a built-in tool handled by the switch below.
+            result = McpToolName.IsMcp(call.Name)
+                ? await _mcp.CallToolAsync(call.Name, call.Arguments, ct).ConfigureAwait(false)
+                : call.Name switch
             {
                 "list_directory" => ListDirectory(project, path),
                 "read_file"      => ReadFile(project, path),
@@ -309,8 +333,18 @@ public sealed class ProjectAgentService : IProjectAgentService
 
     /// <summary>Human-readable label, the detail to show/confirm, and whether the call is destructive.</summary>
     private static (string Summary, string Detail, bool Destructive) Describe(
-        Project project, AgentToolCall call, string? path) => call.Name switch
+        Project project, AgentToolCall call, string? path)
     {
+        // MCP tools reach external services — always treat as approval-worthy (a trusted server bypasses the
+        // prompt separately, in ExecuteAsync). Show the server + tool from the namespaced name.
+        if (McpToolName.IsMcp(call.Name))
+        {
+            McpToolName.TryParse(call.Name, out var server, out var tool);
+            return ($"Call {server} (MCP)", tool, true);
+        }
+
+        return call.Name switch
+        {
         "list_directory" => ("List directory", path ?? ".", false),
         "read_file"      => ("Read file", path ?? "", false),
         "search_files"   => ("Search files", GetString(call.Arguments, "pattern") ?? "", false),
@@ -330,7 +364,8 @@ public sealed class ProjectAgentService : IProjectAgentService
         "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
         "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName, true),
         _ => (call.Name, "", true)
-    };
+        };
+    }
 
     /// <summary>
     /// A compact one-line label for the live "current action" status bar (Phase 3A): the tool's glyph +
@@ -372,6 +407,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "remember"         => "💾",
         "create_skill"     => "✨",
         "update_docs"      => "📘",
+        _ when McpToolName.IsMcp(tool) => "🔌",
         _                  => "🔧"
     };
 
@@ -573,6 +609,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "update_docs"                                  => null, // writes only to the fixed handbook path — not allow-list-gated
         "web_search"                                   => null, // network read, not a file/command tool — ungated
         "update_plan"                                  => null, // UI checklist only — not a file/command tool — ungated
+        _ when McpToolName.IsMcp(toolName)             => AgentToolGroup.Mcp, // external-service tools — gated by the Mcp group
         _                                              => null
     };
 
@@ -583,6 +620,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         AgentToolGroup.DeleteFiles     => "delete files or folders",
         AgentToolGroup.RunCommands     => "run terminal commands",
         AgentToolGroup.InstallSoftware => "install software",
+        AgentToolGroup.Mcp             => "use external (MCP) tools",
         _                              => "use that tool"
     };
 
