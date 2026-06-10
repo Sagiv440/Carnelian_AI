@@ -509,12 +509,19 @@
                                                                VerticalAlignment="Center"/>
                                                     <TextBlock Grid.Column="1" Text="{Binding Name}"
                                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                    <Border Grid.Column="2" Background="#33808080" CornerRadius="3"
-                                                            Padding="5,1" VerticalAlignment="Center"
-                                                            IsVisible="{Binding !Enabled}">
-                                                        <TextBlock Text="off" FontSize="10"
-                                                                   Foreground="{DynamicResource AppTextSecondary}"/>
-                                                    </Border>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                                                                VerticalAlignment="Center">
+                                                        <Border Background="#3348A0A0" CornerRadius="3" Padding="5,1"
+                                                                IsVisible="{Binding IsProjectScoped}">
+                                                            <TextBlock Text="project" FontSize="10"
+                                                                       Foreground="{DynamicResource AppTextSecondary}"/>
+                                                        </Border>
+                                                        <Border Background="#33808080" CornerRadius="3" Padding="5,1"
+                                                                IsVisible="{Binding !Enabled}">
+                                                            <TextBlock Text="off" FontSize="10"
+                                                                       Foreground="{DynamicResource AppTextSecondary}"/>
+                                                        </Border>
+                                                    </StackPanel>
                                                 </Grid>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -537,6 +544,18 @@
                                         <TextBlock Classes="label" Text="Name"/>
                                         <TextBox Width="360" HorizontalAlignment="Left" Text="{Binding EditName}"
                                                  PlaceholderText="e.g. filesystem"/>
+
+                                        <!-- Scope: Local (this project's .AI/mcp.json) vs Global (all projects). Only with a project open. -->
+                                        <StackPanel IsVisible="{Binding HasProject}">
+                                            <TextBlock Classes="label" Text="Scope"/>
+                                            <ToggleSwitch IsChecked="{Binding EditIsProjectScoped}"
+                                                          OnContent="This project (.AI/mcp.json)" OffContent="Global (all projects)"
+                                                          ToolTip.Tip="Local servers are saved in the project and load whenever it's opened; global servers apply to every project."/>
+                                            <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap" MaxWidth="420"
+                                                       Margin="0,2,0,0" HorizontalAlignment="Left"
+                                                       IsVisible="{Binding EditIsProjectScoped}"
+                                                       Text="Saved in this project's .AI/mcp.json — it travels with the repo. Avoid putting secrets (tokens) in Env/Headers here if you commit it."/>
+                                        </StackPanel>
 
                                         <TextBlock Classes="label" Text="Transport"/>
                                         <ComboBox Width="200" HorizontalAlignment="Left"

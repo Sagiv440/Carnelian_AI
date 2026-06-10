@@ -13,9 +13,11 @@ namespace AI_Interface.ViewModels;
 
 /// <summary>
 /// Backs the Settings → AI Features → MCP Servers master/detail panel: lists configured MCP servers, edits the
-/// selected one (name / command / args / env / enabled / trusted), tests its connection (reports the tool
-/// count), and persists to <see cref="AppSettings.McpServers"/>. Adding a server makes its tools available to
-/// the Project-mode agent on the next turn. Mirrors <see cref="AgentsViewModel"/>'s master/detail shape.
+/// selected one (name / transport / command|url / … / enabled / trusted / <b>scope</b>), and tests its
+/// connection (tool list). Servers persist to one of two stores by scope — <b>Global</b> goes to
+/// <see cref="AppSettings.McpServers"/>, <b>Local</b> goes to the project's <c>.AI/mcp.json</c> (so it travels
+/// with the repo and loads on project open). New servers default to Local when a project is open. Mirrors
+/// <see cref="AgentsViewModel"/>'s master/detail shape.
 /// </summary>
 public sealed partial class McpViewModel : ViewModelBase
 {
@@ -27,6 +29,10 @@ public sealed partial class McpViewModel : ViewModelBase
     private readonly ISettingsService _settings;
     private readonly IMcpService _mcp;
     private bool _loadingDetail;
+    private string? _projectDir;
+
+    /// <summary>True when a project is open, so the Local/Global scope choice is offered.</summary>
+    public bool HasProject => _projectDir is not null;
 
     /// <summary>The configured servers shown in the master list.</summary>
     public ObservableCollection<McpServerConfig> Servers { get; } = new();
@@ -64,6 +70,9 @@ public sealed partial class McpViewModel : ViewModelBase
     [ObservableProperty] private bool _editEnabled = true;
     [ObservableProperty] private bool _editAutoApprove;
 
+    /// <summary>Scope toggle (only meaningful with a project open): true = saved to the project's .AI/mcp.json.</summary>
+    [ObservableProperty] private bool _editIsProjectScoped;
+
     /// <summary>Field visibility: stdio shows Command/Args/Env, HTTP shows URL/Headers.</summary>
     public bool IsStdio => EditTransport == McpTransport.Stdio;
     public bool IsHttp => EditTransport == McpTransport.Http;
@@ -89,13 +98,46 @@ public sealed partial class McpViewModel : ViewModelBase
     {
     }
 
-    /// <summary>Loads the configured servers. (<paramref name="projectDir"/> is reserved for per-project servers — Phase 2.)</summary>
+    /// <summary>Loads the global servers (Settings) plus the active project's <c>.AI/mcp.json</c>, each tagged with its scope.</summary>
     public void Initialize(string? projectDir)
+    {
+        _projectDir = string.IsNullOrWhiteSpace(projectDir) ? null : projectDir;
+        OnPropertyChanged(nameof(HasProject));
+        LoadServers();
+        SelectedServer = Servers.FirstOrDefault();
+    }
+
+    /// <summary>(Re)builds the master list from both stores: global (Settings) + project (.AI/mcp.json).</summary>
+    private void LoadServers()
     {
         Servers.Clear();
         foreach (var s in _settings.Current.McpServers ?? new List<McpServerConfig>())
+        {
+            s.IsProjectScoped = false;
             Servers.Add(s);
-        SelectedServer = Servers.FirstOrDefault();
+        }
+        foreach (var s in McpConfigStore.Load(_projectDir))
+        {
+            s.IsProjectScoped = true;
+            Servers.Add(s);
+        }
+    }
+
+    /// <summary>Rebuilds the list (e.g. after a scope move) and reselects the same server by id.</summary>
+    private void Reload()
+    {
+        var selectedId = SelectedServer?.Id;
+        LoadServers();
+        SelectedServer = Servers.FirstOrDefault(s => s.Id == selectedId) ?? Servers.FirstOrDefault();
+    }
+
+    /// <summary>Persists both stores from the in-memory list: global → Settings, project-scoped → .AI/mcp.json.</summary>
+    private void SaveAll()
+    {
+        _settings.Current.McpServers = Servers.Where(s => !s.IsProjectScoped).ToList();
+        _settings.Save();
+        if (_projectDir is not null)
+            McpConfigStore.Save(_projectDir, Servers.Where(s => s.IsProjectScoped).ToList());
     }
 
     partial void OnSelectedServerChanged(McpServerConfig? value)
@@ -110,6 +152,7 @@ public sealed partial class McpViewModel : ViewModelBase
         EditHeaders = value is null ? "" : JoinMap(value.Headers);
         EditEnabled = value?.Enabled ?? true;
         EditAutoApprove = value?.AutoApprove ?? false;
+        EditIsProjectScoped = value?.IsProjectScoped ?? false;
         TestMessage = "";
         DiscoveredTools.Clear();        // last test's tools are for the previously selected server
         HasDiscoveredTools = false;
@@ -131,25 +174,36 @@ public sealed partial class McpViewModel : ViewModelBase
     partial void OnEditEnabledChanged(bool value) => Persist(s => s.Enabled = value);
     partial void OnEditAutoApproveChanged(bool value) => Persist(s => s.AutoApprove = value);
 
+    /// <summary>Moving a server between Local (.AI/mcp.json) and Global rewrites both stores, then reloads so the badge updates.</summary>
+    partial void OnEditIsProjectScopedChanged(bool value)
+    {
+        if (_loadingDetail || SelectedServer is null || !HasProject || SelectedServer.IsProjectScoped == value)
+            return;
+        SelectedServer.IsProjectScoped = value;
+        SaveAll();
+        Reload();
+    }
+
     private void Persist(Action<McpServerConfig> apply)
     {
         if (_loadingDetail || SelectedServer is null)
             return;
         apply(SelectedServer);
-        _settings.Save();
+        SaveAll();
     }
 
     [RelayCommand]
     private void New()
     {
-        var server = new McpServerConfig { Name = "New MCP Server", Enabled = true, Transport = McpTransport.Stdio };
+        // Inside a project, new servers default to Local (the project's .AI/mcp.json); else Global.
+        var server = new McpServerConfig
+        {
+            Name = "New MCP Server", Enabled = true, Transport = McpTransport.Stdio, IsProjectScoped = HasProject
+        };
         server.Id = UniqueId("new-mcp-server", server);
 
-        _settings.Current.McpServers ??= new List<McpServerConfig>();
-        _settings.Current.McpServers.Add(server);
-        _settings.Save();
-
         Servers.Add(server);
+        SaveAll();
         SelectedServer = server;
     }
 
@@ -161,11 +215,8 @@ public sealed partial class McpViewModel : ViewModelBase
         if (SelectedServer is null)
             return;
 
-        var victim = SelectedServer;
-        _settings.Current.McpServers?.Remove(victim);
-        _settings.Save();
-
-        Servers.Remove(victim);
+        Servers.Remove(SelectedServer);
+        SaveAll();
         SelectedServer = Servers.FirstOrDefault();
     }
 

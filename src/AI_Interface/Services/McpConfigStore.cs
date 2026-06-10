@@ -34,6 +34,47 @@ internal static class McpConfigStore
         }
     }
 
+    /// <summary>Writes the given servers to <c>&lt;projectDir&gt;/.AI/mcp.json</c> (creating <c>.AI</c> if needed).</summary>
+    public static void Save(string projectDir, IReadOnlyList<McpServerConfig> servers)
+    {
+        var dir = Path.Combine(projectDir, ".AI");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, FileName), Serialize(servers));
+    }
+
+    /// <summary>
+    /// Serializes servers to the Claude-Code-style <c>mcp.json</c> shape (keyed by name). Pure — round-trips with
+    /// <see cref="Parse"/>. Only the fields relevant to each transport are written; defaults are omitted.
+    /// </summary>
+    internal static string Serialize(IReadOnlyList<McpServerConfig> servers)
+    {
+        var map = new Dictionary<string, object?>();
+        foreach (var s in servers)
+        {
+            var entry = new Dictionary<string, object?>();
+            if (s.Transport == McpTransport.Http)
+            {
+                entry["type"] = "http";
+                entry["url"] = s.Url;
+                if (s.Headers is { Count: > 0 }) entry["headers"] = s.Headers;
+            }
+            else
+            {
+                entry["command"] = s.Command;
+                if (s.Args is { Count: > 0 }) entry["args"] = s.Args;
+                if (s.Env is { Count: > 0 }) entry["env"] = s.Env;
+            }
+            if (!s.Enabled) entry["enabled"] = false;
+            if (s.AutoApprove) entry["autoApprove"] = true;
+
+            var key = string.IsNullOrWhiteSpace(s.Name) ? s.Id : s.Name;
+            if (!string.IsNullOrWhiteSpace(key))
+                map[key] = entry;
+        }
+
+        return JsonSerializer.Serialize(new { mcpServers = map }, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     /// <summary>
     /// Parses the Claude-Code-style <c>mcp.json</c>. Tolerant — a malformed root or entry is skipped, never
     /// thrown on. Transport is taken from an explicit <c>"type"</c> (http/sse ⇒ HTTP) else inferred from

@@ -311,11 +311,16 @@ wire-format change.
   ship: **stdio** (`McpConnection.BuildStdioTransport` launches `Command`+`Args` as a child process and speaks
   JSON-RPC over its stdio) and **HTTP** (`BuildHttpTransport` → `HttpClientTransport` with `Endpoint`+
   `AdditionalHeaders`; `TransportMode` left at AutoDetect = Streamable HTTP, falling back to SSE).
-- **Per-project servers.** A project may ship `<project>/.AI/mcp.json` in **Claude Code's shape**
-  (`{ "mcpServers": { "<name>": { command|url, args, env, headers, type } } }`); `McpConfigStore.Parse`
-  (pure, tolerant, unit-tested) maps each entry to a `McpServerConfig` (transport inferred from `type`/`url`).
-  `McpService.EnabledServers(projectDir)` merges global (Settings) + project, **project overriding global by
-  id**. (The Settings panel edits the **global** set; project servers are config-file only.)
+- **Per-project servers + scope.** A project may ship `<project>/.AI/mcp.json` in **Claude Code's shape**
+  (`{ "mcpServers": { "<name>": { command|url, args, env, headers, type } } }`); `McpConfigStore` is the pure,
+  tolerant, unit-tested (de)serializer (`Parse`/`Serialize`, transport inferred from `type`/`url`) + a
+  best-effort `Load`/`Save`. `McpService.EnabledServers(projectDir)` merges global (Settings) + project,
+  **project overriding global by id**. Each server has a **scope**: the Settings panel writes a **Global**
+  server to `AppSettings.McpServers` and a **Local** one to the project's `.AI/mcp.json` (so it travels with
+  the repo and loads on open). `McpServerConfig.IsProjectScoped` is a **transient `[JsonIgnore]` marker** the
+  panel sets per scope on load; `McpViewModel.SaveAll` rewrites *both* stores from the in-memory list
+  (`Where(!IsProjectScoped)` → settings, `Where(IsProjectScoped)` → file). New servers default to **Local**
+  when a project is open. A "don't commit secrets" note shows for Local servers (env/headers can carry tokens).
 - **Namespacing.** A server tool is advertised as `mcp__<id>__<tool>` (Claude Code's convention) via the pure
   `McpToolName` helper (`Make`/`TryParse`/`IsMcp`/`SanitizeId`, `internal static`, unit-tested): the id is
   reduced to `[a-z0-9-]` (no underscores, so the first `__` after the prefix always splits id from tool), names
@@ -344,8 +349,8 @@ wire-format change.
   `CapTools` intersects it) and an **"MCP tools"** checkbox in the Agents editor.
 - **Settings UI.** A new **MCP Servers** category (`SettingsViewModel.McpPanel` = `McpViewModel`, a master/detail
   mirroring `AgentsViewModel`; `McpPanel.Initialize(projectDir)` called before the window opens). Add/Edit/
-  Remove a server (Name + **Transport** dropdown → stdio shows Command/Args/Env, HTTP shows URL/Headers; plus
-  Enabled/Trusted) + a **Test connection** button that calls `IMcpService.TestAsync` and shows ✅/🔴 + tool
+  Remove a server (Name + a **Scope** toggle Local/Global when a project is open + **Transport** dropdown →
+  stdio shows Command/Args/Env, HTTP shows URL/Headers; plus Enabled/Trusted) + a **Test connection** button that calls `IMcpService.TestAsync` and shows ✅/🔴 + tool
   count **and the discovered tools list** (name + description — `McpProbe.Tools` from
   `McpConnection.ListToolSummariesAsync`, shown via `McpViewModel.DiscoveredTools`/`HasDiscoveredTools`).
   Because stdio launchers (`npx`/`uvx`/…) must be on PATH, a missing command is the usual failure —

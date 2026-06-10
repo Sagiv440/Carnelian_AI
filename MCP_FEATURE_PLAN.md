@@ -6,6 +6,15 @@
 
 Status: **Phases 1–3 IMPLEMENTED — feature complete.**
 
+**Post-plan enhancements:** the Settings panel now shows a server's **discovered tools** (name + description)
+after **Test connection** (`McpConnection.ListToolSummariesAsync` → `McpProbe.Tools` → `McpViewModel.DiscoveredTools`),
+and per-project `.AI/mcp.json` became **writable with a per-server scope**: each server is **Global** (saved to
+`AppSettings.McpServers`) or **Local** (saved to the project's `.AI/mcp.json`, so it travels with the repo and
+loads on open), chosen via a **Scope** toggle in the editor (Local is the default when a project is open).
+`McpConfigStore` gained `Serialize`/`Save`; `McpServerConfig.IsProjectScoped` is a transient `[JsonIgnore]`
+marker and `McpViewModel.SaveAll` rewrites both stores from the in-memory list. A "don't commit secrets" note
+shows for Local servers (env/headers can carry tokens). Round-tripped by `Serialize_RoundTripsThroughParse`.
+
 **Phase 3 — what shipped:** MCP **resources** (browse & attach as context) — `IMcpService.ListResourcesAsync`/
 `ReadResourceAsync`, the `McpResourceBrowserWindow`/`McpResourceBrowserViewModel` dialog (composer 📎 →
 "From MCP server…"), staged as composer chips and folded into the prompt's `[Attached documents]` channel;

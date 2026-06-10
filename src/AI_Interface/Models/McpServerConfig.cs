@@ -61,4 +61,12 @@ public sealed class McpServerConfig
     /// Default false — MCP tools reach external services, so they are approval-gated like destructive tools.
     /// </summary>
     public bool AutoApprove { get; set; }
+
+    /// <summary>
+    /// <b>Transient</b> UI-only marker (never persisted): true when this server belongs to the active project's
+    /// <c>.AI/mcp.json</c> rather than the global settings. Set by the Settings panel when it loads each scope;
+    /// <see cref="JsonIgnoreAttribute"/> so it lands in neither store.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsProjectScoped { get; set; }
 }

@@ -87,6 +87,44 @@ public sealed class McpConfigStoreTests
     }
 
     [Fact]
+    public void Serialize_RoundTripsThroughParse()
+    {
+        var original = new[]
+        {
+            new McpServerConfig
+            {
+                Id = "filesystem", Name = "filesystem", Transport = McpTransport.Stdio,
+                Command = "npx", Args = { "-y", "@modelcontextprotocol/server-filesystem", "/data" },
+                Env = { ["TOKEN"] = "abc" }, Enabled = true, AutoApprove = true
+            },
+            new McpServerConfig
+            {
+                Id = "remote", Name = "remote", Transport = McpTransport.Http,
+                Url = "https://example.com/mcp", Headers = { ["Authorization"] = "Bearer x" }, Enabled = false
+            }
+        };
+
+        var parsed = McpConfigStore.Parse(McpConfigStore.Serialize(original));
+
+        Assert.Equal(2, parsed.Count);
+
+        var fs = parsed.Single(s => s.Id == "filesystem");
+        Assert.Equal(McpTransport.Stdio, fs.Transport);
+        Assert.Equal("npx", fs.Command);
+        Assert.Equal(new[] { "-y", "@modelcontextprotocol/server-filesystem", "/data" }, fs.Args);
+        Assert.Equal("abc", fs.Env["TOKEN"]);
+        Assert.True(fs.Enabled);
+        Assert.True(fs.AutoApprove);
+
+        var remote = parsed.Single(s => s.Id == "remote");
+        Assert.Equal(McpTransport.Http, remote.Transport);
+        Assert.Equal("https://example.com/mcp", remote.Url);
+        Assert.Equal("Bearer x", remote.Headers["Authorization"]);
+        Assert.False(remote.Enabled);
+        Assert.False(remote.AutoApprove);
+    }
+
+    [Fact]
     public void Parse_MultipleServers_AllReturned()
     {
         const string json = """
