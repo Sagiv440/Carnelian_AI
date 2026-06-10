@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -13,7 +14,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AI_Interface.ViewModels;
 
-public sealed partial class MainWindowViewModel : ViewModelBase
+public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     /// <summary>
     /// Base (mode-neutral) chat instructions. The active agent's persona is layered on top via
@@ -192,6 +193,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>Root of the project file tree (one node = the project directory) for the Files tab.</summary>
     public ObservableCollection<FileNode> FileTree { get; } = new();
+
+    // Live file-tree updates. A FileSystemWatcher runs only while the Files tab is open (switching to it
+    // already rebuilds the tree, so staleness only matters while it stays open). Bursty FS events are
+    // coalesced through a short debounce, then each touched directory node is reconciled in place.
+    private FileSystemWatcher? _fileWatcher;
+    private System.Threading.Timer? _fileDebounce;
+    private readonly HashSet<string> _pendingDirRefresh = new(PathComparer);
+    private readonly object _pendingLock = new();
+
+    /// <summary>Case rules for path identity match the host filesystem (Windows is case-insensitive).</summary>
+    private static readonly StringComparison PathCmp =
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    private static StringComparer PathComparer =>
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     public MainWindowViewModel(
         IModelRouter router,
@@ -1248,6 +1263,134 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         var root = new FileNode(ActiveProject.Directory, isDirectory: true) { IsExpanded = true };
         FileTree.Add(root);
+    }
+
+    /// <summary>Start watching when the Files tab opens; stop when it closes (or the project exits).</summary>
+    partial void OnShowProjectFilesChanged(bool value)
+    {
+        if (value)
+            StartFileWatcher();
+        else
+            StopFileWatcher();
+    }
+
+    /// <summary>Begins watching the active project directory for add/remove/rename so the tree stays live.</summary>
+    private void StartFileWatcher()
+    {
+        StopFileWatcher();
+        if (ActiveProject is null)
+            return;
+
+        try
+        {
+            var watcher = new FileSystemWatcher(ActiveProject.Directory)
+            {
+                IncludeSubdirectories = true,
+                // Only structural changes affect the tree (create/delete/rename of files & folders).
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName,
+                InternalBufferSize = 64 * 1024, // headroom against overflow during bursts
+            };
+            watcher.Created += OnFileSystemChanged;
+            watcher.Deleted += OnFileSystemChanged;
+            watcher.Renamed += OnFileSystemRenamed;
+            watcher.Error += OnFileSystemError;
+
+            // Threadpool timer (re-armed per event) debounces bursts; Change() is thread-safe.
+            _fileDebounce = new System.Threading.Timer(_ => FlushFileRefresh(), null, Timeout.Infinite, Timeout.Infinite);
+            watcher.EnableRaisingEvents = true;
+            _fileWatcher = watcher;
+        }
+        catch
+        {
+            // Some environments forbid file watchers; fall back silently to the ⟳ button.
+            StopFileWatcher();
+        }
+    }
+
+    /// <summary>Stops and disposes the watcher + debounce timer and clears any pending refreshes.</summary>
+    private void StopFileWatcher()
+    {
+        if (_fileWatcher is not null)
+        {
+            _fileWatcher.EnableRaisingEvents = false;
+            _fileWatcher.Created -= OnFileSystemChanged;
+            _fileWatcher.Deleted -= OnFileSystemChanged;
+            _fileWatcher.Renamed -= OnFileSystemRenamed;
+            _fileWatcher.Error -= OnFileSystemError;
+            _fileWatcher.Dispose();
+            _fileWatcher = null;
+        }
+        _fileDebounce?.Dispose();
+        _fileDebounce = null;
+        lock (_pendingLock) _pendingDirRefresh.Clear();
+    }
+
+    /// <summary>Releases the file watcher (the window disposes the VM on close — see MainWindow.OnClosed).</summary>
+    public void Dispose() => StopFileWatcher();
+
+    // FS events arrive on a threadpool thread: record the affected parent directory and (re)arm the debounce.
+    private void OnFileSystemChanged(object? sender, FileSystemEventArgs e) =>
+        QueueDirRefresh(Path.GetDirectoryName(e.FullPath));
+
+    private void OnFileSystemRenamed(object? sender, RenamedEventArgs e)
+    {
+        QueueDirRefresh(Path.GetDirectoryName(e.FullPath));
+        QueueDirRefresh(Path.GetDirectoryName(e.OldFullPath));
+    }
+
+    // Buffer overflow / lost events: fall back to a full rebuild of the tree (unless we've since stopped).
+    private void OnFileSystemError(object? sender, ErrorEventArgs e) =>
+        Dispatcher.UIThread.Post(() => { if (_fileWatcher is not null) LoadFileTree(); });
+
+    private void QueueDirRefresh(string? dir)
+    {
+        if (string.IsNullOrEmpty(dir))
+            return;
+        lock (_pendingLock) _pendingDirRefresh.Add(dir);
+        _fileDebounce?.Change(300, Timeout.Infinite);
+    }
+
+    /// <summary>Debounce fired (threadpool): reconcile every touched directory node on the UI thread.</summary>
+    private void FlushFileRefresh()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_fileWatcher is null) // torn down between the timer firing and this post running
+                return;
+            string[] dirs;
+            lock (_pendingLock)
+            {
+                dirs = _pendingDirRefresh.ToArray();
+                _pendingDirRefresh.Clear();
+            }
+            foreach (var dir in dirs)
+                FindLoadedDirNode(dir)?.Reconcile();
+        });
+    }
+
+    /// <summary>Finds the (already-loaded) tree node for a directory path, or null if it isn't shown yet.</summary>
+    private FileNode? FindLoadedDirNode(string path)
+    {
+        foreach (var root in FileTree)
+            if (FindDirNode(root, path) is { } hit)
+                return hit;
+        return null;
+    }
+
+    private static FileNode? FindDirNode(FileNode node, string path)
+    {
+        if (!node.IsDirectory)
+            return null;
+        if (string.Equals(
+                node.FullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                PathCmp))
+            return node;
+
+        foreach (var child in node.Children)
+            if (child.IsDirectory && FindDirNode(child, path) is { } hit)
+                return hit;
+        return null;
     }
 
     /// <summary>

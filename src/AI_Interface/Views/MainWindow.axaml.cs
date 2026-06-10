@@ -34,6 +34,12 @@ public partial class MainWindow : Window
             await vm.InitializeAsync();
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        _vm?.Dispose(); // release the project file watcher / debounce timer if still running
+        base.OnClosed(e);
+    }
+
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_vm is not null)

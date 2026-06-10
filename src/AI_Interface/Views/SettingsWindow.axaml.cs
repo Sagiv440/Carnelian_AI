@@ -62,6 +62,9 @@ public partial class SettingsWindow : Window
             DataContext = App.Services.GetRequiredService<ModelConfigViewModel>()
         };
         await window.ShowDialog(this);
+
+        // A local model may have been downloaded/removed in there — reload the main window's picker.
+        _vm?.NotifyModelsChanged();
     }
 
     private async void OnVoiceBrowserRequested(object? sender, EventArgs e)

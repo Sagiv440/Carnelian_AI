@@ -103,6 +103,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Raised by the Connect button — the main window reconnects and reloads its model list.</summary>
     public event System.EventHandler? ConnectRequested;
 
+    /// <summary>
+    /// Ask the host to reload its model list. Used after the Model Config window closes (a local model may
+    /// have been downloaded or removed there) — reuses the <see cref="ConnectRequested"/> reload path.
+    /// </summary>
+    public void NotifyModelsChanged() => ConnectRequested?.Invoke(this, System.EventArgs.Empty);
+
     /// <summary>Preset color swatches (the flat IDE palette).</summary>
     public IReadOnlyList<string> Palette { get; } = ThemeDefaults.Palette;
 

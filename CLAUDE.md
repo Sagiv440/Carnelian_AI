@@ -467,8 +467,16 @@ referenced by `<ApplicationIcon>` in the csproj and `Window.Icon` in `MainWindow
 **Sidebar.** New Chat + Project buttons, then the chat log, the Deep Research toggle, the active-project
 card, and the model/connection footer. When a project is active a **Chat Log / Files** tab strip appears:
 *Files* shows a lazy-loading `TreeView` of the project directory backed by `FileNode` (children load on
-expand; a ⟳ button refreshes). The active-project card shows the name + "N skills loaded". A saved chat's
-per-item **✕** deletes it (`DeleteSessionCommand`).
+expand; a ⟳ button refreshes). It also updates **live**: while the Files tab is open a `FileSystemWatcher`
+(started/stopped by `OnShowProjectFilesChanged`, scoped to the project dir, `NotifyFilter` =
+FileName|DirectoryName, recursive) watches for add/remove/rename. Events arrive on a threadpool thread, are
+coalesced through a 300 ms `System.Threading.Timer` debounce, then each touched directory is mapped to its
+node (`FindLoadedDirNode`) and merged **in place** via `FileNode.Reconcile` (`Dispatcher.UIThread.Post`) —
+which adds/removes/reorders children but **keeps existing nodes**, so an expanded sub-tree isn't collapsed
+(a never-loaded folder is left alone — it reloads on expand). Switching *to* the Files tab already does a
+full `LoadFileTree`, so the watcher only needs to cover changes while it stays open; a watcher `Error`
+(buffer overflow) falls back to a full rebuild. The active-project card shows the name + "N skills loaded".
+A saved chat's per-item **✕** deletes it (`DeleteSessionCommand`).
 
 **Conversation actions (composer toolbar).** Two user-triggered actions sit by Send/Stop (any mode):
 **🗜 Compact** (`CompactCommand`) — summarises the current transcript via `IChatClient.CompleteAsync` and
