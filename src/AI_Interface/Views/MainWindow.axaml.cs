@@ -157,6 +157,28 @@ public partial class MainWindow : Window
             await Clipboard.SetTextAsync(message.Text);
     }
 
+    // --- Project file tree: double-click opens a file; right-click context menu (see MainWindow.axaml) ---
+
+    private void OnFileTreeDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        // The first tap selects the row, so SelectedItem is the double-clicked node. Folders keep the
+        // default expand/collapse behaviour; only files are opened with the OS default app.
+        if ((sender as TreeView)?.SelectedItem is FileNode { IsDirectory: false } file)
+            _vm?.OpenFileWithOsCommand.Execute(file);
+    }
+
+    private void OnOpenInFileExplorer(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FileNode node)
+            _vm?.OpenInFileExplorerCommand.Execute(node);
+    }
+
+    private void OnViewInFolder(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FileNode node)
+            _vm?.RevealInFolderCommand.Execute(node);
+    }
+
     private async void OnCopyCode(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: MessageSegment segment } && Clipboard is not null)

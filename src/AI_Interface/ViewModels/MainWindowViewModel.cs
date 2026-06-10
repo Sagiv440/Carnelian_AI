@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -1707,15 +1708,101 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         try
         {
             // UseShellExecute lets the OS pick the default browser on both Windows and Linux.
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
-            {
-                UseShellExecute = true
-            });
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }
         catch
         {
             // Opening a link should never crash the app.
         }
+    }
+
+    // --- Project file tree context actions (right-click / double-click) ----------------------------
+
+    /// <summary>Context menu (folder): open the folder in the OS file manager.</summary>
+    [RelayCommand]
+    private void OpenInFileExplorer(FileNode? node)
+    {
+        if (node is { IsDirectory: true, FullPath.Length: > 0 })
+            ShellOpenFolder(node.FullPath);
+    }
+
+    /// <summary>Context menu (file): open the file's containing folder, selecting the file where supported.</summary>
+    [RelayCommand]
+    private void RevealInFolder(FileNode? node)
+    {
+        if (node is { IsDirectory: false, FullPath.Length: > 0 })
+            ShellRevealFile(node.FullPath);
+    }
+
+    /// <summary>Double-click (file): ask the OS to open the file with its default application.</summary>
+    [RelayCommand]
+    private void OpenFileWithOs(FileNode? node)
+    {
+        if (node is { IsDirectory: false, FullPath.Length: > 0 })
+            ShellOpenFile(node.FullPath);
+    }
+
+    // OS shell launchers — best-effort; opening something in the file manager must never crash the app.
+
+    private static void ShellOpenFolder(string path)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                Process.Start(new ProcessStartInfo("explorer.exe") { Arguments = $"\"{path}\"", UseShellExecute = true });
+            else
+                StartUnixOpener(path);
+        }
+        catch { /* ignored */ }
+    }
+
+    private static void ShellRevealFile(string filePath)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                // explorer's /select opens the containing folder with the file highlighted.
+                Process.Start(new ProcessStartInfo("explorer.exe") { Arguments = $"/select,\"{filePath}\"", UseShellExecute = true });
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                var psi = new ProcessStartInfo("open") { UseShellExecute = false };
+                psi.ArgumentList.Add("-R");
+                psi.ArgumentList.Add(filePath);
+                Process.Start(psi);
+            }
+            else
+            {
+                // No portable "reveal & select" on Linux — open the containing folder instead.
+                var folder = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(folder))
+                    StartUnixOpener(folder);
+            }
+        }
+        catch { /* ignored */ }
+    }
+
+    private static void ShellOpenFile(string filePath)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+                Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
+            else
+                StartUnixOpener(filePath);
+        }
+        catch { /* ignored */ }
+    }
+
+    // Linux: xdg-open / macOS: open — picks the default handler for a file or folder. ArgumentList avoids
+    // manual quoting (paths with spaces).
+    private static void StartUnixOpener(string target)
+    {
+        var opener = OperatingSystem.IsMacOS() ? "open" : "xdg-open";
+        var psi = new ProcessStartInfo(opener) { UseShellExecute = false };
+        psi.ArgumentList.Add(target);
+        Process.Start(psi);
     }
 
     private void RequestScroll() => ScrollToEndRequested?.Invoke(this, EventArgs.Empty);

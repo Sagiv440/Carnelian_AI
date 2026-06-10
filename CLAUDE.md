@@ -475,7 +475,14 @@ node (`FindLoadedDirNode`) and merged **in place** via `FileNode.Reconcile` (`Di
 which adds/removes/reorders children but **keeps existing nodes**, so an expanded sub-tree isn't collapsed
 (a never-loaded folder is left alone — it reloads on expand). Switching *to* the Files tab already does a
 full `LoadFileTree`, so the watcher only needs to cover changes while it stays open; a watcher `Error`
-(buffer overflow) falls back to a full rebuild. The active-project card shows the name + "N skills loaded".
+(buffer overflow) falls back to a full rebuild. **Tree interactions:** right-click a row for a context menu
+(folder → *Open In File Explorer*; file → *View in Folder*), and double-click a file to open it with the OS
+default app. The XAML wires a `ContextMenu` (per-row, `x:CompileBindings="False"` so it binds the row's
+`FileNode`) + `DoubleTapped`; thin code-behind handlers (`OnOpenInFileExplorer`/`OnViewInFolder`/
+`OnFileTreeDoubleTapped`, using `SelectedItem` / the menu item's `DataContext` — popups can't reach the
+window via `RelativeSource`) invoke the VM's `OpenInFileExplorer`/`RevealInFolder`/`OpenFileWithOs`
+commands, which shell out per-OS (`explorer.exe`/`explorer /select,` on Windows, `open`/`open -R` on macOS,
+`xdg-open` on Linux) — best-effort, mirroring `OpenUrl`. The active-project card shows the name + "N skills loaded".
 A saved chat's per-item **✕** deletes it (`DeleteSessionCommand`).
 
 **Conversation actions (composer toolbar).** Two user-triggered actions sit by Send/Stop (any mode):

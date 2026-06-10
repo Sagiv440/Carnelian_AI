@@ -566,10 +566,23 @@
                 <!-- Project files: hierarchical tree with expand/collapse arrows -->
                 <ScrollViewer Grid.Row="4" HorizontalScrollBarVisibility="Auto"
                               IsVisible="{Binding ShowProjectFiles}">
-                    <TreeView Classes="files" ItemsSource="{Binding FileTree}">
+                    <TreeView x:Name="ProjectFileTree" Classes="files" ItemsSource="{Binding FileTree}"
+                              DoubleTapped="OnFileTreeDoubleTapped">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:FileNode">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <!-- Right-click: folder -> open in file manager; file -> reveal its folder.
+                                         CompileBindings off so the menu binds against the row's FileNode. -->
+                                    <StackPanel.ContextMenu>
+                                        <ContextMenu x:CompileBindings="False">
+                                            <MenuItem Header="Open In File Explorer"
+                                                      IsVisible="{Binding IsDirectory}"
+                                                      Click="OnOpenInFileExplorer"/>
+                                            <MenuItem Header="View in Folder"
+                                                      IsVisible="{Binding !IsDirectory}"
+                                                      Click="OnViewInFolder"/>
+                                        </ContextMenu>
+                                    </StackPanel.ContextMenu>
                                     <TextBlock Text="{Binding Glyph}"/>
                                     <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource AppTextPrimary}"/>
