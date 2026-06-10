@@ -170,6 +170,11 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
     {
         "list_directory" => Truncate(ListDirectory(project, GetString(call.Arguments, "path"))),
         "read_file"      => Truncate(ReadFile(project, GetString(call.Arguments, "path"))),
+        // Reuse the single-agent search/find implementations (read-only) so the lead can scope before delegating.
+        "search_files"   => Truncate(ProjectAgentService.SearchFiles(project, GetString(call.Arguments, "pattern"),
+                                GetString(call.Arguments, "path"), GetString(call.Arguments, "glob"))),
+        "find_files"     => Truncate(ProjectAgentService.FindFiles(project, GetString(call.Arguments, "glob"),
+                                GetString(call.Arguments, "path"))),
         "update_docs"    => Truncate(UpdateDocs(project, GetString(call.Arguments, "content"))),
         _                => $"Unknown tool '{call.Name}'."
     };
@@ -183,6 +188,8 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
     {
         "list_directory" => ("List directory", GetString(call.Arguments, "path") ?? "."),
         "read_file"      => ("Read file", GetString(call.Arguments, "path") ?? ""),
+        "search_files"   => ("Search files", GetString(call.Arguments, "pattern") ?? ""),
+        "find_files"     => ("Find files", GetString(call.Arguments, "glob") ?? ""),
         "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName),
         _                => (call.Name, "")
     };
@@ -568,6 +575,32 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                     type = "object",
                     properties = new { path = new { type = "string", description = "Path relative to the project root." } },
                     required = new[] { "path" }
+                })));
+            tools.Add(new("search_files",
+                "Search file contents across the project for a regular expression (like grep), returning " +
+                "'path:line: text'. Use it to find where something lives before delegating.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        pattern = new { type = "string", description = "Regular expression to search for (case-insensitive)." },
+                        path = new { type = "string", description = "File or folder to search in. Omit or \".\" for the whole project." },
+                        glob = new { type = "string", description = "Optional glob to limit files, e.g. \"*.cs\" or \"src/**/*.ts\"." }
+                    },
+                    required = new[] { "pattern" }
+                })));
+            tools.Add(new("find_files",
+                "Find files whose path matches a glob (e.g. \"**/*.csproj\"). Returns matching paths.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        glob = new { type = "string", description = "Glob pattern. Without '/' it matches by file name; include '/' or '**' to match by path." },
+                        path = new { type = "string", description = "Folder to search under. Omit or \".\" for the whole project." }
+                    },
+                    required = new[] { "glob" }
                 })));
         }
 

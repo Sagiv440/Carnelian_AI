@@ -26,6 +26,13 @@ public sealed class ProjectAgentActivityHelpersTests
     [InlineData("remember", "💾")]
     [InlineData("create_skill", "✨")]
     [InlineData("update_docs", "📘")]
+    // Batch 1 tools:
+    [InlineData("search_files", "🔍")]
+    [InlineData("find_files", "🔎")]
+    [InlineData("edit_file", "✏️")]   // shares the pencil glyph with write_file
+    [InlineData("move_file", "➡️")]
+    [InlineData("copy_file", "📋")]
+    [InlineData("web_search", "🌐")]
     public void IconFor_KnownTool_ReturnsExpectedGlyph(string tool, string expected)
     {
         Assert.Equal(expected, ProjectAgentService.IconFor(tool));
@@ -54,6 +61,11 @@ public sealed class ProjectAgentActivityHelpersTests
     [InlineData("Failed to start command: npm")]                                   // "Failed to start command"
     [InlineData("Command timed out after 120s and was terminated.")]               // "timed out after"
     [InlineData("Path 'x' is outside the project directory and was blocked.")]     // "was blocked"
+    // Batch 1 failure markers:
+    [InlineData("Source not found: a/b")]                                          // move/copy: "not found:"
+    [InlineData("Error: web search failed — boom")]                                // web_search: "Error:" prefix
+    [InlineData("The 'find' text was not present in a.cs — nothing changed. Read the file and copy an exact snippet (whitespace and indentation included).")] // edit_file miss: "— nothing changed."
+    [InlineData("Destination already exists: b.cs. Delete it or choose another path — nothing changed.")] // copy/move dest-exists no-op: "— nothing changed."
     public void IsFailure_FailureMarkers_ReturnTrue(string result)
     {
         Assert.True(ProjectAgentService.IsFailure(result));
@@ -63,8 +75,26 @@ public sealed class ProjectAgentActivityHelpersTests
     [InlineData("Wrote 42 characters to App.jsx.")]
     [InlineData("read 120 lines")]
     [InlineData("Remembered (this project): the build uses vite.")]
+    // Batch 1 benign "nothing found" results are NOT failures (empty-result success, not an error):
+    [InlineData("No matches for /foo/.")]                                          // search_files: zero hits
+    [InlineData("No files match '**/*.cs'.")]                                      // find_files: zero hits
+    [InlineData("No web results for 'x'.")]                                        // web_search: zero hits
     public void IsFailure_SuccessString_ReturnsFalse(string result)
     {
+        Assert.False(ProjectAgentService.IsFailure(result));
+    }
+
+    // ---- IsFailure: the tightened "— nothing changed." marker (regression) ---------------------
+    // The edit_file/move/copy no-op marker was deliberately narrowed from "nothing changed" to the em-dash
+    // form "— nothing changed." so that benign command output that merely contains the words "nothing changed"
+    // is NOT mis-flagged as a failure. These guard that regression.
+
+    [Theory]
+    [InlineData("exit code: 0\nstdout:\nNothing changed")]      // a command that printed "Nothing changed"
+    [InlineData("nothing to commit, working tree clean")]       // `git commit` on a clean tree
+    public void IsFailure_BenignNothingChangedWithoutEmDash_ReturnsFalse(string result)
+    {
+        // Contains the words "nothing changed" / "nothing to" but NOT the distinctive "— nothing changed." suffix.
         Assert.False(ProjectAgentService.IsFailure(result));
     }
 

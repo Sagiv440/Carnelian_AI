@@ -436,6 +436,38 @@ public class AgentOrchestratorTests
     }
 
     [Fact]
+    public void DescribeLeadTool_SearchFiles_UsesPatternArg()
+    {
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(Call("search_files", new { pattern = "TODO" }));
+        Assert.Equal("Search files", summary);
+        Assert.Equal("TODO", detail);
+    }
+
+    [Fact]
+    public void DescribeLeadTool_SearchFiles_NoPattern_DefaultsToEmpty()
+    {
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(CallNoArgs("search_files"));
+        Assert.Equal("Search files", summary);
+        Assert.Equal("", detail);
+    }
+
+    [Fact]
+    public void DescribeLeadTool_FindFiles_UsesGlobArg()
+    {
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(Call("find_files", new { glob = "**/*.cs" }));
+        Assert.Equal("Find files", summary);
+        Assert.Equal("**/*.cs", detail);
+    }
+
+    [Fact]
+    public void DescribeLeadTool_FindFiles_NoGlob_DefaultsToEmpty()
+    {
+        var (summary, detail) = AgentOrchestrator.DescribeLeadTool(CallNoArgs("find_files"));
+        Assert.Equal("Find files", summary);
+        Assert.Equal("", detail);
+    }
+
+    [Fact]
     public void DescribeLeadTool_UpdateDocs_PointsAtHandbookPath()
     {
         // Detail is the fixed handbook path ".AI/" + ProjectDocsService.FileName ("AI_DOCS.md").

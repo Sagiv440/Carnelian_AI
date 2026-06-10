@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AI_Interface.Models;
@@ -29,12 +30,29 @@ public sealed class ProjectAgentService : IProjectAgentService
 
     private readonly IMemoryService _memory;
     private readonly IProjectDocsService _docs;
+    private readonly IWebSearchService _search;
 
-    public ProjectAgentService(IMemoryService memory, IProjectDocsService docs)
+    public ProjectAgentService(IMemoryService memory, IProjectDocsService docs, IWebSearchService search)
     {
         _memory = memory;
         _docs = docs;
+        _search = search;
     }
+
+    // ---- limits for the search/find tools --------------------------------------------------
+
+    /// <summary>Folders skipped by search_files / find_files (vcs, build output, deps, the app's own .AI).</summary>
+    private static readonly string[] ScanExcludeDirs =
+        { ".git", ".AI", "node_modules", "bin", "obj", ".vs", ".idea", "dist", "build", ".next", "target" };
+
+    /// <summary>Cap on matching lines returned by search_files (keeps the tool result bounded).</summary>
+    private const int MaxSearchMatches = 100;
+
+    /// <summary>Cap on paths returned by find_files.</summary>
+    private const int MaxFindResults = 200;
+
+    /// <summary>Files larger than this are skipped by search_files (likely data/binaries, not source).</summary>
+    private const long MaxScanFileBytes = 1_000_000;
 
     /// <summary>
     /// Maintenance directive appended to the system prompt when the agent owns the handbook (top-level run).
@@ -240,10 +258,21 @@ public sealed class ProjectAgentService : IProjectAgentService
             {
                 "list_directory" => ListDirectory(project, path),
                 "read_file"      => ReadFile(project, path),
+                "search_files"   => SearchFiles(project, GetString(call.Arguments, "pattern"), path,
+                                        GetString(call.Arguments, "glob")),
+                "find_files"     => FindFiles(project, GetString(call.Arguments, "glob"), path),
                 "write_file"     => WriteFile(project, path, GetString(call.Arguments, "content") ?? ""),
+                "edit_file"      => EditFile(project, path, GetString(call.Arguments, "find"),
+                                        GetString(call.Arguments, "replace")),
+                "move_file"      => MoveFile(project, GetString(call.Arguments, "source"),
+                                        GetString(call.Arguments, "destination")),
+                "copy_file"      => CopyFile(project, GetString(call.Arguments, "source"),
+                                        GetString(call.Arguments, "destination")),
                 "create_folder"  => CreateFolder(project, path),
                 "delete_file"    => DeleteFile(project, path),
                 "delete_folder"  => DeleteFolder(project, path),
+                "web_search"     => await WebSearchAsync(GetString(call.Arguments, "query"),
+                                        GetString(call.Arguments, "max"), ct).ConfigureAwait(false),
                 "run_command"    => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
                                         .ConfigureAwait(false),
                 "install_software" => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
@@ -282,11 +311,17 @@ public sealed class ProjectAgentService : IProjectAgentService
     {
         "list_directory" => ("List directory", path ?? ".", false),
         "read_file"      => ("Read file", path ?? "", false),
+        "search_files"   => ("Search files", GetString(call.Arguments, "pattern") ?? "", false),
+        "find_files"     => ("Find files", GetString(call.Arguments, "glob") ?? "", false),
         "create_folder"  => ("Create folder", path ?? "", false),
         "write_file"     => ("Write file", path ?? "", WouldOverwrite(project, path)),
+        "edit_file"      => ("Edit file", path ?? "", true),
+        "move_file"      => ("Move/rename file", GetString(call.Arguments, "source") ?? "", true),
+        "copy_file"      => ("Copy file", GetString(call.Arguments, "source") ?? "", false),
         "delete_file"    => ("Delete file", path ?? "", true),
         "delete_folder"  => ("Delete folder", path ?? "", true),
         "run_command"    => ("Run command", GetString(call.Arguments, "command") ?? "", true),
+        "web_search"     => ("Web search", GetString(call.Arguments, "query") ?? "", false),
         "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
         "remember"       => ("Remember a note", GetString(call.Arguments, "text") ?? "", false),
         "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
@@ -318,12 +353,18 @@ public sealed class ProjectAgentService : IProjectAgentService
     {
         "list_directory"   => "📂",
         "read_file"        => "📄",
+        "search_files"     => "🔍",
+        "find_files"       => "🔎",
         "write_file"       => "✏️",
+        "edit_file"        => "✏️",
+        "move_file"        => "➡️",
+        "copy_file"        => "📋",
         "create_folder"    => "📁",
         "delete_file"      => "🗑",
         "delete_folder"    => "🗑",
         "run_command"      => "⌘",
         "install_software" => "📦",
+        "web_search"       => "🌐",
         "remember"         => "💾",
         "create_skill"     => "✨",
         "update_docs"      => "📘",
@@ -354,7 +395,8 @@ public sealed class ProjectAgentService : IProjectAgentService
     {
         "declined to run", "not permitted", "is disabled", "Refusing to",
         "can only be changed with the update_docs",
-        "not found:", "Failed to start command", "timed out after", "was blocked"
+        "not found:", "Failed to start command", "timed out after", "was blocked",
+        "— nothing changed." // distinctive edit_file/move/copy no-op suffix (em-dash form avoids matching benign tool output)
     };
 
     /// <summary>Persists a fact to memory. <c>scope</c> "user" → global; anything else (default) → this project.</summary>
@@ -455,13 +497,16 @@ public sealed class ProjectAgentService : IProjectAgentService
     /// <summary>Maps a tool name to the <see cref="AgentToolGroup"/> that gates it (null = always allowed).</summary>
     private static AgentToolGroup? ToolGroupOf(string toolName) => toolName switch
     {
-        "list_directory" or "read_file"     => AgentToolGroup.ReadFiles,
-        "write_file" or "create_folder"     => AgentToolGroup.WriteFiles,
-        "delete_file" or "delete_folder"    => AgentToolGroup.DeleteFiles,
-        "run_command"                       => AgentToolGroup.RunCommands,
-        "install_software"                  => AgentToolGroup.InstallSoftware,
-        "update_docs"                       => null, // writes only to the fixed handbook path — not allow-list-gated
-        _                                   => null
+        "list_directory" or "read_file"
+            or "search_files" or "find_files"          => AgentToolGroup.ReadFiles,
+        "write_file" or "create_folder"
+            or "edit_file" or "move_file" or "copy_file" => AgentToolGroup.WriteFiles,
+        "delete_file" or "delete_folder"               => AgentToolGroup.DeleteFiles,
+        "run_command"                                  => AgentToolGroup.RunCommands,
+        "install_software"                             => AgentToolGroup.InstallSoftware,
+        "update_docs"                                  => null, // writes only to the fixed handbook path — not allow-list-gated
+        "web_search"                                   => null, // network read, not a file/command tool — ungated
+        _                                              => null
     };
 
     private static string PermissionLabel(AgentToolGroup group) => group switch
@@ -629,6 +674,306 @@ public sealed class ProjectAgentService : IProjectAgentService
         catch { /* best effort */ }
     }
 
+    // ---- search / find / edit / move / copy / web (all confined to the project) ------------
+
+    /// <summary>
+    /// grep over project files: returns matching lines as <c>relpath:line: text</c> (capped). <c>internal</c>
+    /// so the orchestrator's lead loop can reuse it (read-only; no instance state).
+    /// </summary>
+    internal static string SearchFiles(Project project, string? pattern, string? path, string? glob)
+    {
+        pattern = (pattern ?? "").Trim();
+        if (pattern.Length == 0)
+            return "Provide a non-empty 'pattern' to search for.";
+
+        Regex regex;
+        try { regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant); }
+        catch (Exception ex) { return $"Error: invalid search pattern — {ex.Message}"; }
+
+        if (!TryResolve(project.Directory, path, out var full, out var error))
+            return error;
+
+        Regex? globRegex = null;
+        var globFull = false;
+        if (!string.IsNullOrWhiteSpace(glob))
+        {
+            globRegex = GlobToRegex(glob!);
+            globFull = GlobMatchesPath(glob!);
+        }
+
+        IEnumerable<string> files;
+        if (File.Exists(full)) files = new[] { full };
+        else if (Directory.Exists(full)) files = EnumerateProjectFiles(full);
+        else return $"Path not found: {Rel(project, full)}";
+
+        var sb = new StringBuilder();
+        var matches = 0;
+        foreach (var file in files)
+        {
+            if (matches >= MaxSearchMatches) break;
+
+            if (globRegex is not null)
+            {
+                var forGlob = globFull ? RelForward(project, file) : Path.GetFileName(file);
+                if (!globRegex.IsMatch(forGlob)) continue;
+            }
+
+            long length;
+            try { length = new FileInfo(file).Length; } catch { continue; }
+            if (length > MaxScanFileBytes) continue;
+
+            string text;
+            try { text = File.ReadAllText(file); } catch { continue; }
+            if (text.IndexOf('\0') >= 0) continue; // skip binary
+
+            var rel = RelForward(project, file);
+            var lines = text.Split('\n');
+            for (var i = 0; i < lines.Length && matches < MaxSearchMatches; i++)
+            {
+                var line = lines[i].TrimEnd('\r');
+                if (regex.IsMatch(line))
+                {
+                    sb.Append(rel).Append(':').Append(i + 1).Append(": ").AppendLine(line.Trim());
+                    matches++;
+                }
+            }
+        }
+
+        if (matches == 0)
+            return $"No matches for /{pattern}/" + (string.IsNullOrWhiteSpace(glob) ? "" : $" in files matching '{glob}'") + ".";
+        var header = matches >= MaxSearchMatches ? $"(showing the first {MaxSearchMatches} matches)\n" : "";
+        return header + sb.ToString().TrimEnd();
+    }
+
+    /// <summary>Lists project files whose path (or name) matches a glob (capped). <c>internal</c> for lead reuse.</summary>
+    internal static string FindFiles(Project project, string? glob, string? path)
+    {
+        glob = (glob ?? "").Trim();
+        if (glob.Length == 0)
+            return "Provide a non-empty 'glob' pattern (e.g. \"**/*.cs\").";
+
+        if (!TryResolve(project.Directory, path, out var full, out var error))
+            return error;
+        if (!Directory.Exists(full))
+            return $"Directory not found: {Rel(project, full)}";
+
+        var regex = GlobToRegex(glob);
+        var matchFull = GlobMatchesPath(glob);
+
+        var hits = new List<string>();
+        foreach (var file in EnumerateProjectFiles(full))
+        {
+            var target = matchFull ? RelForward(project, file) : Path.GetFileName(file);
+            if (regex.IsMatch(target))
+            {
+                hits.Add(RelForward(project, file));
+                if (hits.Count >= MaxFindResults) break;
+            }
+        }
+
+        if (hits.Count == 0)
+            return $"No files match '{glob}'.";
+        hits.Sort(StringComparer.OrdinalIgnoreCase);
+        var header = hits.Count >= MaxFindResults ? $"(showing the first {MaxFindResults})\n" : "";
+        return header + string.Join('\n', hits);
+    }
+
+    /// <summary>Replaces the FIRST exact occurrence of <paramref name="find"/> with <paramref name="replace"/>.</summary>
+    private static string EditFile(Project project, string? path, string? find, string? replace)
+    {
+        if (string.IsNullOrEmpty(find))
+            return "Provide the 'find' text to replace (it must match the file exactly).";
+        replace ??= "";
+
+        if (!TryResolve(project.Directory, path, out var full, out var error))
+            return error;
+        if (IsHandbookPath(project, full))
+            return HandbookGuardMessage;
+        if (!File.Exists(full))
+            return $"File not found: {Rel(project, full)}";
+
+        var content = File.ReadAllText(full);
+        var idx = content.IndexOf(find, StringComparison.Ordinal);
+        if (idx < 0)
+            return $"The 'find' text was not present in {Rel(project, full)} — nothing changed. " +
+                   "Read the file and copy an exact snippet (whitespace and indentation included).";
+
+        var count = CountOccurrences(content, find);
+        var updated = content[..idx] + replace + content[(idx + find.Length)..];
+        File.WriteAllText(full, updated);
+        return count == 1
+            ? $"Edited {Rel(project, full)} — replaced 1 occurrence ({find.Length}→{replace.Length} chars)."
+            : $"Edited {Rel(project, full)} — replaced the first of {count} occurrences.";
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        if (needle.Length == 0) return 0;
+        int n = 0, i = 0;
+        while ((i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+        return n;
+    }
+
+    /// <summary>Moves/renames a file or folder within the project.</summary>
+    private static string MoveFile(Project project, string? source, string? destination)
+    {
+        if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(destination))
+            return "Provide both 'source' and 'destination' paths.";
+        if (!TryResolve(project.Directory, source, out var src, out var e1)) return e1;
+        if (!TryResolve(project.Directory, destination, out var dst, out var e2)) return e2;
+        if (IsHandbookPath(project, src) || IsHandbookPath(project, dst))
+            return HandbookGuardMessage;
+
+        var isDir = Directory.Exists(src);
+        if (!isDir && !File.Exists(src))
+            return $"Source not found: {Rel(project, src)}";
+        if (Directory.Exists(dst) || File.Exists(dst))
+            return $"Destination already exists: {Rel(project, dst)}. Delete it or choose another path " +
+                   "— nothing changed.";
+
+        var dstDir = Path.GetDirectoryName(dst);
+        if (!string.IsNullOrEmpty(dstDir))
+            Directory.CreateDirectory(dstDir);
+
+        if (isDir) Directory.Move(src, dst);
+        else File.Move(src, dst);
+        return $"Moved {Rel(project, src)} → {Rel(project, dst)}.";
+    }
+
+    /// <summary>Copies a file to a new path within the project.</summary>
+    private static string CopyFile(Project project, string? source, string? destination)
+    {
+        if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(destination))
+            return "Provide both 'source' and 'destination' paths.";
+        if (!TryResolve(project.Directory, source, out var src, out var e1)) return e1;
+        if (!TryResolve(project.Directory, destination, out var dst, out var e2)) return e2;
+        if (IsHandbookPath(project, dst))
+            return HandbookGuardMessage;
+        if (!File.Exists(src))
+            return $"File not found: {Rel(project, src)}";
+        if (Directory.Exists(dst) || File.Exists(dst))
+            return $"Destination already exists: {Rel(project, dst)}. Delete it or choose another path " +
+                   "— nothing changed.";
+
+        var dstDir = Path.GetDirectoryName(dst);
+        if (!string.IsNullOrEmpty(dstDir))
+            Directory.CreateDirectory(dstDir);
+        File.Copy(src, dst);
+        return $"Copied {Rel(project, src)} → {Rel(project, dst)}.";
+    }
+
+    /// <summary>Searches the web via the shared <see cref="IWebSearchService"/>; formats the top results.</summary>
+    private async Task<string> WebSearchAsync(string? query, string? maxRaw, CancellationToken ct)
+    {
+        query = (query ?? "").Trim();
+        if (query.Length == 0)
+            return "Provide a non-empty 'query' to search the web for.";
+
+        var max = 5;
+        if (int.TryParse(maxRaw, out var m))
+            max = Math.Clamp(m, 1, 10);
+
+        IReadOnlyList<SearchResult> results;
+        try { results = await _search.SearchAsync(query, max, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { return $"Error: web search failed — {ex.Message}"; }
+
+        if (results.Count == 0)
+            return $"No web results for '{query}'.";
+
+        var sb = new StringBuilder();
+        var i = 1;
+        foreach (var r in results)
+        {
+            sb.Append(i++).Append(". ").AppendLine(r.Title);
+            sb.Append("   ").AppendLine(r.Url);
+            if (!string.IsNullOrWhiteSpace(r.Snippet))
+                sb.Append("   ").AppendLine(r.Snippet.Trim());
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>Walks files under <paramref name="root"/>, pruning <see cref="ScanExcludeDirs"/> (by name).</summary>
+    private static IEnumerable<string> EnumerateProjectFiles(string root)
+    {
+        var stack = new Stack<string>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var dir = stack.Pop();
+
+            string[] subdirs;
+            try { subdirs = Directory.GetDirectories(dir); }
+            catch { continue; }
+            foreach (var sub in subdirs)
+            {
+                var name = Path.GetFileName(sub);
+                if (ScanExcludeDirs.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    continue;
+                stack.Push(sub);
+            }
+
+            string[] files;
+            try { files = Directory.GetFiles(dir); }
+            catch { continue; }
+            foreach (var f in files)
+                yield return f;
+        }
+    }
+
+    /// <summary>Project-relative path with forward slashes (stable display + glob matching across OSes).</summary>
+    private static string RelForward(Project project, string full) =>
+        Path.GetRelativePath(project.Directory, full).Replace('\\', '/');
+
+    /// <summary>True when a glob is path-scoped (contains a separator or <c>**</c>); else it matches by file name.</summary>
+    internal static bool GlobMatchesPath(string glob) =>
+        glob.Contains('/') || glob.Contains('\\') || glob.Contains("**");
+
+    /// <summary>
+    /// Compiles a glob to an anchored, case-insensitive <see cref="Regex"/> over a '/'-separated path:
+    /// <c>*</c> matches within a segment, <c>**</c> matches across segments (<c>**/</c> also matches zero
+    /// segments), <c>?</c> matches one non-separator char, everything else is literal. Pure (unit-tested).
+    /// </summary>
+    internal static Regex GlobToRegex(string glob)
+    {
+        glob = (glob ?? "").Replace('\\', '/');
+        var sb = new StringBuilder("^");
+        for (var i = 0; i < glob.Length; i++)
+        {
+            var c = glob[i];
+            switch (c)
+            {
+                case '*':
+                    if (i + 1 < glob.Length && glob[i + 1] == '*')
+                    {
+                        i++; // consume the second '*'
+                        if (i + 1 < glob.Length && glob[i + 1] == '/')
+                        {
+                            i++; // consume the '/', so "**/x" also matches "x" at the root
+                            sb.Append("(?:.*/)?");
+                        }
+                        else
+                        {
+                            sb.Append(".*");
+                        }
+                    }
+                    else
+                    {
+                        sb.Append("[^/]*");
+                    }
+                    break;
+                case '?':
+                    sb.Append("[^/]");
+                    break;
+                default:
+                    sb.Append(Regex.Escape(c.ToString()));
+                    break;
+            }
+        }
+        sb.Append('$');
+        return new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
     // ---- helpers ---------------------------------------------------------------------------
 
     private static StringComparison PathComparison =>
@@ -728,7 +1073,10 @@ public sealed class ProjectAgentService : IProjectAgentService
         You have tools to inspect and change the project and to run terminal commands. Rules:
         - All paths are relative to the project root. You cannot read or change anything outside it.
         - Terminal commands run with the project root as the working directory.
-        - Inspect before you change: list_directory / read_file before write_file or delete.
+        - Inspect before you change: use search_files / find_files / read_file to locate and read code
+          before write_file, edit_file, or delete.
+        - For a small change, prefer edit_file (replace an exact snippet) over rewriting a whole file with
+          write_file.
         - Make the smallest change that satisfies the request. Do not invent unrelated work.
         {install}
         - When the task is complete, stop calling tools and reply with a short plain-text summary of
@@ -773,6 +1121,34 @@ public sealed class ProjectAgentService : IProjectAgentService
                     properties = new { path = new { type = "string", description = "Directory path relative to the project root. Omit or \".\" for the root." } }
                 })));
             tools.Add(new("read_file", "Read and return the full text of a file in the project.", pathOnly));
+            tools.Add(new("search_files",
+                "Search file contents across the project for a regular expression (like grep). Returns matching " +
+                "lines as 'path:line: text'. Use this to locate code instead of reading whole files. Skips " +
+                ".git/.AI/node_modules/bin/obj and binary/large files; results are capped.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        pattern = new { type = "string", description = "Regular expression to search for (case-insensitive)." },
+                        path = new { type = "string", description = "File or folder to search in, relative to the project root. Omit or \".\" for the whole project." },
+                        glob = new { type = "string", description = "Optional glob to limit which files are searched, e.g. \"*.cs\" or \"src/**/*.ts\"." }
+                    },
+                    required = new[] { "pattern" }
+                })));
+            tools.Add(new("find_files",
+                "Find files in the project whose path matches a glob pattern (e.g. \"**/*.razor\", \"*.csproj\", " +
+                "\"src/**/*.ts\"). Returns matching paths. Cheaper than listing directories recursively.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        glob = new { type = "string", description = "Glob pattern. A pattern without '/' matches by file name anywhere (e.g. \"*.cs\"); include '/' or '**' to match by path." },
+                        path = new { type = "string", description = "Folder to search under, relative to the project root. Omit or \".\" for the whole project." }
+                    },
+                    required = new[] { "glob" }
+                })));
         }
 
         if (allowed.Allows(AgentToolGroup.WriteFiles))
@@ -788,6 +1164,45 @@ public sealed class ProjectAgentService : IProjectAgentService
                         content = new { type = "string", description = "Full text to write to the file." }
                     },
                     required = new[] { "path", "content" }
+                })));
+            tools.Add(new("edit_file",
+                "Make a targeted edit to an existing file: replace the FIRST exact occurrence of 'find' with " +
+                "'replace', without rewriting the whole file. Prefer this over write_file for small changes. " +
+                "'find' must match the file's text exactly (including whitespace); read the file first if unsure.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        path = new { type = "string", description = "File path relative to the project root." },
+                        find = new { type = "string", description = "The exact text to find (the first occurrence is replaced)." },
+                        replace = new { type = "string", description = "The replacement text." }
+                    },
+                    required = new[] { "path", "find", "replace" }
+                })));
+            tools.Add(new("move_file",
+                "Move or rename a file or folder within the project.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        source = new { type = "string", description = "Existing path, relative to the project root." },
+                        destination = new { type = "string", description = "New path, relative to the project root." }
+                    },
+                    required = new[] { "source", "destination" }
+                })));
+            tools.Add(new("copy_file",
+                "Copy a file to a new path within the project.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        source = new { type = "string", description = "Existing file path, relative to the project root." },
+                        destination = new { type = "string", description = "Destination path, relative to the project root." }
+                    },
+                    required = new[] { "source", "destination" }
                 })));
             tools.Add(new("create_folder", "Create a folder (and any missing parents) in the project.", pathOnly));
         }
@@ -814,6 +1229,22 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "'apt-get install -y ...', 'brew install ...').",
                 commandSchema));
         }
+
+        // web_search: a read-only network tool (reuses the app's web-search service). Not a file/command
+        // tool, so it isn't gated by the allow-list — any agent may look things up while it works.
+        tools.Add(new AgentTool("web_search",
+            "Search the web for current information while working (docs, error messages, API/syntax). Returns " +
+            "the top results as title + url + snippet. Use it when project files don't have the answer.",
+            Schema(new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "The web search query." },
+                    max = new { type = "integer", description = "How many results to return (1–10, default 5)." }
+                },
+                required = new[] { "query" }
+            })));
 
         // create_skill: a meta tool that writes a reusable guidance file under .AI/skills/. Always offered
         // (it only writes to that controlled location), so "create a skill for X" works with any agent.

@@ -118,17 +118,29 @@ same name when re-serialising the running conversation. Gemini has no system rol
 requests → feed each result back as a `ChatRole.Tool` message → repeat until the model replies in plain
 text (step-budget cap — a `maxSteps` arg to `RunAsync`, derived from the global approval setting via
 `AutonomyMap.ForApprovalMode`; `≤0` falls back to `DefaultMaxSteps`=24). Tools: `list_directory`,
-`read_file`, `write_file`, `create_folder`,
+`read_file`, `search_files` (grep), `find_files` (glob), `write_file`, `edit_file` (targeted
+first-occurrence replace), `move_file` (move/rename), `copy_file`, `create_folder`,
 `delete_file`, `delete_folder`, `run_command`, `install_software` (offered only when permitted),
+`web_search` (always offered — reuses `IWebSearchService`; ungated, network read),
 `remember` (offered only when memory is on — see **Memory**), `create_skill` (always offered —
 see **Project skills**), and `update_docs` (offered only to the top-level/main agent when
 `allowDocsUpdate` — see **`update_docs` tool**).
 - **Per-agent tool allow-list (Phase 2).** `RunAsync` takes the active agent's `AgentTools`; `BuildTools`
-  advertises **only the permitted groups** (ReadFiles→list/read, WriteFiles→write/create, DeleteFiles→
-  delete, RunCommands→run_command, InstallSoftware→install_software). `ExecuteAsync` refuses a disallowed
-  tool if the model calls it anyway (defense in depth). `install_software` needs **both** the agent's
-  `InstallSoftware=true` **and** `SoftwareInstallPermission != Never`. An **unrestricted** `AgentTools`
-  (`AllowAll=true`, the default for an un-customized agent) offers the full set, so behaviour is unchanged.
+  advertises **only the permitted groups** (ReadFiles→list/read/**search_files**/**find_files**, WriteFiles→
+  write/create/**edit_file**/**move_file**/**copy_file**, DeleteFiles→delete, RunCommands→run_command,
+  InstallSoftware→install_software). `ExecuteAsync` refuses a disallowed tool if the model calls it anyway
+  (defense in depth). `install_software` needs **both** the agent's `InstallSoftware=true` **and**
+  `SoftwareInstallPermission != Never`. An **unrestricted** `AgentTools` (`AllowAll=true`, the default for an
+  un-customized agent) offers the full set, so behaviour is unchanged.
+- **Search/find/edit/move/copy/web tools.** `search_files` (regex grep — skips `.git`/`.AI`/`node_modules`/
+  `bin`/`obj`/… via `ScanExcludeDirs`, skips >1 MB and binary files, caps at 100 matches) and `find_files`
+  (glob via the pure `GlobToRegex`/`GlobMatchesPath` — path-scoped when the glob has `/` or `**`, else
+  basename match; caps at 200) are read-only; `edit_file` (replaces the **first** exact `find`; "— nothing
+  changed." on a miss, a `FailureMarkers` entry), `move_file`, and `copy_file` (both `TryResolve` **both**
+  ends, refuse the handbook, and refuse an existing destination) are writes. All confined by `TryResolve`.
+  `web_search` is **ungated** (like `remember`) and reuses the injected `IWebSearchService`. The orchestrator
+  Lead also gets read-only `search_files`/`find_files` (reusing `ProjectAgentService.SearchFiles`/`FindFiles`,
+  now `internal static`); write/web tools reach delegated specialists via `CapTools`/ungating unchanged.
 - **Sandbox.** File ops are confined to the project directory (`TryResolve` rejects paths outside it);
   commands run with the project root as the working directory.
 - **Approval.** `AgentApprovalMode` (`AutoRun` / `ConfirmDestructive` / `ConfirmEverything`) is passed to
