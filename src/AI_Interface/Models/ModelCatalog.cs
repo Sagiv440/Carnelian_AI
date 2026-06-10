@@ -4,25 +4,56 @@ using System.Linq;
 
 namespace AI_Interface.Models;
 
+/// <summary>
+/// Capabilities / modalities a model can interact with — what each model "talks to". Rendered as
+/// icons in the Model Config list so you can see at a glance what a model supports.
+/// </summary>
+[Flags]
+public enum ModelCapabilities
+{
+    None = 0,
+    Text = 1 << 0,       // 💬 text chat — every chat model
+    Tools = 1 << 1,      // 🛠 tool / function calling (needed for Project / agent mode)
+    Vision = 1 << 2,     // 👁 image input
+    Reasoning = 1 << 3,  // 🧠 native step-by-step thinking
+}
+
 /// <summary>One known Ollama model variant and the metadata needed to size it for the recommender.</summary>
 /// <param name="Name">Ollama pull name, e.g. "qwen2.5-coder:7b".</param>
 /// <param name="ParamsB">Approximate parameter count, in billions.</param>
 /// <param name="Category">What the model is best at.</param>
 /// <param name="BaseSizeGb">Approximate on-disk / load size at the Q4_K_M quant.</param>
 /// <param name="MaxContextK">Largest context window the model supports, in thousands of tokens.</param>
+/// <param name="Capabilities">Which APIs / modalities the model supports.</param>
 public sealed record ModelCatalogEntry(
-    string Name, double ParamsB, ModelUseCase Category, double BaseSizeGb, int MaxContextK);
+    string Name, double ParamsB, ModelUseCase Category, double BaseSizeGb, int MaxContextK,
+    ModelCapabilities Capabilities);
 
 /// <summary>A catalog entry scored against the current hardware + preferences.</summary>
 public sealed record ModelRecommendation(
     string Symbol, string Name, string PullName, string Quant, double SizeGb,
-    ModelUseCase Category, string FitNote, double Score, bool IsInstalled)
+    ModelUseCase Category, string FitNote, double Score, bool IsInstalled,
+    int MaxContextK, ModelCapabilities Capabilities)
 {
     public string SizeDisplay => $"{SizeGb:0.0} GB";
+
+    /// <summary>Max context window as a compact token label, e.g. "128K".</summary>
+    public string TokensDisplay => MaxContextK > 0 ? $"{MaxContextK}K" : "—";
+
+    // Per-capability flags drive the API icons in the Model Config row.
+    public bool HasTools => Capabilities.HasFlag(ModelCapabilities.Tools);
+    public bool HasVision => Capabilities.HasFlag(ModelCapabilities.Vision);
+    public bool HasReasoning => Capabilities.HasFlag(ModelCapabilities.Reasoning);
 }
 
 /// <summary>A selectable context-window size (label for the UI, value in thousands of tokens).</summary>
 public sealed record ContextOption(string Label, int ValueK);
+
+/// <summary>
+/// An API/capability filter option for the picker. <see cref="ModelCapabilities.None"/> means
+/// "Any" (no filtering); otherwise the list is restricted to models that support the flag.
+/// </summary>
+public sealed record ApiOption(string Label, ModelCapabilities Required);
 
 /// <summary>
 /// A use-case / filter option for the picker. A null <paramref name="UseCase"/> with
@@ -72,37 +103,42 @@ public static class ModelCatalog
         _ => "🧠"
     };
 
+    // Capability shorthands (every chat model handles text; the differentiators are tools / vision).
+    private const ModelCapabilities TextOnly = ModelCapabilities.Text;
+    private const ModelCapabilities TextTools = ModelCapabilities.Text | ModelCapabilities.Tools;
+    private const ModelCapabilities TextVision = ModelCapabilities.Text | ModelCapabilities.Vision;
+
     private static readonly ModelCatalogEntry[] Entries =
     {
         // General / standard
-        new("llama3.2:1b", 1.2, ModelUseCase.Chat, 0.8, 128),
-        new("llama3.2:3b", 3.2, ModelUseCase.Chat, 2.0, 128),
-        new("llama3.1:8b", 8, ModelUseCase.Standard, 4.7, 128),
-        new("llama3.3:70b", 70, ModelUseCase.Standard, 40, 128),
-        new("qwen2.5:7b", 7, ModelUseCase.Standard, 4.7, 128),
-        new("qwen2.5:14b", 14, ModelUseCase.Standard, 9.0, 128),
-        new("qwen2.5:32b", 32, ModelUseCase.Standard, 20, 128),
-        new("qwen2.5:72b", 72, ModelUseCase.Standard, 47, 128),
-        new("mistral:7b", 7, ModelUseCase.Chat, 4.4, 32),
-        new("gemma2:2b", 2.6, ModelUseCase.Chat, 1.6, 8),
-        new("gemma2:9b", 9, ModelUseCase.Standard, 5.4, 8),
-        new("gemma2:27b", 27, ModelUseCase.Standard, 16, 8),
-        new("phi3:mini", 3.8, ModelUseCase.Chat, 2.2, 128),
+        new("llama3.2:1b", 1.2, ModelUseCase.Chat, 0.8, 128, TextTools),
+        new("llama3.2:3b", 3.2, ModelUseCase.Chat, 2.0, 128, TextTools),
+        new("llama3.1:8b", 8, ModelUseCase.Standard, 4.7, 128, TextTools),
+        new("llama3.3:70b", 70, ModelUseCase.Standard, 40, 128, TextTools),
+        new("qwen2.5:7b", 7, ModelUseCase.Standard, 4.7, 128, TextTools),
+        new("qwen2.5:14b", 14, ModelUseCase.Standard, 9.0, 128, TextTools),
+        new("qwen2.5:32b", 32, ModelUseCase.Standard, 20, 128, TextTools),
+        new("qwen2.5:72b", 72, ModelUseCase.Standard, 47, 128, TextTools),
+        new("mistral:7b", 7, ModelUseCase.Chat, 4.4, 32, TextTools),
+        new("gemma2:2b", 2.6, ModelUseCase.Chat, 1.6, 8, TextOnly),
+        new("gemma2:9b", 9, ModelUseCase.Standard, 5.4, 8, TextOnly),
+        new("gemma2:27b", 27, ModelUseCase.Standard, 16, 8, TextOnly),
+        new("phi3:mini", 3.8, ModelUseCase.Chat, 2.2, 128, TextOnly),
 
         // Coding
-        new("qwen2.5-coder:1.5b", 1.5, ModelUseCase.Coding, 1.0, 32),
-        new("qwen2.5-coder:7b", 7, ModelUseCase.Coding, 4.7, 32),
-        new("qwen2.5-coder:14b", 14, ModelUseCase.Coding, 9.0, 32),
-        new("qwen2.5-coder:32b", 32, ModelUseCase.Coding, 20, 32),
-        new("codellama:7b", 7, ModelUseCase.Coding, 3.8, 16),
-        new("codellama:13b", 13, ModelUseCase.Coding, 7.4, 16),
-        new("deepseek-coder-v2:16b", 16, ModelUseCase.Coding, 8.9, 128),
+        new("qwen2.5-coder:1.5b", 1.5, ModelUseCase.Coding, 1.0, 32, TextTools),
+        new("qwen2.5-coder:7b", 7, ModelUseCase.Coding, 4.7, 32, TextTools),
+        new("qwen2.5-coder:14b", 14, ModelUseCase.Coding, 9.0, 32, TextTools),
+        new("qwen2.5-coder:32b", 32, ModelUseCase.Coding, 20, 32, TextTools),
+        new("codellama:7b", 7, ModelUseCase.Coding, 3.8, 16, TextOnly),
+        new("codellama:13b", 13, ModelUseCase.Coding, 7.4, 16, TextOnly),
+        new("deepseek-coder-v2:16b", 16, ModelUseCase.Coding, 8.9, 128, TextOnly),
 
         // Vision
-        new("llava:7b", 7, ModelUseCase.Vision, 4.7, 4),
-        new("llava:13b", 13, ModelUseCase.Vision, 8.0, 4),
-        new("llama3.2-vision:11b", 11, ModelUseCase.Vision, 7.9, 128),
-        new("minicpm-v:8b", 8, ModelUseCase.Vision, 5.5, 32),
+        new("llava:7b", 7, ModelUseCase.Vision, 4.7, 4, TextVision),
+        new("llava:13b", 13, ModelUseCase.Vision, 8.0, 4, TextVision),
+        new("llama3.2-vision:11b", 11, ModelUseCase.Vision, 7.9, 128, TextVision),
+        new("minicpm-v:8b", 8, ModelUseCase.Vision, 5.5, 32, TextVision),
     };
 
     /// <summary>Ranks every catalog model for the given hardware/preferences, best match first.</summary>
@@ -153,7 +189,8 @@ public static class ModelCatalog
             var score = onlyDownloaded ? FitOnlyScore(e, ratio) : Score(e, useCase, ratio);
             var name = $"{Glyph(e.Category)} {e.Name}";
             list.Add(new ModelRecommendation(
-                symbol, name, e.Name, quant, size, e.Category, note, score, isInstalled));
+                symbol, name, e.Name, quant, size, e.Category, note, score, isInstalled,
+                e.MaxContextK, e.Capabilities));
         }
 
         return list.OrderByDescending(r => r.Score).ToList();

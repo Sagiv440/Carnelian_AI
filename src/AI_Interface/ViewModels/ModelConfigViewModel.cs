@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AI_Interface.Models;
@@ -32,8 +33,17 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
         new CategoryOption("Standard", ModelUseCase.Standard, false),
         new CategoryOption("Coding", ModelUseCase.Coding, false),
         new CategoryOption("Chat", ModelUseCase.Chat, false),
-        new CategoryOption("Vision", ModelUseCase.Vision, false),
-        new CategoryOption("Downloaded", null, true)
+        new CategoryOption("Vision", ModelUseCase.Vision, false)
+    };
+
+    /// <summary>Filter the list to models that support a given API/capability ("Any" = no filter).</summary>
+    public IReadOnlyList<ApiOption> ApiFilters { get; } = new[]
+    {
+        new ApiOption("Any", ModelCapabilities.None),
+        new ApiOption("🛠 Tools", ModelCapabilities.Tools),
+        new ApiOption("👁 Vision", ModelCapabilities.Vision),
+        new ApiOption("🧠 Reasoning", ModelCapabilities.Reasoning),
+        new ApiOption("💬 Text", ModelCapabilities.Text)
     };
 
     /// <summary>Ranked recommendations, best match first.</summary>
@@ -51,14 +61,19 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
     // --- preferences ---
 
     [ObservableProperty] private CategoryOption _selectedCategory;
+    [ObservableProperty] private ApiOption _selectedApi;
     [ObservableProperty] private string _selectedQuant = "Q4_K_M";
     [ObservableProperty] private ContextOption _selectedContext;
+
+    /// <summary>When on, the list is filtered to only models already downloaded locally.</summary>
+    [ObservableProperty] private bool _downloadedOnly;
 
     public ModelConfigViewModel(IHardwareService hardware, IOllamaClient ollama)
     {
         _hardware = hardware;
         _ollama = ollama;
         _selectedCategory = Categories[0];
+        _selectedApi = ApiFilters[0];   // "Any"
         _selectedContext = Contexts[1]; // 8K
         Recompute();                    // capability ordering before the first scan
     }
@@ -69,8 +84,10 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
     }
 
     partial void OnSelectedCategoryChanged(CategoryOption value) => Recompute();
+    partial void OnSelectedApiChanged(ApiOption value) => Recompute();
     partial void OnSelectedQuantChanged(string value) => Recompute();
     partial void OnSelectedContextChanged(ContextOption value) => Recompute();
+    partial void OnDownloadedOnlyChanged(bool value) => Recompute();
     partial void OnIsScanningChanged(bool value) => ScanCommand.NotifyCanExecuteChanged();
 
     partial void OnIsBusyChanged(bool value)
@@ -172,13 +189,18 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
     private void Recompute()
     {
         var useCase = SelectedCategory?.UseCase ?? ModelUseCase.Standard;
-        var onlyDownloaded = SelectedCategory?.DownloadedOnly ?? false;
 
         var recs = ModelCatalog.Recommend(
-            _hw, useCase, SelectedQuant, SelectedContext?.ValueK ?? 8, _installed, onlyDownloaded);
+            _hw, useCase, SelectedQuant, SelectedContext?.ValueK ?? 8, _installed, DownloadedOnly);
+
+        // Optional API/capability filter (keeps the ranked order from Recommend).
+        var required = SelectedApi?.Required ?? ModelCapabilities.None;
+        IEnumerable<ModelRecommendation> filtered = required == ModelCapabilities.None
+            ? recs
+            : recs.Where(r => r.Capabilities.HasFlag(required));
 
         Models.Clear();
-        foreach (var r in recs)
+        foreach (var r in filtered)
             Models.Add(r);
 
         IsEmpty = Models.Count == 0;

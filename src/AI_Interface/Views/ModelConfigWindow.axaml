@@ -4,11 +4,11 @@
         xmlns:models="using:AI_Interface.Models"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="680" d:DesignHeight="660"
+        mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="660"
         x:Class="AI_Interface.Views.ModelConfigWindow"
         x:DataType="vm:ModelConfigViewModel"
-        Width="680" Height="670"
-        MinWidth="580" MinHeight="540"
+        Width="760" Height="670"
+        MinWidth="660" MinHeight="540"
         WindowStartupLocation="CenterOwner"
         Title="Model Config">
 
@@ -46,7 +46,7 @@
     </Window.Styles>
 
     <Border Classes="card" CornerRadius="4" Margin="14" Padding="18">
-        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" RowSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" RowSpacing="10">
 
             <!-- Header -->
             <StackPanel Grid.Row="0">
@@ -69,11 +69,19 @@
                 </Grid>
             </Border>
 
-            <!-- Preferences: category + quant + context -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="22">
-                <StackPanel>
+            <!-- Icon legend: what the Fit + API icons in the list mean -->
+            <StackPanel Grid.Row="2" Spacing="2">
+                <TextBlock Classes="muted" FontSize="12"
+                           Text="Fit:   ✅ comfortable      🟡 tight      🔴 too large for your memory"/>
+                <TextBlock Classes="muted" FontSize="12"
+                           Text="APIs:   💬 text chat      🛠 tools (agent mode)      👁 vision (images)      🧠 reasoning"/>
+            </StackPanel>
+
+            <!-- Filters: use case + API + quant + context + downloaded-only toggle (wraps if narrow) -->
+            <WrapPanel Grid.Row="3">
+                <StackPanel Margin="0,0,22,6">
                     <TextBlock Classes="label" Text="Use case"/>
-                    <ComboBox Width="160" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}">
+                    <ComboBox Width="150" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="models:CategoryOption">
                                 <TextBlock Text="{Binding Label}"/>
@@ -81,13 +89,24 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                 </StackPanel>
-                <StackPanel>
-                    <TextBlock Classes="label" Text="Quant"/>
-                    <ComboBox Width="130" ItemsSource="{Binding Quants}" SelectedItem="{Binding SelectedQuant}"/>
+                <StackPanel Margin="0,0,22,6">
+                    <TextBlock Classes="label" Text="API"/>
+                    <ComboBox Width="140" ItemsSource="{Binding ApiFilters}" SelectedItem="{Binding SelectedApi}"
+                              ToolTip.Tip="Show only models that support this capability">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:ApiOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </StackPanel>
-                <StackPanel>
+                <StackPanel Margin="0,0,22,6">
+                    <TextBlock Classes="label" Text="Quant"/>
+                    <ComboBox Width="120" ItemsSource="{Binding Quants}" SelectedItem="{Binding SelectedQuant}"/>
+                </StackPanel>
+                <StackPanel Margin="0,0,22,6">
                     <TextBlock Classes="label" Text="Context"/>
-                    <ComboBox Width="130" ItemsSource="{Binding Contexts}" SelectedItem="{Binding SelectedContext}">
+                    <ComboBox Width="110" ItemsSource="{Binding Contexts}" SelectedItem="{Binding SelectedContext}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="models:ContextOption">
                                 <TextBlock Text="{Binding Label}"/>
@@ -95,18 +114,26 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                 </StackPanel>
-            </StackPanel>
+                <StackPanel Margin="0,0,0,6" VerticalAlignment="Bottom">
+                    <TextBlock Classes="label" Text="Show"/>
+                    <ToggleSwitch IsChecked="{Binding DownloadedOnly}"
+                                  OnContent="Downloaded only" OffContent="All models"
+                                  ToolTip.Tip="Show only models you've already downloaded"/>
+                </StackPanel>
+            </WrapPanel>
 
             <!-- Ranked model list -->
-            <Border Grid.Row="3" Classes="card" CornerRadius="4" Padding="0" ClipToBounds="True">
+            <Border Grid.Row="4" Classes="card" CornerRadius="4" Padding="0" ClipToBounds="True">
                 <Grid RowDefinitions="Auto,*">
                     <!-- column header -->
-                    <Grid Grid.Row="0" ColumnDefinitions="42,*,82,78,120" Margin="14,10,14,8">
+                    <Grid Grid.Row="0" ColumnDefinitions="36,*,70,96,72,64,116" Margin="14,10,14,8">
                         <TextBlock Grid.Column="0" Classes="colhead" Text="Fit"/>
                         <TextBlock Grid.Column="1" Classes="colhead" Text="Model"/>
-                        <TextBlock Grid.Column="2" Classes="colhead" Text="Size"/>
-                        <TextBlock Grid.Column="3" Classes="colhead" Text="Quant"/>
-                        <TextBlock Grid.Column="4" Classes="colhead" Text=""/>
+                        <TextBlock Grid.Column="2" Classes="colhead" Text="Tokens"/>
+                        <TextBlock Grid.Column="3" Classes="colhead" Text="APIs"/>
+                        <TextBlock Grid.Column="4" Classes="colhead" Text="Size"/>
+                        <TextBlock Grid.Column="5" Classes="colhead" Text="Quant"/>
+                        <TextBlock Grid.Column="6" Classes="colhead" Text=""/>
                     </Grid>
                     <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom"
                             Background="{DynamicResource AppSurfaceBorderBrush}"/>
@@ -115,18 +142,36 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="models:ModelRecommendation" x:CompileBindings="False">
                                 <Border Padding="14,7" ToolTip.Tip="{Binding FitNote}">
-                                    <Grid ColumnDefinitions="42,*,82,78,120" VerticalAlignment="Center">
+                                    <Grid ColumnDefinitions="36,*,70,96,72,64,116" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" Text="{Binding Symbol}" FontSize="16"/>
                                         <TextBlock Grid.Column="1" Text="{Binding Name}"
                                                    Foreground="{DynamicResource AppTextPrimary}"
                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}" Classes="muted"
+
+                                        <!-- Max context window (tokens) the model supports -->
+                                        <TextBlock Grid.Column="2" Text="{Binding TokensDisplay}" Classes="muted"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip.Tip="Largest context window (tokens) the model supports"/>
+
+                                        <!-- API support: what the model can interact with, as icons -->
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="5"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="💬" ToolTip.Tip="Text chat"/>
+                                            <TextBlock Text="🛠" IsVisible="{Binding HasTools}"
+                                                       ToolTip.Tip="Tool / function calling — needed for Project (agent) mode"/>
+                                            <TextBlock Text="👁" IsVisible="{Binding HasVision}"
+                                                       ToolTip.Tip="Vision — accepts image input"/>
+                                            <TextBlock Text="🧠" IsVisible="{Binding HasReasoning}"
+                                                       ToolTip.Tip="Native reasoning / thinking"/>
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="4" Text="{Binding SizeDisplay}" Classes="muted"
                                                    VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="3" Text="{Binding Quant}" Classes="muted"
+                                        <TextBlock Grid.Column="5" Text="{Binding Quant}" Classes="muted"
                                                    VerticalAlignment="Center"/>
 
                                         <!-- Action: appears on the selected row; Download or Remove by install state -->
-                                        <Panel Grid.Column="4"
+                                        <Panel Grid.Column="6"
                                                IsVisible="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}">
                                             <Button Classes="cta rowaction" Content="Download"
                                                     IsVisible="{Binding !IsInstalled}"
@@ -153,7 +198,7 @@
             </Border>
 
             <!-- Status line (download / remove progress) -->
-            <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10"
+            <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="10"
                         IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
                              IsVisible="{Binding IsBusy}"/>
@@ -161,7 +206,7 @@
                            TextWrapping="Wrap"/>
             </StackPanel>
 
-            <Button Grid.Row="5" Classes="cta" Content="Close" Click="OnClose"
+            <Button Grid.Row="6" Classes="cta" Content="Close" Click="OnClose"
                     HorizontalAlignment="Right" MinWidth="100"/>
         </Grid>
     </Border>
