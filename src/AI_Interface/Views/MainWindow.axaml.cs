@@ -220,13 +220,54 @@ public partial class MainWindow : Window
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
     {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        // Slash-command palette navigation (when open): ↑/↓ move, Enter/Tab run, Esc closes. These are
+        // intercepted before the TextBox so they don't move the caret / insert a newline / change focus.
+        if (vm.IsSlashMenuOpen)
+        {
+            switch (e.Key)
+            {
+                case Key.Down:
+                    vm.MoveSlashSelection(1);
+                    SlashList.ScrollIntoView(vm.SelectedSlashIndex); // unfocused list won't auto-scroll
+                    e.Handled = true;
+                    return;
+                case Key.Up:
+                    vm.MoveSlashSelection(-1);
+                    SlashList.ScrollIntoView(vm.SelectedSlashIndex);
+                    e.Handled = true;
+                    return;
+                case Key.Enter when !e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+                case Key.Tab when !e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+                    vm.AcceptSlashCommand();
+                    e.Handled = true;
+                    return;
+                case Key.Escape:
+                    vm.CloseSlashMenu();
+                    e.Handled = true;
+                    return;
+            }
+        }
+
         // Enter sends; Shift+Enter inserts a newline (default TextBox behaviour).
         if (e.Key != Key.Enter || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
             return;
 
-        if (DataContext is MainWindowViewModel vm && vm.SendCommand.CanExecute(null))
+        if (vm.SendCommand.CanExecute(null))
             vm.SendCommand.Execute(null);
 
         e.Handled = true;
+    }
+
+    /// <summary>Click on a slash-palette row: run that command, then return focus to the composer.</summary>
+    private void OnSlashItemTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.AcceptSlashCommand();
+            InputBox.Focus();
+        }
     }
 }

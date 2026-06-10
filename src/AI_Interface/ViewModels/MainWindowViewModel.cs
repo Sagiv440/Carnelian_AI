@@ -110,6 +110,25 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private string _inputText = "";
 
+    // ---- slash (/) command palette -------------------------------------------------------------
+
+    /// <summary>The commands currently shown in the slash palette (filtered + context-aware).</summary>
+    public ObservableCollection<SlashCommand> SlashCommands { get; } = new();
+
+    /// <summary>The full command set, built lazily once (its actions reference this VM's commands).</summary>
+    private IReadOnlyList<SlashCommand>? _allSlashCommands;
+
+    /// <summary>True while the slash palette is showing (the composer starts with "/" and matches commands).</summary>
+    [ObservableProperty]
+    private bool _isSlashMenuOpen;
+
+    /// <summary>Highlighted row in the palette (driven by ↑/↓; two-way bound to the menu ListBox).</summary>
+    [ObservableProperty]
+    private int _selectedSlashIndex;
+
+    /// <summary>Re-evaluates the slash palette whenever the composer text changes.</summary>
+    partial void OnInputTextChanged(string value) => UpdateSlashMenu(value);
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private ChatModel? _selectedModel;
@@ -1083,6 +1102,83 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // transcript to a fresh session — i.e. discard the current chat without saving it.
         DeleteSession(_currentSession);
     }
+
+    // ---- slash (/) command palette --------------------------------------------------------
+
+    /// <summary>The slash palette's command set. Actions reference existing VM commands; built once.</summary>
+    private IReadOnlyList<SlashCommand> AllSlashCommands => _allSlashCommands ??= BuildSlashCommands();
+
+    private IReadOnlyList<SlashCommand> BuildSlashCommands() => new List<SlashCommand>
+    {
+        // The conversation actions self-guard on IsBusy; hide them while a turn is streaming so the palette
+        // doesn't offer a silent no-op.
+        new() { Name = "new",       Description = "Start a new chat",                      Run = () => NewChatCommand.Execute(null),          IsAvailable = () => !IsBusy },
+        new() { Name = "compact",   Description = "Summarise & compact this conversation", Run = () => CompactCommand.Execute(null),          IsAvailable = () => !IsBusy },
+        new() { Name = "clear",     Description = "Discard the current conversation",      Run = () => ClearCurrentChatCommand.Execute(null), IsAvailable = () => !IsBusy },
+        new() { Name = "project",   Description = "Create or open a project",              Run = () => OpenProjectCommand.Execute(null) },
+        new() { Name = "settings",  Description = "Open settings",                         Run = () => OpenSettingsCommand.Execute(null) },
+        // Mode switches don't apply inside a project (the agent runs there).
+        new() { Name = "chat",      Description = "Switch to plain chat",     Run = () => SetMode(AppMode.Chat),         IsAvailable = () => ActiveProject is null },
+        new() { Name = "web",       Description = "Switch to web search",     Run = () => SetMode(AppMode.WebSearch),    IsAvailable = () => ActiveProject is null },
+        new() { Name = "research",  Description = "Switch to deep research",  Run = () => SetMode(AppMode.DeepResearch), IsAvailable = () => ActiveProject is null },
+        new() { Name = "thinking",  Description = "Toggle Thinking (plan before answering)", Run = () => ThinkingEnabled = !ThinkingEnabled },
+        new() { Name = "auto-read", Description = "Toggle reading replies aloud",          Run = () => AutoSpeakEnabled = !AutoSpeakEnabled, IsAvailable = () => IsVoiceConfigured },
+    };
+
+    /// <summary>Opens/filters/closes the palette for the current composer text. Call on the UI thread.</summary>
+    private void UpdateSlashMenu(string? input)
+    {
+        if (!SlashMenu.ShouldOpen(input))
+        {
+            CloseSlashMenu();
+            return;
+        }
+
+        var available = AllSlashCommands.Where(c => c.IsAvailable()).ToList();
+        var matches = SlashMenu.Filter(available, SlashMenu.ExtractQuery(input));
+
+        SlashCommands.Clear();
+        foreach (var c in matches)
+            SlashCommands.Add(c);
+
+        if (SlashCommands.Count == 0)
+        {
+            IsSlashMenuOpen = false;
+            return;
+        }
+        SelectedSlashIndex = 0;
+        IsSlashMenuOpen = true;
+    }
+
+    /// <summary>Moves the palette highlight (↑/↓), wrapping around. Called from the composer key handler.</summary>
+    public void MoveSlashSelection(int delta)
+    {
+        if (!IsSlashMenuOpen || SlashCommands.Count == 0)
+            return;
+        var n = SlashCommands.Count;
+        SelectedSlashIndex = ((SelectedSlashIndex + delta) % n + n) % n;
+    }
+
+    /// <summary>Runs the highlighted command, clears the composer, and closes the palette.</summary>
+    public void AcceptSlashCommand()
+    {
+        if (!IsSlashMenuOpen)
+            return;
+        var idx = SelectedSlashIndex;
+        if (idx < 0 || idx >= SlashCommands.Count)
+        {
+            CloseSlashMenu();
+            return;
+        }
+
+        var command = SlashCommands[idx];
+        CloseSlashMenu();
+        InputText = "";   // also re-runs UpdateSlashMenu("") → stays closed
+        command.Run();
+    }
+
+    /// <summary>Closes the palette (no-op if already closed). Call on the UI thread.</summary>
+    public void CloseSlashMenu() => IsSlashMenuOpen = false;
 
     /// <summary>Sidebar "Project" button: ask the view to open the New Project window.</summary>
     [RelayCommand]

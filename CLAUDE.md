@@ -34,8 +34,9 @@ pwsh ./build/publish-windows.ps1     # -> publish/win-x64/AI_Interface.exe
 ./build/publish-linux.sh             # -> publish/linux-x64/AI_Interface
 ```
 
-There is no test project yet. To run the app end-to-end you need Ollama running locally
-(`ollama serve`) with at least one model pulled (`ollama pull llama3`); the Project agent needs a
+Tests live in `tests/AI_Interface.Tests` (xUnit; `dotnet test AI_Interface.sln`) and cover the I/O-free
+logic (pure helpers exposed via `InternalsVisibleTo`). To run the app end-to-end you need Ollama running
+locally (`ollama serve`) with at least one model pulled (`ollama pull llama3`); the Project agent needs a
 **tool-calling-capable** model (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`).
 
 > On Windows a running instance locks `AI_Interface.exe`, so a rebuild's final copy step fails while the
@@ -475,6 +476,19 @@ replaces it with a single summary message, freeing context tokens (like Claude C
 shares the Send `_cts`/`IsBusy` (so **Stop** cancels it) and updates the **same** session in place
 (preserving its title). **🧹 Clear** (`ClearCurrentChatCommand`) — discards the current conversation by
 delegating to `DeleteSession(_currentSession)` (removes it from the log if saved, resets the transcript).
+
+**Slash-command palette (composer).** Typing `/` in the composer opens a filterable command palette (like
+Claude Code's). Pure helpers in `ViewModels/SlashMenu.cs` (`internal static`, unit-tested): `ShouldOpen`
+(input starts with `/`, no whitespace), `ExtractQuery`, `Filter` (prefix-then-substring, stable). The VM
+holds `ObservableCollection<SlashCommand> SlashCommands` + `IsSlashMenuOpen` + `SelectedSlashIndex`;
+`OnInputTextChanged` → `UpdateSlashMenu` filters the lazily-built `BuildSlashCommands()` set by each
+command's live `IsAvailable()` (context-aware — mode switches hide in a project, `/auto-read` needs voice,
+the conversation actions hide while `IsBusy`). Commands: `/new /compact /clear /project /settings /chat /web
+/research /thinking /auto-read`, each `SlashCommand.Run` invoking an existing VM command/toggle. The palette
+(`MainWindow.axaml`, a `Border`+`ListBox.slashMenu` above the composer `TextBox`, `Focusable="False"`) is
+keyboard-driven from the **tunnel** `OnInputKeyDown` on `InputBox` (↑/↓ `MoveSlashSelection`+`ScrollIntoView`,
+Enter/Tab `AcceptSlashCommand`, Esc `CloseSlashMenu`); a row `Tapped` runs it (`OnSlashItemTapped`).
+`AcceptSlashCommand` clears `InputText` then runs — so a command's `Run` must not read `InputText`.
 
 **Resolving view models from views.** Dialogs are opened imperatively: the VM raises an event
 (`SettingsRequested`, `ProjectRequested`, `ToolApprovalRequested`, `ModelConfigRequested`), the

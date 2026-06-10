@@ -312,6 +312,45 @@
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
 
+        <!-- Slash-command palette: flat list, tight rows. The highlight is KEYBOARD-DRIVEN — the ListBox is
+             Focusable=False and just reflects SelectedIndex, so the selected row must read clearly while the
+             list is unfocused. We override PART_ContentPresenter directly (winning over Fluent's focus-gated
+             selected brushes) and flatten Fluent's rounded/animated selection: a stronger translucent-accent
+             fill PLUS a left accent bar via the presenter's BorderBrush so Enter's target is unmistakable. -->
+        <Style Selector="ListBox.slashMenu">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="2"/>
+        </Style>
+        <Style Selector="ListBox.slashMenu ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="CornerRadius" Value="3"/>
+        </Style>
+        <!-- Flatten Fluent's default item visual: no rounding/fill of its own; we paint state explicitly. -->
+        <Style Selector="ListBox.slashMenu ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="8,5"/>
+        </Style>
+        <!-- Pointer hover: faint neutral wash that reads in both themes (doesn't fight the selection). -->
+        <Style Selector="ListBox.slashMenu ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#18808080"/>
+        </Style>
+        <!-- Selected (the Enter target): translucent-accent fill + a solid accent left bar. Re-assert on
+             :selected:pointerover so hover never weakens the active row. -->
+        <Style Selector="ListBox.slashMenu ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#33F2542D"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="ListBox.slashMenu ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#33F2542D"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
         <!-- Plan checklist rows: default, done (struck-through + muted), active (accent + semibold) -->
         <Style Selector="TextBlock.planText">
             <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
@@ -993,6 +1032,35 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <!-- Slash-command palette: opens when the message starts with "/". Type to filter,
+                         ↑/↓ to move, Enter/Tab or click to run (keyboard handled in MainWindow.axaml.cs). -->
+                    <Border IsVisible="{Binding IsSlashMenuOpen}" Margin="0,0,0,4"
+                            Background="{DynamicResource AppSurfaceBrush}"
+                            BorderBrush="{DynamicResource AppSurfaceBorderBrush}"
+                            BorderThickness="1" CornerRadius="4">
+                        <ListBox x:Name="SlashList" Classes="slashMenu" Focusable="False" MaxHeight="240"
+                                 ItemsSource="{Binding SlashCommands}"
+                                 SelectedIndex="{Binding SelectedSlashIndex, Mode=TwoWay}"
+                                 Tapped="OnSlashItemTapped"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SlashCommand">
+                                    <!-- Name column hugs the longest command (/auto-read) with a consistent
+                                         gutter, so it never clips and never strands the description. -->
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <TextBlock Grid.Column="0" Text="{Binding Display}"
+                                                   FontFamily="Cascadia Code,Consolas,monospace"
+                                                   Foreground="{DynamicResource AppAccentBrush}"
+                                                   VerticalAlignment="Center" MinWidth="84"
+                                                   Margin="0,0,14,0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Description}" Classes="muted"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
 
                     <!-- Text input -->
                     <TextBox x:Name="InputBox" Classes="composer"
