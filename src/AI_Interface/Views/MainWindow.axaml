@@ -1002,8 +1002,8 @@
                              MaxHeight="160"
                              PlaceholderText="Type a message…  (Enter to send, Shift+Enter for a new line)"/>
 
-                    <!-- Toolbar: attach + search-scope dropdown + thinking toggle (left), send/stop (right) -->
-                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                    <!-- Toolbar: attach + search-scope dropdown + thinking toggle (left), compact/clear + send/stop (right) -->
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
                         <Button Grid.Column="0" Classes="ghost" Content="📎" FontSize="15"
                                 ToolTip.Tip="Attach files">
                             <Button.Flyout>
@@ -1039,10 +1039,18 @@
                                       Content="🔊 Auto-read"
                                       ToolTip.Tip="Read each reply aloud automatically, in the voice that matches its language"/>
 
-                        <Button Grid.Column="4" Classes="cta" Content="Send" MinWidth="96"
+                        <!-- Compact: summarise the conversation to free context tokens. Clear: discard it. -->
+                        <Button Grid.Column="4" Classes="ghost" Content="🗜" FontSize="15" Margin="8,0,0,0"
+                                Command="{Binding CompactCommand}"
+                                ToolTip.Tip="Compact: summarise this conversation and replace it to free up context"/>
+                        <Button Grid.Column="5" Classes="ghost" Content="🧹" FontSize="15" Margin="8,0,0,0"
+                                Command="{Binding ClearCurrentChatCommand}"
+                                ToolTip.Tip="Clear: discard the current conversation"/>
+
+                        <Button Grid.Column="6" Classes="cta" Content="Send" MinWidth="96" Margin="8,0,0,0"
                                 Command="{Binding SendCommand}"
                                 IsVisible="{Binding !IsBusy}"/>
-                        <Button Grid.Column="5" Content="Stop" MinWidth="96"
+                        <Button Grid.Column="7" Content="Stop" MinWidth="96" Margin="8,0,0,0"
                                 Command="{Binding StopCommand}"
                                 IsVisible="{Binding IsBusy}"/>
                     </Grid>

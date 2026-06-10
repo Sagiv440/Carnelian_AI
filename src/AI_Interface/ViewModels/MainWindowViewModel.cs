@@ -975,13 +975,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Stop() => _cts?.Cancel();
 
-    [RelayCommand]
-    private void ClearChat()
-    {
-        Messages.Clear();
-        StatusText = "";
-    }
-
     /// <summary>Sidebar "New Chat": save the current conversation, then start a fresh one (staying in
     /// the active project, if any, so the new chat is still saved under it).</summary>
     [RelayCommand]
@@ -992,6 +985,103 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Messages.Clear();
         StatusText = "";
         SetMode(ActiveProject is not null ? AppMode.Project : AppMode.Chat);
+    }
+
+    /// <summary>
+    /// "Compact": summarise the current conversation into a short briefing and replace the transcript with
+    /// it, freeing context tokens (like Claude Code's /compact). Best-effort; uses the selected chat model
+    /// and shares the Send cancellation (the Stop button cancels it).
+    /// </summary>
+    [RelayCommand]
+    private async Task CompactAsync()
+    {
+        if (IsBusy || SelectedModel is null)
+            return;
+        if (Messages.Count(m => !string.IsNullOrEmpty(m.Text)) < 2)
+        {
+            StatusText = "Nothing to compact yet.";
+            return;
+        }
+
+        var client = _router.For(SelectedModel.Provider);
+        var model = SelectedModel.Id;
+        var prompt = BuildCompactMessages();
+
+        IsBusy = true;
+        _cts = new CancellationTokenSource();
+        StatusText = "Compacting conversation…";
+        try
+        {
+            var summary = (await client.CompleteAsync(model, prompt, _cts.Token)).Trim();
+            if (string.IsNullOrEmpty(summary))
+            {
+                StatusText = "Compact produced no summary.";
+                return;
+            }
+
+            // Replace the transcript with the summary so the next turn continues from it. Update the SAME
+            // session in place (not a fork) and preserve its title — after compaction there's no user turn
+            // for PersistCurrentSession's title-builder to derive one from, so it'd otherwise become "New chat".
+            var priorTitle = _currentSession.Title;
+            Messages.Clear();
+            Messages.Add(new MessageViewModel(ChatRole.Assistant,
+                "**Summary of the earlier conversation (compacted to save context):**\n\n" + summary));
+            PersistCurrentSession();
+            if (!string.IsNullOrWhiteSpace(priorTitle) && priorTitle != "New chat")
+            {
+                _currentSession.Title = priorTitle;
+                SaveLog();
+            }
+            StatusText = "";
+            RequestScroll();
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Compact cancelled.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Compact failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            _cts?.Dispose();
+            _cts = null;
+        }
+    }
+
+    /// <summary>Builds the summarisation request from the current transcript (one labelled line per message).</summary>
+    private List<ChatMessage> BuildCompactMessages()
+    {
+        var sb = new StringBuilder();
+        foreach (var m in Messages)
+        {
+            if (string.IsNullOrEmpty(m.Text))
+                continue;
+            var who = m.Role == ChatRole.User ? "User" : m.Role == ChatRole.Assistant ? "Assistant" : "System";
+            sb.Append(who).Append(": ").AppendLine(m.Text.Trim()).AppendLine();
+        }
+        return new List<ChatMessage>
+        {
+            ChatMessage.System(
+                "You compress a conversation to save context. Summarise the conversation below into a compact " +
+                "briefing a new session can continue from: the user's goal, key facts and decisions, the current " +
+                "state, and any open threads or next steps. Be concise but keep specifics (names, files, numbers, " +
+                "code identifiers). Output only the summary."),
+            ChatMessage.User("Conversation to summarise:\n\n" + sb.ToString().Trim())
+        };
+    }
+
+    /// <summary>"Clear": discard the current conversation (removing it from the log if it was saved).</summary>
+    [RelayCommand]
+    private void ClearCurrentChat()
+    {
+        if (IsBusy)
+            return;
+        // Passing the current session makes DeleteSession remove it from the log (if present) AND reset the
+        // transcript to a fresh session — i.e. discard the current chat without saving it.
+        DeleteSession(_currentSession);
     }
 
     /// <summary>Sidebar "Project" button: ask the view to open the New Project window.</summary>

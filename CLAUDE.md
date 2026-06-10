@@ -466,7 +466,15 @@ referenced by `<ApplicationIcon>` in the csproj and `Window.Icon` in `MainWindow
 **Sidebar.** New Chat + Project buttons, then the chat log, the Deep Research toggle, the active-project
 card, and the model/connection footer. When a project is active a **Chat Log / Files** tab strip appears:
 *Files* shows a lazy-loading `TreeView` of the project directory backed by `FileNode` (children load on
-expand; a ⟳ button refreshes). The active-project card shows the name + "N skills loaded".
+expand; a ⟳ button refreshes). The active-project card shows the name + "N skills loaded". A saved chat's
+per-item **✕** deletes it (`DeleteSessionCommand`).
+
+**Conversation actions (composer toolbar).** Two user-triggered actions sit by Send/Stop (any mode):
+**🗜 Compact** (`CompactCommand`) — summarises the current transcript via `IChatClient.CompleteAsync` and
+replaces it with a single summary message, freeing context tokens (like Claude Code's `/compact`); it
+shares the Send `_cts`/`IsBusy` (so **Stop** cancels it) and updates the **same** session in place
+(preserving its title). **🧹 Clear** (`ClearCurrentChatCommand`) — discards the current conversation by
+delegating to `DeleteSession(_currentSession)` (removes it from the log if saved, resets the transcript).
 
 **Resolving view models from views.** Dialogs are opened imperatively: the VM raises an event
 (`SettingsRequested`, `ProjectRequested`, `ToolApprovalRequested`, `ModelConfigRequested`), the
