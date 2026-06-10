@@ -215,7 +215,7 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
         AgentApprovalMode approvalMode, int maxSteps, AgentTools allowedTools, string personaPrefix,
         string thinkingDirective, string projectSkills, SoftwareInstallPermission installPermission,
         bool memoryEnabled, bool allowDocsUpdate, IProgress<string> status, Action<string> onActivity,
-        Action<ActivityUpdate>? onActivityStep, Action<string> onAnswer,
+        Action<ActivityUpdate>? onActivityStep, Action<PlanUpdate>? onPlan, Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         onAnswer("Design-time project agent response.");

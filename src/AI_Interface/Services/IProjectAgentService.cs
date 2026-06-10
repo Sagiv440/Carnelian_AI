@@ -31,6 +31,7 @@ public interface IProjectAgentService
     /// <param name="status">Step progress (constructed on the UI thread, so it auto-marshals).</param>
     /// <param name="onActivity">Receives the action log / intermediate reasoning (the "work"). Must marshal to the UI thread.</param>
     /// <param name="onActivityStep">Optional structured activity feed — one update per tool call (Started/Finished) plus the model's interim narration (Note). Null (e.g. a delegated specialist run) leaves only the <paramref name="onActivity"/> log. Must marshal to the UI thread.</param>
+    /// <param name="onPlan">Optional — receives the agent's checklist whenever it calls <c>update_plan</c> (the full list each time). Null (e.g. a delegated specialist run) just doesn't surface the plan. Must marshal to the UI thread.</param>
     /// <param name="onAnswer">Receives the final plain-text answer. Must marshal to the UI thread.</param>
     /// <param name="approve">Asked to approve a single tool call; returns false to skip it.</param>
     Task RunAsync(
@@ -50,6 +51,7 @@ public interface IProjectAgentService
         IProgress<string> status,
         Action<string> onActivity,
         Action<ActivityUpdate>? onActivityStep,
+        Action<PlanUpdate>? onPlan,
         Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct);

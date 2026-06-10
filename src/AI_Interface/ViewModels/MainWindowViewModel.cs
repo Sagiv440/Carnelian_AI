@@ -790,6 +790,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             RequestScroll();
         });
 
+        // The agent's checklist (update_plan tool) → the message's plan card. Single-agent path only.
+        void OnPlan(PlanUpdate u) => Dispatcher.UIThread.Post(() =>
+        {
+            assistant.SetPlan(u);
+            RequestScroll();
+        });
+
         // Orchestrator-only: structured per-delegation updates → per-delegation cards in the transcript.
         // A delegation's Activity carries the specialist's structured step (u.Step), routed into the card's
         // own feed so it renders identically to a single-agent run.
@@ -846,7 +853,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 SelectedAgent?.Tools ?? new AgentTools(),
                 PersonaPrefix(), directives, ProjectContext(), _settings.Current.SoftwareInstall, MemoryActive(),
                 allowDocsUpdate: true, progress,
-                OnActivity, OnActivityStep, OnAnswer, RequestToolApprovalAsync, ct);
+                OnActivity, OnActivityStep, OnPlan, OnAnswer, RequestToolApprovalAsync, ct);
         }
 
         // The turn may have created/edited project skills (create_skill, or write_file under .AI/skills) —

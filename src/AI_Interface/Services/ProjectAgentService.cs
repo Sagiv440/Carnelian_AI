@@ -106,6 +106,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         IProgress<string> status,
         Action<string> onActivity,
         Action<ActivityUpdate>? onActivityStep,
+        Action<PlanUpdate>? onPlan,
         Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
         CancellationToken ct)
@@ -169,7 +170,7 @@ public sealed class ProjectAgentService : IProjectAgentService
 
                 var result = await ExecuteAsync(
                     project, call, approvalMode, allowedTools, installPermission, allowDocsUpdate,
-                    status, onActivity, approve, ct)
+                    status, onActivity, onPlan, approve, ct)
                     .ConfigureAwait(false);
 
                 // Structured feed: resolve the row with this tool's result + success/failure status.
@@ -188,7 +189,7 @@ public sealed class ProjectAgentService : IProjectAgentService
     private async Task<string> ExecuteAsync(
         Project project, AgentToolCall call, AgentApprovalMode approvalMode,
         AgentTools allowedTools, SoftwareInstallPermission installPermission, bool allowDocsUpdate,
-        IProgress<string> status, Action<string> onActivity,
+        IProgress<string> status, Action<string> onActivity, Action<PlanUpdate>? onPlan,
         Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
     {
         var path = GetString(call.Arguments, "path");
@@ -277,6 +278,7 @@ public sealed class ProjectAgentService : IProjectAgentService
                                         .ConfigureAwait(false),
                 "install_software" => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
                                         .ConfigureAwait(false),
+                "update_plan"    => UpdatePlan(call.Arguments, onPlan),
                 "remember"       => Remember(project, GetString(call.Arguments, "text"), GetString(call.Arguments, "scope")),
                 "create_skill"   => CreateSkill(project, GetString(call.Arguments, "name"),
                                         GetString(call.Arguments, "content"), GetString(call.Arguments, "description")),
@@ -322,6 +324,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "delete_folder"  => ("Delete folder", path ?? "", true),
         "run_command"    => ("Run command", GetString(call.Arguments, "command") ?? "", true),
         "web_search"     => ("Web search", GetString(call.Arguments, "query") ?? "", false),
+        "update_plan"    => ("Update plan", "", false),
         "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
         "remember"       => ("Remember a note", GetString(call.Arguments, "text") ?? "", false),
         "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
@@ -365,6 +368,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "run_command"      => "⌘",
         "install_software" => "📦",
         "web_search"       => "🌐",
+        "update_plan"      => "📝",
         "remember"         => "💾",
         "create_skill"     => "✨",
         "update_docs"      => "📘",
@@ -397,6 +401,68 @@ public sealed class ProjectAgentService : IProjectAgentService
         "can only be changed with the update_docs",
         "not found:", "Failed to start command", "timed out after", "was blocked",
         "— nothing changed." // distinctive edit_file/move/copy no-op suffix (em-dash form avoids matching benign tool output)
+    };
+
+    /// <summary>
+    /// Surfaces the agent's checklist to the UI (the full list is resent each call). Pure UI side effect via
+    /// <paramref name="onPlan"/> — no files touched. Returns a short confirmation summarising the step counts.
+    /// </summary>
+    private static string UpdatePlan(JsonElement args, Action<PlanUpdate>? onPlan)
+    {
+        var steps = ParsePlanSteps(args);
+        if (steps.Count == 0)
+            return "Provide a non-empty 'steps' array — each with 'text' and optional 'status' (pending/active/done).";
+
+        onPlan?.Invoke(new PlanUpdate(steps));
+
+        var done = steps.Count(s => s.Status == PlanStepStatus.Done);
+        var active = steps.Count(s => s.Status == PlanStepStatus.Active);
+        return $"Plan updated: {steps.Count} step(s) — {done} done, {active} in progress.";
+    }
+
+    /// <summary>
+    /// Parses the update_plan <c>steps</c> array (each item a string or {text, status}). Fully value-kind
+    /// guarded — malformed items are skipped, never thrown on. <c>status</c> is honored only when a JSON
+    /// string (a numeric/bool status degrades to Pending). <c>internal</c> for unit testing.
+    /// </summary>
+    internal static IReadOnlyList<PlanStep> ParsePlanSteps(JsonElement args)
+    {
+        var list = new List<PlanStep>();
+        if (args.ValueKind != JsonValueKind.Object ||
+            !args.TryGetProperty("steps", out var steps) || steps.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var el in steps.EnumerateArray())
+        {
+            string text;
+            var status = PlanStepStatus.Pending;
+            if (el.ValueKind == JsonValueKind.String)
+            {
+                text = el.GetString() ?? "";
+            }
+            else if (el.ValueKind == JsonValueKind.Object)
+            {
+                text = el.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String
+                    ? t.GetString() ?? "" : "";
+                if (el.TryGetProperty("status", out var st) && st.ValueKind == JsonValueKind.String)
+                    status = ParseStatus(st.GetString());
+            }
+            else continue;
+
+            text = text.Trim();
+            if (text.Length > 0)
+                list.Add(new PlanStep(text, status));
+        }
+        return list;
+    }
+
+    /// <summary>Maps a free-form status string to <see cref="PlanStepStatus"/> (default Pending). Tolerant of synonyms.</summary>
+    internal static PlanStepStatus ParseStatus(string? s) => (s ?? "").Trim().ToLowerInvariant() switch
+    {
+        "done" or "complete" or "completed" or "finished" or "x" or "✓" => PlanStepStatus.Done,
+        "active" or "in_progress" or "in-progress" or "in progress"
+            or "doing" or "current" or "wip" => PlanStepStatus.Active,
+        _ => PlanStepStatus.Pending
     };
 
     /// <summary>Persists a fact to memory. <c>scope</c> "user" → global; anything else (default) → this project.</summary>
@@ -506,6 +572,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "install_software"                             => AgentToolGroup.InstallSoftware,
         "update_docs"                                  => null, // writes only to the fixed handbook path — not allow-list-gated
         "web_search"                                   => null, // network read, not a file/command tool — ungated
+        "update_plan"                                  => null, // UI checklist only — not a file/command tool — ungated
         _                                              => null
     };
 
@@ -1244,6 +1311,36 @@ public sealed class ProjectAgentService : IProjectAgentService
                     max = new { type = "integer", description = "How many results to return (1–10, default 5)." }
                 },
                 required = new[] { "query" }
+            })));
+
+        // update_plan: a UI-only checklist the agent maintains (no file/command side effects), so it's
+        // ungated like web_search. The agent resends the full step list each call.
+        tools.Add(new AgentTool("update_plan",
+            "Maintain a short, visible checklist for a multi-step task. Call it to post your plan, then again " +
+            "as you progress — always sending the FULL ordered list, each step with a status. Mark the step " +
+            "you're on 'active', finished steps 'done', the rest 'pending'. Keep it to a handful of concrete steps.",
+            Schema(new
+            {
+                type = "object",
+                properties = new
+                {
+                    steps = new
+                    {
+                        type = "array",
+                        description = "The full ordered list of steps (resend the whole list on every call).",
+                        items = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                text = new { type = "string", description = "Short imperative description of the step." },
+                                status = new { type = "string", description = "'pending', 'active' (working it now), or 'done'." }
+                            },
+                            required = new[] { "text" }
+                        }
+                    }
+                },
+                required = new[] { "steps" }
             })));
 
         // create_skill: a meta tool that writes a reusable guidance file under .AI/skills/. Always offered

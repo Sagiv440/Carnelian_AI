@@ -33,6 +33,8 @@ public sealed class ProjectAgentActivityHelpersTests
     [InlineData("move_file", "➡️")]
     [InlineData("copy_file", "📋")]
     [InlineData("web_search", "🌐")]
+    // Batch 2 tools:
+    [InlineData("update_plan", "📝")]
     public void IconFor_KnownTool_ReturnsExpectedGlyph(string tool, string expected)
     {
         Assert.Equal(expected, ProjectAgentService.IconFor(tool));

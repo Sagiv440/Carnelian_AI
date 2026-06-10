@@ -122,6 +122,7 @@ text (step-budget cap — a `maxSteps` arg to `RunAsync`, derived from the globa
 first-occurrence replace), `move_file` (move/rename), `copy_file`, `create_folder`,
 `delete_file`, `delete_folder`, `run_command`, `install_software` (offered only when permitted),
 `web_search` (always offered — reuses `IWebSearchService`; ungated, network read),
+`update_plan` (always offered — a UI-only checklist; ungated — see below),
 `remember` (offered only when memory is on — see **Memory**), `create_skill` (always offered —
 see **Project skills**), and `update_docs` (offered only to the top-level/main agent when
 `allowDocsUpdate` — see **`update_docs` tool**).
@@ -141,6 +142,15 @@ see **Project skills**), and `update_docs` (offered only to the top-level/main a
   `web_search` is **ungated** (like `remember`) and reuses the injected `IWebSearchService`. The orchestrator
   Lead also gets read-only `search_files`/`find_files` (reusing `ProjectAgentService.SearchFiles`/`FindFiles`,
   now `internal static`); write/web tools reach delegated specialists via `CapTools`/ungating unchanged.
+- **`update_plan` tool — a live checklist.** Ungated (no file/command side effect). The agent resends the
+  FULL ordered step list each call; `ParsePlanSteps` (tolerant — string or `{text,status}` items, malformed
+  skipped) + `ParseStatus` (synonyms → `PlanStepStatus` Pending/Active/Done) build a `PlanUpdate`
+  (`Models/PlanUpdate.cs`). `RunAsync` gained an `Action<PlanUpdate>? onPlan` (after `onActivityStep`); the VM
+  marshals it to `MessageViewModel.SetPlan`, which rebuilds an `ObservableCollection<PlanStepViewModel>`
+  (`Plan` + `HasPlan`) rendered as a **checklist card** in the message (☑ done struck-through, ▶ active in
+  accent, ☐ pending). **Single-agent path only:** the orchestrator passes `onPlan: null` (delegated
+  specialists' plans aren't surfaced) and the Lead isn't offered the tool. `ParsePlanSteps`/`ParseStatus` are
+  `internal static` (unit-tested).
 - **Sandbox.** File ops are confined to the project directory (`TryResolve` rejects paths outside it);
   commands run with the project root as the working directory.
 - **Approval.** `AgentApprovalMode` (`AutoRun` / `ConfirmDestructive` / `ConfirmEverything`) is passed to

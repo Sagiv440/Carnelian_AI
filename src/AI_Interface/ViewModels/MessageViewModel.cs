@@ -138,6 +138,16 @@ public sealed partial class MessageViewModel : ObservableObject
     private bool _hasActivities;
 
     /// <summary>
+    /// The agent's live plan/checklist (the <c>update_plan</c> tool). Replaced wholesale on each update —
+    /// the agent resends the full ordered list — so it's a simple rebuild, not a per-row reconcile.
+    /// </summary>
+    public ObservableCollection<PlanStepViewModel> Plan { get; } = new();
+
+    /// <summary>True once the agent has posted a plan (drives the checklist card's visibility).</summary>
+    [ObservableProperty]
+    private bool _hasPlan;
+
+    /// <summary>
     /// Whether to show the legacy monospace <see cref="Work"/> block: only when there's work text but no
     /// structured feed (e.g. chat-with-thinking). Single-agent project runs populate <see cref="Activities"/>,
     /// so the structured feed shows and the raw block is hidden (no duplicate display).
@@ -242,6 +252,15 @@ public sealed partial class MessageViewModel : ObservableObject
     {
         ActivityFeed.Apply(Activities, u);
         HasActivities = Activities.Count > 0;
+    }
+
+    /// <summary>Replaces the plan checklist with the agent's latest full list. Call on the UI thread.</summary>
+    public void SetPlan(PlanUpdate update)
+    {
+        Plan.Clear();
+        foreach (var s in update.Steps)
+            Plan.Add(new PlanStepViewModel { Text = s.Text, Status = s.Status });
+        HasPlan = Plan.Count > 0;
     }
 
     public void SetSources(IEnumerable<SearchResult> sources)

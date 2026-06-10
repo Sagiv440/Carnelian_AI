@@ -312,6 +312,19 @@
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
 
+        <!-- Plan checklist rows: default, done (struck-through + muted), active (accent + semibold) -->
+        <Style Selector="TextBlock.planText">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimary}"/>
+        </Style>
+        <Style Selector="TextBlock.planText.planDone">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondary}"/>
+            <Setter Property="TextDecorations" Value="Strikethrough"/>
+        </Style>
+        <Style Selector="TextBlock.planText.planActive">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
         <!-- Result body: hairline-bordered card indented to the title gutter, tight padding -->
         <Style Selector="Border.activityResult">
             <Setter Property="Margin" Value="34,2,0,4"/>
@@ -680,6 +693,34 @@
                                                 </ScrollViewer>
                                             </Border>
                                         </StackPanel>
+
+                                        <!-- Agent plan / checklist (update_plan tool): a compact card the agent
+                                             rebuilds wholesale each call; ☑ done (struck-through), ▶ active (accent). -->
+                                        <Border IsVisible="{Binding HasPlan}" Margin="0,2" Padding="10,8"
+                                                Background="{DynamicResource AppSurfaceBrush}"
+                                                BorderBrush="{DynamicResource AppSurfaceBorderBrush}"
+                                                BorderThickness="1" CornerRadius="4">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="PLAN" Classes="muted" FontSize="10" FontWeight="SemiBold"/>
+                                                <ItemsControl ItemsSource="{Binding Plan}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:PlanStepViewModel">
+                                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                <TextBlock Text="{Binding Glyph}" VerticalAlignment="Top"
+                                                                           Foreground="{DynamicResource AppTextSecondary}"/>
+                                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                                           Classes="planText"
+                                                                           Classes.planDone="{Binding IsDone}"
+                                                                           Classes.planActive="{Binding IsActive}"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
 
                                         <!-- Orchestrator delegations: one collapsible card per subtask handed to a
                                              specialist. Reads as a nested sub-task under the lead — a slight left

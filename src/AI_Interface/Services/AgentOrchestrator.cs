@@ -282,6 +282,8 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 // rows + tool rows below carry everything), so discard the legacy onActivity channel.
                 _ => { },
                 onActivityStep: SpecialistStep,
+                // A delegated specialist's plan/checklist isn't surfaced (it has no card slot of its own here).
+                onPlan: null,
                 CaptureAnswer,
                 approve,
                 ct).ConfigureAwait(false);
