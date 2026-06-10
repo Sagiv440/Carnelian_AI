@@ -1115,6 +1115,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         new() { Name = "new",       Description = "Start a new chat",                      Run = () => NewChatCommand.Execute(null),          IsAvailable = () => !IsBusy },
         new() { Name = "compact",   Description = "Summarise & compact this conversation", Run = () => CompactCommand.Execute(null),          IsAvailable = () => !IsBusy },
         new() { Name = "clear",     Description = "Discard the current conversation",      Run = () => ClearCurrentChatCommand.Execute(null), IsAvailable = () => !IsBusy },
+        // Project-mode agent kick-offs: send a preset prompt; the agent does the work with its tools.
+        new() { Name = "init",        Description = "Set up AI_DOCS.md + memory for this project", Run = () => SendAgentPreset(InitPrompt),      IsAvailable = () => ActiveProject is not null && !IsBusy },
+        new() { Name = "update-docs", Description = "Update the project handbook (AI_DOCS.md)",     Run = () => SendAgentPreset(UpdateDocsPrompt), IsAvailable = () => ActiveProject is not null && !IsBusy },
+        new() { Name = "run-app",     Description = "Build and run the app",                        Run = () => SendAgentPreset(RunAppPrompt),     IsAvailable = () => ActiveProject is not null && !IsBusy },
         new() { Name = "project",   Description = "Create or open a project",              Run = () => OpenProjectCommand.Execute(null) },
         new() { Name = "settings",  Description = "Open settings",                         Run = () => OpenSettingsCommand.Execute(null) },
         // Mode switches don't apply inside a project (the agent runs there).
@@ -1124,6 +1128,41 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         new() { Name = "thinking",  Description = "Toggle Thinking (plan before answering)", Run = () => ThinkingEnabled = !ThinkingEnabled },
         new() { Name = "auto-read", Description = "Toggle reading replies aloud",          Run = () => AutoSpeakEnabled = !AutoSpeakEnabled, IsAvailable = () => IsVoiceConfigured },
     };
+
+    // Preset prompts for the project-mode slash actions — sent to the agent, which carries them out with its
+    // own tools (update_docs / remember / run_command), gated by the active agent's permissions and approval.
+    private const string InitPrompt =
+        "Initialise this project's knowledge base:\n" +
+        "1. Inspect the project — list its files, read the key ones, and search where useful.\n" +
+        "2. Create or update the project handbook with the update_docs tool (.AI/AI_DOCS.md): a concise, " +
+        "durable guide to how this project works — its purpose, structure and architecture, the most " +
+        "important files/folders, how to build/run/test it, and its conventions. Write rules and " +
+        "orientation, not a log.\n" +
+        "3. Record the most important durable facts about the project (and any clear preferences) with the " +
+        "remember tool.\n" +
+        "Then give me a short summary of what you set up.";
+
+    private const string UpdateDocsPrompt =
+        "Review the current state of this project and update its handbook (.AI/AI_DOCS.md) with the " +
+        "update_docs tool so it accurately reflects the project as it is now — its purpose, structure, key " +
+        "build/run/test commands, and conventions. Inspect the project first and revise surgically, " +
+        "preserving useful existing content. Then summarise what you changed.";
+
+    private const string RunAppPrompt =
+        "Build and run this application. Work out the right commands for this project from its " +
+        "manifest/config (e.g. package.json, a .csproj/.sln, pyproject.toml, Makefile, …), run them with " +
+        "run_command (build first if needed), and report what happened. If it fails, show the error and " +
+        "suggest a fix.";
+
+    /// <summary>Fills the composer with a preset prompt and sends it to the agent (used by project slash actions).</summary>
+    private void SendAgentPreset(string prompt)
+    {
+        if (IsBusy || SelectedModel is null)
+            return;
+        InputText = prompt;
+        if (SendCommand.CanExecute(null))
+            SendCommand.Execute(null);
+    }
 
     /// <summary>Opens/filters/closes the palette for the current composer text. Call on the UI thread.</summary>
     private void UpdateSlashMenu(string? input)

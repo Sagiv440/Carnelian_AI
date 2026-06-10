@@ -482,9 +482,13 @@ Claude Code's). Pure helpers in `ViewModels/SlashMenu.cs` (`internal static`, un
 (input starts with `/`, no whitespace), `ExtractQuery`, `Filter` (prefix-then-substring, stable). The VM
 holds `ObservableCollection<SlashCommand> SlashCommands` + `IsSlashMenuOpen` + `SelectedSlashIndex`;
 `OnInputTextChanged` → `UpdateSlashMenu` filters the lazily-built `BuildSlashCommands()` set by each
-command's live `IsAvailable()` (context-aware — mode switches hide in a project, `/auto-read` needs voice,
-the conversation actions hide while `IsBusy`). Commands: `/new /compact /clear /project /settings /chat /web
-/research /thinking /auto-read`, each `SlashCommand.Run` invoking an existing VM command/toggle. The palette
+command's live `IsAvailable()` (context-aware — mode switches hide in a project, the project actions show
+**only** in a project, `/auto-read` needs voice, the conversation actions hide while `IsBusy`). Commands:
+`/new /compact /clear /project /settings /chat /web /research /thinking /auto-read`, each `SlashCommand.Run`
+invoking an existing VM command/toggle; plus **project-mode-only agent kick-offs** `/init` (analyse →
+`update_docs` handbook + `remember` facts), `/update-docs` (refresh the handbook), and `/run-app` (build &
+run) — these call `SendAgentPreset(prompt)`, which fills the composer with a preset instruction and sends it
+to the project agent (which then uses its own `update_docs`/`remember`/`run_command` tools). The palette
 (`MainWindow.axaml`, a `Border`+`ListBox.slashMenu` above the composer `TextBox`, `Focusable="False"`) is
 keyboard-driven from the **tunnel** `OnInputKeyDown` on `InputBox` (↑/↓ `MoveSlashSelection`+`ScrollIntoView`,
 Enter/Tab `AcceptSlashCommand`, Esc `CloseSlashMenu`); a row `Tapped` runs it (`OnSlashItemTapped`).
