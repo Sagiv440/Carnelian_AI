@@ -38,4 +38,17 @@ public class AgentPromptBuilderTests
         // Assert: no planning pass for the confirm modes.
         Assert.Equal(string.Empty, directive);
     }
+
+    // --- PhasesDirective: always present, mentions phases + update_plan ------------------------
+
+    [Fact]
+    public void PhasesDirective_IsNonEmpty_AndMentionsPhasesAndTheTool()
+    {
+        var directive = AgentPromptBuilder.PhasesDirective();
+
+        Assert.False(string.IsNullOrEmpty(directive));
+        Assert.Contains("phases", directive);
+        Assert.Contains("update_plan", directive);
+        Assert.StartsWith("\n\n", directive); // leads with a blank line so it slots after preceding content
+    }
 }

@@ -238,6 +238,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty] private bool _projectTeamAgentsOnly;
 
+    /// <summary>
+    /// When on, the project agent advances through phases automatically; when off it pauses at each phase
+    /// boundary for the user's OK. Mirrors <see cref="AppSettings.AutoFlowPhases"/>; independent of approval.
+    /// </summary>
+    [ObservableProperty] private bool _autoFlowPhases;
+
     /// <summary>Facts remembered about the user (global scope).</summary>
     public ObservableCollection<MemoryEntry> GlobalMemories { get; } = new();
 
@@ -286,6 +292,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
         if (_loading)
             return;
         _settings.Current.ProjectTeamAgentsOnly = value;
+        _settings.Save();
+    }
+
+    partial void OnAutoFlowPhasesChanged(bool value)
+    {
+        if (_loading)
+            return;
+        _settings.Current.AutoFlowPhases = value;
         _settings.Save();
     }
 
@@ -449,6 +463,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _softwareInstall = s.SoftwareInstall;
         _globalMemoryEnabled = s.GlobalMemoryEnabled;
         _projectTeamAgentsOnly = s.ProjectTeamAgentsOnly;
+        _autoFlowPhases = s.AutoFlowPhases;
         _searchProvider = s.SearchProvider;
         _searxngUrl = s.SearxngUrl;
         _braveApiKey = s.BraveApiKey;

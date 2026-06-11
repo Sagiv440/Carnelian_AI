@@ -143,15 +143,34 @@ see **Project skills**), and `update_docs` (offered only to the top-level/main a
   `web_search` is **ungated** (like `remember`) and reuses the injected `IWebSearchService`. The orchestrator
   Lead also gets read-only `search_files`/`find_files` (reusing `ProjectAgentService.SearchFiles`/`FindFiles`,
   now `internal static`); write/web tools reach delegated specialists via `CapTools`/ungating unchanged.
-- **`update_plan` tool — a live checklist.** Ungated (no file/command side effect). The agent resends the
-  FULL ordered step list each call; `ParsePlanSteps` (tolerant — string or `{text,status}` items, malformed
-  skipped) + `ParseStatus` (synonyms → `PlanStepStatus` Pending/Active/Done) build a `PlanUpdate`
-  (`Models/PlanUpdate.cs`). `RunAsync` gained an `Action<PlanUpdate>? onPlan` (after `onActivityStep`); the VM
-  marshals it to `MessageViewModel.SetPlan`, which rebuilds an `ObservableCollection<PlanStepViewModel>`
-  (`Plan` + `HasPlan`) rendered as a **checklist card** in the message (☑ done struck-through, ▶ active in
-  accent, ☐ pending). **Single-agent path only:** the orchestrator passes `onPlan: null` (delegated
-  specialists' plans aren't surfaced) and the Lead isn't offered the tool. `ParsePlanSteps`/`ParseStatus` are
-  `internal static` (unit-tested).
+- **`update_plan` tool — a live checklist or named phases.** Ungated (no file/command side effect). The agent
+  resends the FULL plan each call as EITHER a flat `steps` array OR named `phases` (each `{name,status,steps}`).
+  `ParsePlanSteps`→`ParseStepsArray` (tolerant — string or `{text,status}` items, malformed skipped) +
+  `ParsePhases` (skips items with no `name`, reuses `ParseStepsArray`) + `ParseStatus` (synonyms →
+  `PlanStepStatus` Pending/Active/Done) build a `PlanUpdate(Steps, Phases)` (`Models/PlanUpdate.cs`; a
+  back-compat `PlanUpdate(steps)` ctor keeps flat callers working). `UpdatePlan` prefers phases when present.
+  Tool description + JSON schema are `internal static UpdatePlanToolDescription`/`UpdatePlanSchema()` so the
+  Lead advertises an identical tool. The VM marshals `onPlan` to `MessageViewModel.SetPlan`, which rebuilds
+  `Phases` (`ObservableCollection<PlanPhaseViewModel>`, each with nested `Steps`) **or** the flat `Plan`
+  (`HasPlan = Plan.Count>0 && !HasPhases` — phases win the single card slot). Rendered as a **plan card** (☑
+  done struck-through, ▶ active in accent, ☐ pending); the phased card nests steps under each phase header.
+  **Both agents surface it now:** the single agent and the **Lead** (which owns the team's phase plan — added
+  to `BuildLeadTools`, routed via `ExecuteLeadTool`→`ProjectAgentService.UpdatePlan`); delegated specialists
+  stay suppressed (`onPlan: null`). `AgentPromptBuilder.PhasesDirective()` (approval-independent) nudges the
+  model to organise complex work into phases; it's threaded into the single agent's `directives` and the Lead
+  system prompt. `ParsePlanSteps`/`ParseStepsArray`/`ParsePhases`/`ParseStatus` are `internal static` (unit-tested).
+- **Phase gate (`AppSettings.AutoFlowPhases`, default true).** When the agent works in phases, this single
+  setting (Settings → Autonomy & Memory → *Phases*; **independent** of `AgentApproval`) decides flow: ON =
+  auto-advance; OFF = pause at each phase boundary for a Continue/Stop confirmation. `RunAsync` (both the
+  single agent and `IAgentOrchestrator`) gained `bool autoFlowPhases, Func<PhaseGate,Task<bool>>? phaseGate`
+  (before `ct`). The shared `ProjectAgentService.ApplyPhaseGateAsync` (internal static, unit-tested) runs after
+  each `update_plan` call: it tracks the loop-local `previousActivePhase`, and `DetectPhaseAdvance`/
+  `ActivePhaseName` (pure helpers) fire a `PhaseGate(CompletedPhase, NextPhase)` only on a real active-phase
+  change (never before the first phase, never when all done, case-insensitive). When gating, the loop blocks on
+  `phaseGate`; a decline ends the run with a "_(paused…)_" answer. The VM's `RequestPhaseContinueAsync` mirrors
+  the tool-approval plumbing (`PhaseGateRequested` event → `Dispatcher.UIThread.Post` a `PhaseGateEventArgs`
+  with a `TaskCompletionSource<bool>`); the code-behind shows the reusable `ConfirmWindow` and resolves the
+  TCS. Specialists pass `autoFlowPhases: true, phaseGate: null` (never gate).
 - **Sandbox.** File ops are confined to the project directory (`TryResolve` rejects paths outside it);
   commands run with the project root as the working directory.
 - **Approval.** `AgentApprovalMode` (`AutoRun` / `ConfirmDestructive` / `ConfirmEverything`) is passed to

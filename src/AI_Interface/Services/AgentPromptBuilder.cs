@@ -89,6 +89,18 @@ public static class AgentPromptBuilder
         : "";
 
     /// <summary>
+    /// Project-mode directive (independent of approval mode) telling the agent to structure a complex task
+    /// into a few named PHASES via the <c>update_plan</c> tool's <c>phases</c> field and work one phase at a
+    /// time — keeping runs consistent and legible. Led by a blank line so it slots after preceding content.
+    /// A flat checklist is fine for simple tasks. Augments (does not replace) <see cref="PlanningDirective"/>.
+    /// </summary>
+    public static string PhasesDirective() =>
+        "\n\nFor a multi-step task, organise the work into a few named phases (e.g. Explore → Implement → " +
+        "Verify) using the update_plan tool's 'phases': post the phases up front, mark exactly one phase " +
+        "'active' at a time, complete its steps, then move to the next. Keep a simple flat checklist for " +
+        "trivial tasks.";
+
+    /// <summary>
     /// The combined text of the agent's selected <b>built-in</b> skill packs, each prefixed with its name,
     /// led by a blank line so it slots after preceding content. Empty when no built-in packs are selected.
     /// (Project <c>SKILL.md</c> selections are resolved separately, in Project mode only.)

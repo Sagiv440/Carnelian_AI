@@ -53,6 +53,7 @@ public partial class MainWindow : Window
             _vm.McpResourcesRequested -= OnMcpResourcesRequested;
             _vm.ProjectRequested -= OnProjectRequested;
             _vm.ToolApprovalRequested -= OnToolApprovalRequested;
+            _vm.PhaseGateRequested -= OnPhaseGateRequested;
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -65,6 +66,7 @@ public partial class MainWindow : Window
             _vm.McpResourcesRequested += OnMcpResourcesRequested;
             _vm.ProjectRequested += OnProjectRequested;
             _vm.ToolApprovalRequested += OnToolApprovalRequested;
+            _vm.PhaseGateRequested += OnPhaseGateRequested;
         }
     }
 
@@ -84,6 +86,15 @@ public partial class MainWindow : Window
         var dialog = new ToolApprovalWindow(e.Request);
         var approved = await dialog.ShowDialog<bool>(this);
         e.Completion.TrySetResult(approved);
+    }
+
+    private async void OnPhaseGateRequested(object? sender, PhaseGateEventArgs e)
+    {
+        var dialog = new ConfirmWindow(
+            "Continue to the next phase?",
+            $"Finished the “{e.Gate.CompletedPhase}” phase. Continue to “{e.Gate.NextPhase}”?");
+        var cont = await dialog.ShowDialog<bool>(this);
+        e.Completion.TrySetResult(cont);
     }
 
     private async void OnAttachFilesRequested(object? sender, AttachmentKind kind)

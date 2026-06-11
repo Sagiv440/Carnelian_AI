@@ -143,9 +143,19 @@ public sealed partial class MessageViewModel : ObservableObject
     /// </summary>
     public ObservableCollection<PlanStepViewModel> Plan { get; } = new();
 
-    /// <summary>True once the agent has posted a plan (drives the checklist card's visibility).</summary>
+    /// <summary>True once the agent has posted a flat plan (drives the checklist card's visibility).</summary>
     [ObservableProperty]
     private bool _hasPlan;
+
+    /// <summary>
+    /// The agent's live plan organised into named phases (the <c>update_plan</c> tool's <c>phases</c>). Like
+    /// <see cref="Plan"/> it's rebuilt wholesale on each update. When present it replaces the flat checklist.
+    /// </summary>
+    public ObservableCollection<PlanPhaseViewModel> Phases { get; } = new();
+
+    /// <summary>True when the agent has posted a phased plan (drives the phase card's visibility).</summary>
+    [ObservableProperty]
+    private bool _hasPhases;
 
     /// <summary>
     /// Whether to show the legacy monospace <see cref="Work"/> block: only when there's work text but no
@@ -254,13 +264,28 @@ public sealed partial class MessageViewModel : ObservableObject
         HasActivities = Activities.Count > 0;
     }
 
-    /// <summary>Replaces the plan checklist with the agent's latest full list. Call on the UI thread.</summary>
+    /// <summary>
+    /// Replaces the plan with the agent's latest full list. A phased plan (<see cref="PlanUpdate.Phases"/>)
+    /// renders the phase card and wins over the flat checklist; otherwise the flat <see cref="Plan"/> shows.
+    /// Call on the UI thread.
+    /// </summary>
     public void SetPlan(PlanUpdate update)
     {
+        Phases.Clear();
+        foreach (var p in update.Phases)
+        {
+            var phase = new PlanPhaseViewModel { Name = p.Name, Status = p.Status };
+            foreach (var s in p.Steps)
+                phase.Steps.Add(new PlanStepViewModel { Text = s.Text, Status = s.Status });
+            Phases.Add(phase);
+        }
+        HasPhases = Phases.Count > 0;
+
         Plan.Clear();
         foreach (var s in update.Steps)
             Plan.Add(new PlanStepViewModel { Text = s.Text, Status = s.Status });
-        HasPlan = Plan.Count > 0;
+        // The flat checklist only shows when there are no phases (phases win the single plan slot).
+        HasPlan = Plan.Count > 0 && !HasPhases;
     }
 
     public void SetSources(IEnumerable<SearchResult> sources)

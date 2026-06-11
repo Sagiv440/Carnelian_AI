@@ -91,6 +91,72 @@ public sealed class ProjectAgentService : IProjectAgentService
         required = new[] { "content" }
     });
 
+    /// <summary>
+    /// The update_plan tool's model-facing description. Shared with <see cref="AgentOrchestrator"/> so the Lead
+    /// and the single agent advertise an identical tool. Supports a flat <c>steps</c> checklist OR named
+    /// <c>phases</c> (each with its own steps) for multi-stage work.
+    /// </summary>
+    internal const string UpdatePlanToolDescription =
+        "Maintain a short, visible plan for a multi-step task. Call it to post your plan, then again as you " +
+        "progress — always resending the FULL list, each item with a status ('pending', 'active' = working it " +
+        "now, 'done'). For a complex task, organise the work into a few named PHASES (e.g. Explore, Implement, " +
+        "Verify) via 'phases' — each phase with its own 'steps'; mark exactly one phase 'active' at a time and " +
+        "advance it as you go. For a simple task a flat 'steps' list is fine. Send EITHER 'phases' OR 'steps'.";
+
+    /// <summary>The JSON schema for the update_plan tool (a flat <c>steps</c> array or named <c>phases</c>). Shared with the orchestrator.</summary>
+    internal static JsonElement UpdatePlanSchema() => JsonSerializer.SerializeToElement(new
+    {
+        type = "object",
+        properties = new
+        {
+            steps = new
+            {
+                type = "array",
+                description = "A flat ordered checklist (for a simple task). Resend the whole list every call.",
+                items = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        text = new { type = "string", description = "Short imperative description of the step." },
+                        status = new { type = "string", description = "'pending', 'active' (working it now), or 'done'." }
+                    },
+                    required = new[] { "text" }
+                }
+            },
+            phases = new
+            {
+                type = "array",
+                description = "Named phases for a complex task (preferred). Resend the whole list every call.",
+                items = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        name = new { type = "string", description = "Short phase name, e.g. \"Explore\"." },
+                        status = new { type = "string", description = "'pending', 'active' (the phase you're in now), or 'done'." },
+                        steps = new
+                        {
+                            type = "array",
+                            description = "The checklist steps within this phase.",
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    text = new { type = "string", description = "Short imperative description of the step." },
+                                    status = new { type = "string", description = "'pending', 'active', or 'done'." }
+                                },
+                                required = new[] { "text" }
+                            }
+                        }
+                    },
+                    required = new[] { "name" }
+                }
+            }
+        }
+    });
+
     public async Task RunAsync(
         IChatClient client,
         Project project,
@@ -111,6 +177,8 @@ public sealed class ProjectAgentService : IProjectAgentService
         Action<PlanUpdate>? onPlan,
         Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
+        bool autoFlowPhases,
+        Func<PhaseGate, Task<bool>>? phaseGate,
         CancellationToken ct)
     {
         // A null allow-list (e.g. an agent with no tool profile) is treated as unrestricted.
@@ -146,6 +214,10 @@ public sealed class ProjectAgentService : IProjectAgentService
         // 0-based counter correlating each tool call's Started/Finished structured update (mirrors the
         // orchestrator's delegation index). Notes consume an index too so each lands in the feed in order.
         var activityIndex = 0;
+
+        // Tracks the phase the model is currently in, to detect a move into a NEW phase across update_plan
+        // calls — used by the phase gate (pause between phases when AutoFlowPhases is off).
+        string? previousActivePhase = null;
 
         for (var step = 0; step < maxSteps; step++)
         {
@@ -194,6 +266,20 @@ public sealed class ProjectAgentService : IProjectAgentService
                     ActivityPhase.Finished, idx, "", "", "", result, IsFailure(result)));
 
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
+
+                // Phase gate: when the model moves into a NEW phase via update_plan, optionally pause for the
+                // user before it does that phase's work (the loop blocks here until the gate resolves).
+                if (string.Equals(call.Name, "update_plan", StringComparison.Ordinal))
+                {
+                    var (prev, stop) = await ApplyPhaseGateAsync(
+                        previousActivePhase, call.Arguments, autoFlowPhases, phaseGate).ConfigureAwait(false);
+                    previousActivePhase = prev;
+                    if (stop is not null)
+                    {
+                        onAnswer($"_(paused at the “{stop.NextPhase}” phase — send another message to continue.)_");
+                        return;
+                    }
+                }
             }
         }
 
@@ -440,14 +526,26 @@ public sealed class ProjectAgentService : IProjectAgentService
     };
 
     /// <summary>
-    /// Surfaces the agent's checklist to the UI (the full list is resent each call). Pure UI side effect via
-    /// <paramref name="onPlan"/> — no files touched. Returns a short confirmation summarising the step counts.
+    /// Surfaces the agent's plan to the UI (the full list is resent each call). Pure UI side effect via
+    /// <paramref name="onPlan"/> — no files touched. Prefers a <c>phases</c> array (named phases, each with its
+    /// own steps); falls back to a flat <c>steps</c> checklist. Returns a short confirmation. <c>internal</c>
+    /// so the Lead orchestrator can reuse it.
     /// </summary>
-    private static string UpdatePlan(JsonElement args, Action<PlanUpdate>? onPlan)
+    internal static string UpdatePlan(JsonElement args, Action<PlanUpdate>? onPlan)
     {
+        var phases = ParsePhases(args);
+        if (phases.Count > 0)
+        {
+            onPlan?.Invoke(new PlanUpdate(System.Array.Empty<PlanStep>(), phases));
+            var pdone = phases.Count(p => p.Status == PlanStepStatus.Done);
+            var pactive = phases.Count(p => p.Status == PlanStepStatus.Active);
+            return $"Plan updated: {phases.Count} phase(s) — {pdone} done, {pactive} in progress.";
+        }
+
         var steps = ParsePlanSteps(args);
         if (steps.Count == 0)
-            return "Provide a non-empty 'steps' array — each with 'text' and optional 'status' (pending/active/done).";
+            return "Provide a non-empty 'steps' array (each with 'text' and optional 'status'), " +
+                   "or a 'phases' array (each with a 'name' and its own 'steps').";
 
         onPlan?.Invoke(new PlanUpdate(steps));
 
@@ -456,19 +554,27 @@ public sealed class ProjectAgentService : IProjectAgentService
         return $"Plan updated: {steps.Count} step(s) — {done} done, {active} in progress.";
     }
 
-    /// <summary>
-    /// Parses the update_plan <c>steps</c> array (each item a string or {text, status}). Fully value-kind
-    /// guarded — malformed items are skipped, never thrown on. <c>status</c> is honored only when a JSON
-    /// string (a numeric/bool status degrades to Pending). <c>internal</c> for unit testing.
-    /// </summary>
+    /// <summary>Parses the top-level <c>steps</c> array of update_plan into <see cref="PlanStep"/>s (flat plan).</summary>
     internal static IReadOnlyList<PlanStep> ParsePlanSteps(JsonElement args)
     {
-        var list = new List<PlanStep>();
         if (args.ValueKind != JsonValueKind.Object ||
             !args.TryGetProperty("steps", out var steps) || steps.ValueKind != JsonValueKind.Array)
+            return System.Array.Empty<PlanStep>();
+        return ParseStepsArray(steps);
+    }
+
+    /// <summary>
+    /// Parses a JSON array of steps (each item a string or {text, status}) into <see cref="PlanStep"/>s. Fully
+    /// value-kind guarded — malformed items are skipped, never thrown on. <c>status</c> is honored only when a
+    /// JSON string (a numeric/bool status degrades to Pending). Shared by the flat plan and each phase's steps.
+    /// </summary>
+    internal static IReadOnlyList<PlanStep> ParseStepsArray(JsonElement stepsArray)
+    {
+        var list = new List<PlanStep>();
+        if (stepsArray.ValueKind != JsonValueKind.Array)
             return list;
 
-        foreach (var el in steps.EnumerateArray())
+        foreach (var el in stepsArray.EnumerateArray())
         {
             string text;
             var status = PlanStepStatus.Pending;
@@ -490,6 +596,76 @@ public sealed class ProjectAgentService : IProjectAgentService
                 list.Add(new PlanStep(text, status));
         }
         return list;
+    }
+
+    /// <summary>
+    /// Parses the update_plan <c>phases</c> array (each item {name, status?, steps?}). Fully value-kind guarded
+    /// — items without a non-empty string <c>name</c> are skipped, malformed steps dropped, never thrown on.
+    /// <c>internal</c> for unit testing.
+    /// </summary>
+    internal static IReadOnlyList<PlanPhase> ParsePhases(JsonElement args)
+    {
+        var list = new List<PlanPhase>();
+        if (args.ValueKind != JsonValueKind.Object ||
+            !args.TryGetProperty("phases", out var phases) || phases.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var el in phases.EnumerateArray())
+        {
+            if (el.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var name = el.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String
+                ? (n.GetString() ?? "").Trim() : "";
+            if (name.Length == 0)
+                continue;
+
+            var status = el.TryGetProperty("status", out var st) && st.ValueKind == JsonValueKind.String
+                ? ParseStatus(st.GetString()) : PlanStepStatus.Pending;
+            var steps = el.TryGetProperty("steps", out var s) ? ParseStepsArray(s) : System.Array.Empty<PlanStep>();
+
+            list.Add(new PlanPhase(name, status, steps));
+        }
+        return list;
+    }
+
+    /// <summary>The name of the phase currently marked Active (the convention is exactly one), or null.</summary>
+    internal static string? ActivePhaseName(IReadOnlyList<PlanPhase> phases) =>
+        phases.FirstOrDefault(p => p.Status == PlanStepStatus.Active)?.Name;
+
+    /// <summary>
+    /// Detects a move into a NEW phase across the (stateless) update_plan calls: returns a
+    /// <see cref="PhaseGate"/> when the active phase's name changed from <paramref name="previousActivePhase"/>
+    /// to a different non-null phase. Returns null before the first active phase, when nothing is active now,
+    /// or when the active phase is unchanged — so a non-phased / non-compliant plan never gates.
+    /// </summary>
+    internal static PhaseGate? DetectPhaseAdvance(string? previousActivePhase, IReadOnlyList<PlanPhase> phases)
+    {
+        if (string.IsNullOrEmpty(previousActivePhase))
+            return null;
+        var now = ActivePhaseName(phases);
+        return now is null || string.Equals(now, previousActivePhase, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : new PhaseGate(previousActivePhase, now);
+    }
+
+    /// <summary>
+    /// The shared phase-gate step for both agent loops: parse the just-executed <c>update_plan</c> args,
+    /// detect a move into a new phase, advance the previous-active-phase tracker, and — when not auto-flowing
+    /// — ask the user to continue. Returns the updated tracker and, if the user declined, the
+    /// <see cref="PhaseGate"/> to stop at (the caller emits the "paused" answer). UI-free.
+    /// </summary>
+    internal static async Task<(string? PreviousActivePhase, PhaseGate? Stop)> ApplyPhaseGateAsync(
+        string? previousActivePhase, JsonElement updatePlanArgs,
+        bool autoFlowPhases, Func<PhaseGate, Task<bool>>? phaseGate)
+    {
+        var phases = ParsePhases(updatePlanArgs);
+        var advance = DetectPhaseAdvance(previousActivePhase, phases);
+        var next = ActivePhaseName(phases) ?? previousActivePhase;
+        if (advance is not null && !autoFlowPhases && phaseGate is not null
+            && !await phaseGate(advance).ConfigureAwait(false))
+            return (next, advance); // user declined → stop, carrying the phase we won't enter
+        return (next, null);
     }
 
     /// <summary>Maps a free-form status string to <see cref="PlanStepStatus"/> (default Pending). Tolerant of synonyms.</summary>
@@ -1351,35 +1527,9 @@ public sealed class ProjectAgentService : IProjectAgentService
                 required = new[] { "query" }
             })));
 
-        // update_plan: a UI-only checklist the agent maintains (no file/command side effects), so it's
-        // ungated like web_search. The agent resends the full step list each call.
-        tools.Add(new AgentTool("update_plan",
-            "Maintain a short, visible checklist for a multi-step task. Call it to post your plan, then again " +
-            "as you progress — always sending the FULL ordered list, each step with a status. Mark the step " +
-            "you're on 'active', finished steps 'done', the rest 'pending'. Keep it to a handful of concrete steps.",
-            Schema(new
-            {
-                type = "object",
-                properties = new
-                {
-                    steps = new
-                    {
-                        type = "array",
-                        description = "The full ordered list of steps (resend the whole list on every call).",
-                        items = new
-                        {
-                            type = "object",
-                            properties = new
-                            {
-                                text = new { type = "string", description = "Short imperative description of the step." },
-                                status = new { type = "string", description = "'pending', 'active' (working it now), or 'done'." }
-                            },
-                            required = new[] { "text" }
-                        }
-                    }
-                },
-                required = new[] { "steps" }
-            })));
+        // update_plan: a UI-only plan/checklist the agent maintains (no file/command side effects), so it's
+        // ungated like web_search. The agent resends the full list each call (flat steps or named phases).
+        tools.Add(new AgentTool("update_plan", UpdatePlanToolDescription, UpdatePlanSchema()));
 
         // create_skill: a meta tool that writes a reusable guidance file under .AI/skills/. Always offered
         // (it only writes to that controlled location), so "create a skill for X" works with any agent.

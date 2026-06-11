@@ -216,7 +216,8 @@ internal sealed class DesignProjectAgentService : IProjectAgentService
         string thinkingDirective, string projectSkills, SoftwareInstallPermission installPermission,
         bool memoryEnabled, bool allowDocsUpdate, IProgress<string> status, Action<string> onActivity,
         Action<ActivityUpdate>? onActivityStep, Action<PlanUpdate>? onPlan, Action<string> onAnswer,
-        Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+        Func<ToolApprovalRequest, Task<bool>> approve, bool autoFlowPhases,
+        Func<PhaseGate, Task<bool>>? phaseGate, CancellationToken ct)
     {
         onAnswer("Design-time project agent response.");
         return Task.CompletedTask;
@@ -231,7 +232,8 @@ internal sealed class DesignAgentOrchestrator : IAgentOrchestrator
         string thinkingDirective, SoftwareInstallPermission installPermission, AgentApprovalMode approval,
         IProgress<string> status,
         Action<ActivityUpdate> onActivityStep, Action<string> onAnswer, Action<DelegationUpdate> onDelegation,
-        Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+        Action<PlanUpdate>? onPlan, Func<ToolApprovalRequest, Task<bool>> approve,
+        bool autoFlowPhases, Func<PhaseGate, Task<bool>>? phaseGate, CancellationToken ct)
     {
         onAnswer("Design-time orchestrator response.");
         return Task.CompletedTask;

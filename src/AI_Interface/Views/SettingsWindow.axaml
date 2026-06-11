@@ -690,6 +690,15 @@
                             <TextBlock Classes="label" Margin="0,2,0,0" TextWrapping="Wrap"
                                        Text="When on, single agents are hidden from the picker while a project is open — you steer the team through a Lead. The Lead still delegates to those specialists behind the scenes."/>
 
+                            <!-- Phases -->
+                            <TextBlock Classes="section" Text="Phases"/>
+                            <TextBlock Classes="label" TextWrapping="Wrap"
+                                       Text="For a complex task the project agent organises its work into named phases (e.g. Explore → Implement → Verify), shown as a plan card."/>
+                            <CheckBox Margin="0,8,0,0" Content="Auto-advance through phases"
+                                      IsChecked="{Binding AutoFlowPhases}"/>
+                            <TextBlock Classes="label" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       Text="When on, the agent moves from one phase to the next on its own. When off, it pauses at each phase boundary and asks you to continue — a checkpoint separate from the tool-approval setting above."/>
+
                             <!-- Persistent memory -->
                             <TextBlock Classes="section" Text="Memory"/>
                             <TextBlock Classes="label" TextWrapping="Wrap"

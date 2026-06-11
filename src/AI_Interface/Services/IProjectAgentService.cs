@@ -34,6 +34,8 @@ public interface IProjectAgentService
     /// <param name="onPlan">Optional — receives the agent's checklist whenever it calls <c>update_plan</c> (the full list each time). Null (e.g. a delegated specialist run) just doesn't surface the plan. Must marshal to the UI thread.</param>
     /// <param name="onAnswer">Receives the final plain-text answer. Must marshal to the UI thread.</param>
     /// <param name="approve">Asked to approve a single tool call; returns false to skip it.</param>
+    /// <param name="autoFlowPhases">When the agent works in phases: true advances automatically; false pauses at each phase boundary via <paramref name="phaseGate"/>.</param>
+    /// <param name="phaseGate">Asked to continue past a phase boundary when <paramref name="autoFlowPhases"/> is false; returns false to stop the run. Null (or auto-flow) never pauses.</param>
     Task RunAsync(
         IChatClient client,
         Project project,
@@ -54,5 +56,7 @@ public interface IProjectAgentService
         Action<PlanUpdate>? onPlan,
         Action<string> onAnswer,
         Func<ToolApprovalRequest, Task<bool>> approve,
+        bool autoFlowPhases,
+        Func<PhaseGate, Task<bool>>? phaseGate,
         CancellationToken ct);
 }

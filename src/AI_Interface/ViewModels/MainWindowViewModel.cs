@@ -68,6 +68,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>Raised when the project agent needs the user to approve a tool call.</summary>
     public event EventHandler<ToolApprovalEventArgs>? ToolApprovalRequested;
 
+    /// <summary>Raised when the project agent reaches a phase boundary and needs the user's OK to continue.</summary>
+    public event EventHandler<PhaseGateEventArgs>? PhaseGateRequested;
+
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
 
     /// <summary>Models offered in the top-bar picker, across every configured provider.</summary>
@@ -856,7 +859,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             RequestScroll();
         });
 
-        // The agent's checklist (update_plan tool) → the message's plan card. Single-agent path only.
+        // The agent's plan/phases (update_plan tool) → the message's plan card. Used by the single agent
+        // and the Lead (which owns its phase plan); delegated specialists are suppressed via onPlan: null.
         void OnPlan(PlanUpdate u) => Dispatcher.UIThread.Post(() =>
         {
             assistant.SetPlan(u);
@@ -897,8 +901,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 SelectedAgent, client, model, ActiveProject, conversation,
                 MemoryBlock(), MemoryActive(), ProjectContext(), ThinkingDirective(),
                 _settings.Current.SoftwareInstall, _settings.Current.AgentApproval,
-                progress, OnActivityStep, OnAnswer, OnDelegation,
-                RequestToolApprovalAsync, ct);
+                progress, OnActivityStep, OnAnswer, OnDelegation, OnPlan,
+                RequestToolApprovalAsync, _settings.Current.AutoFlowPhases, RequestPhaseContinueAsync, ct);
         }
         else
         {
@@ -909,7 +913,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             var (approval, maxSteps) = AutonomyMap.ForApprovalMode(approvalMode);
             // Under AutoRun the agent gets a plan-then-execute directive appended to the system prompt; it
             // slots in alongside the Thinking directive (both lead with their own blank line, both may be empty).
-            var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(approvalMode);
+            // PhasesDirective (approval-independent) tells it to structure complex work into named phases.
+            var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(approvalMode)
+                + AgentPromptBuilder.PhasesDirective();
 
             // ProjectContext() = the AI_DOCS.md handbook + project skills, injected only in Project mode.
             // allowDocsUpdate: true — the active top-level agent is the main agent and may maintain the
@@ -919,7 +925,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 SelectedAgent?.Tools ?? new AgentTools(),
                 PersonaPrefix(), directives, ProjectContext(), _settings.Current.SoftwareInstall, MemoryActive(),
                 allowDocsUpdate: true, progress,
-                OnActivity, OnActivityStep, OnPlan, OnAnswer, RequestToolApprovalAsync, ct);
+                OnActivity, OnActivityStep, OnPlan, OnAnswer, RequestToolApprovalAsync,
+                _settings.Current.AutoFlowPhases, RequestPhaseContinueAsync, ct);
         }
 
         // The turn may have created/edited project skills (create_skill, or write_file under .AI/skills) —
@@ -937,6 +944,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         var tcs = new TaskCompletionSource<bool>();
         Dispatcher.UIThread.Post(() =>
             ToolApprovalRequested?.Invoke(this, new ToolApprovalEventArgs(request, tcs)));
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// Asks the view to confirm advancing to the next phase (when AutoFlowPhases is off). Raised from the
+    /// agent's background loop and marshalled to the UI; returns true to continue, false to stop the run.
+    /// </summary>
+    private Task<bool> RequestPhaseContinueAsync(PhaseGate gate)
+    {
+        if (PhaseGateRequested is null)
+            return Task.FromResult(true); // no UI wired (e.g. design time) → continue
+
+        var tcs = new TaskCompletionSource<bool>();
+        Dispatcher.UIThread.Post(() =>
+            PhaseGateRequested?.Invoke(this, new PhaseGateEventArgs(gate, tcs)));
         return tcs.Task;
     }
 

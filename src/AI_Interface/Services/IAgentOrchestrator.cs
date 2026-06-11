@@ -42,7 +42,13 @@ public interface IAgentOrchestrator
     /// Receives structured per-delegation updates (start/activity/finish, keyed by a 0-based index) so the UI
     /// can render a hierarchical per-delegation card list. Must marshal to the UI thread.
     /// </param>
+    /// <param name="onPlan">
+    /// Receives the LEAD's plan/phases (its <c>update_plan</c> tool) for the message's plan card; the Lead
+    /// owns the phase plan. Delegated specialists' plans are suppressed. Must marshal to the UI thread.
+    /// </param>
     /// <param name="approve">Asked to approve a single specialist tool call; returns false to skip it.</param>
+    /// <param name="autoFlowPhases">When the lead works in phases: true advances automatically; false pauses at each phase boundary via <paramref name="phaseGate"/>.</param>
+    /// <param name="phaseGate">Asked to continue past a phase boundary when <paramref name="autoFlowPhases"/> is false; returns false to stop the run.</param>
     Task RunAsync(
         Agent lead,
         IChatClient leadClient,
@@ -59,6 +65,9 @@ public interface IAgentOrchestrator
         Action<ActivityUpdate> onActivityStep,
         Action<string> onAnswer,
         Action<DelegationUpdate> onDelegation,
+        Action<PlanUpdate>? onPlan,
         Func<ToolApprovalRequest, Task<bool>> approve,
+        bool autoFlowPhases,
+        Func<PhaseGate, Task<bool>>? phaseGate,
         CancellationToken ct);
 }

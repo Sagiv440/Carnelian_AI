@@ -774,6 +774,56 @@
                                             </StackPanel>
                                         </Border>
 
+                                        <!-- Phased plan (update_plan 'phases'): named phases, each with its own
+                                             steps. Phases win the plan slot over the flat checklist above. -->
+                                        <Border IsVisible="{Binding HasPhases}" Margin="0,2" Padding="10,8"
+                                                Background="{DynamicResource AppSurfaceBrush}"
+                                                BorderBrush="{DynamicResource AppSurfaceBorderBrush}"
+                                                BorderThickness="1" CornerRadius="4">
+                                            <StackPanel Spacing="6">
+                                                <TextBlock Text="PLAN" Classes="muted" FontSize="10" FontWeight="SemiBold"/>
+                                                <ItemsControl ItemsSource="{Binding Phases}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><StackPanel Spacing="6"/></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:PlanPhaseViewModel">
+                                                            <StackPanel Spacing="2">
+                                                                <!-- Phase header -->
+                                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                    <TextBlock Text="{Binding Glyph}" VerticalAlignment="Top"
+                                                                               Foreground="{DynamicResource AppTextSecondary}"/>
+                                                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                                                               FontWeight="SemiBold"
+                                                                               Classes="planText"
+                                                                               Classes.planDone="{Binding IsDone}"
+                                                                               Classes.planActive="{Binding IsActive}"/>
+                                                                </StackPanel>
+                                                                <!-- Steps within the phase (indented) -->
+                                                                <ItemsControl ItemsSource="{Binding Steps}" Margin="20,0,0,0">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:PlanStepViewModel">
+                                                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                                <TextBlock Text="{Binding Glyph}" VerticalAlignment="Top"
+                                                                                           Foreground="{DynamicResource AppTextSecondary}"/>
+                                                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                                                           Classes="planText"
+                                                                                           Classes.planDone="{Binding IsDone}"
+                                                                                           Classes.planActive="{Binding IsActive}"/>
+                                                                            </StackPanel>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+
                                         <!-- Orchestrator delegations: one collapsible card per subtask handed to a
                                              specialist. Reads as a nested sub-task under the lead — a slight left
                                              indent and a hairline left accent rule mark it as subordinate to the answer. -->

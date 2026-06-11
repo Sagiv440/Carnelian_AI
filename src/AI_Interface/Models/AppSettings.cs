@@ -95,6 +95,13 @@ public sealed class AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public SoftwareInstallPermission SoftwareInstall { get; set; } = SoftwareInstallPermission.Never;
 
+    /// <summary>
+    /// When the project agent works in named phases, whether it advances automatically (true) or pauses at
+    /// each phase boundary for the user's OK (false). Independent of <see cref="AgentApproval"/>. Defaults to
+    /// auto-advance so phases are non-disruptive visibility out of the box; the pause is opt-in.
+    /// </summary>
+    public bool AutoFlowPhases { get; set; } = true;
+
     // --- MCP (Model Context Protocol) servers ---
 
     /// <summary>

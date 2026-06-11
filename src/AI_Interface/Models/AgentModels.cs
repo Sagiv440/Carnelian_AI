@@ -17,3 +17,10 @@ public sealed record AgentTurn(string Content, IReadOnlyList<AgentToolCall> Tool
 
 /// <summary>A request for the user to approve (or deny) a single tool call before it executes.</summary>
 public sealed record ToolApprovalRequest(string ToolName, string Summary, string Detail, bool IsDestructive);
+
+/// <summary>
+/// A request to continue past a phase boundary (when <c>AutoFlowPhases</c> is off): the agent just finished
+/// <paramref name="CompletedPhase"/> and is about to start <paramref name="NextPhase"/>. The user approves
+/// (true) to continue or declines (false) to stop the run.
+/// </summary>
+public sealed record PhaseGate(string CompletedPhase, string NextPhase);

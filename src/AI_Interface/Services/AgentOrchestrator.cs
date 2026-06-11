@@ -66,7 +66,10 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         Action<ActivityUpdate> onActivityStep,
         Action<string> onAnswer,
         Action<DelegationUpdate> onDelegation,
+        Action<PlanUpdate>? onPlan,
         Func<ToolApprovalRequest, Task<bool>> approve,
+        bool autoFlowPhases,
+        Func<PhaseGate, Task<bool>>? phaseGate,
         CancellationToken ct)
     {
         // Roster the lead may delegate to: everyone EXCEPT orchestrators and the lead itself. Excluding
@@ -83,6 +86,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 AgentPromptBuilder.PersonaPrefix(lead, memoryBlock) +
                 SystemPrompt(project, roster) +
                 DocsDirective +
+                AgentPromptBuilder.PhasesDirective() +
                 thinkingDirective)
         };
         messages.AddRange(conversation);
@@ -99,6 +103,9 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         // which feed the message's single-agent-style activity feed. Independent of the delegation index
         // space (nextIndex above), which keys the separate per-delegation cards.
         var leadActivityIndex = 0;
+
+        // Tracks the lead's current phase to gate moves into a new phase (when AutoFlowPhases is off).
+        string? previousActivePhase = null;
 
         for (var step = 0; step < MaxDelegations; step++)
         {
@@ -144,13 +151,26 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                         ActivityPhase.Started, idx, ProjectAgentService.IconFor(call.Name), summary, detail, "", false));
                     status.Report(ProjectAgentService.CurrentActionLabel(call.Name, summary, detail));
 
-                    result = ExecuteLeadTool(call, project);
+                    result = ExecuteLeadTool(call, project, onPlan);
 
                     onActivityStep(new ActivityUpdate(
                         ActivityPhase.Finished, idx, "", "", "", result, ProjectAgentService.IsFailure(result)));
                 }
 
                 messages.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = call.Name });
+
+                // Phase gate: when the lead moves into a NEW phase via update_plan, optionally pause for the user.
+                if (string.Equals(call.Name, "update_plan", StringComparison.Ordinal))
+                {
+                    var (prev, stop) = await ProjectAgentService.ApplyPhaseGateAsync(
+                        previousActivePhase, call.Arguments, autoFlowPhases, phaseGate).ConfigureAwait(false);
+                    previousActivePhase = prev;
+                    if (stop is not null)
+                    {
+                        onAnswer($"_(paused at the “{stop.NextPhase}” phase — send another message to continue.)_");
+                        return;
+                    }
+                }
             }
         }
 
@@ -166,7 +186,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
     /// The lead never writes/deletes/runs project files directly; <c>delegate_task</c> is handled separately
     /// in the loop (it has its own per-delegation card, not the lead's structured feed).
     /// </summary>
-    private string ExecuteLeadTool(AgentToolCall call, Project project) => call.Name switch
+    private string ExecuteLeadTool(AgentToolCall call, Project project, Action<PlanUpdate>? onPlan) => call.Name switch
     {
         "list_directory" => Truncate(ListDirectory(project, GetString(call.Arguments, "path"))),
         "read_file"      => Truncate(ReadFile(project, GetString(call.Arguments, "path"))),
@@ -176,6 +196,8 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         "find_files"     => Truncate(ProjectAgentService.FindFiles(project, GetString(call.Arguments, "glob"),
                                 GetString(call.Arguments, "path"))),
         "update_docs"    => Truncate(UpdateDocs(project, GetString(call.Arguments, "content"))),
+        // The lead owns the phase plan — reuse the single-agent UpdatePlan (pure UI side effect via onPlan).
+        "update_plan"    => ProjectAgentService.UpdatePlan(call.Arguments, onPlan),
         _                => $"Unknown tool '{call.Name}'."
     };
 
@@ -191,6 +213,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         "search_files"   => ("Search files", GetString(call.Arguments, "pattern") ?? ""),
         "find_files"     => ("Find files", GetString(call.Arguments, "glob") ?? ""),
         "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName),
+        "update_plan"    => ("Update plan", ""),
         _                => (call.Name, "")
     };
 
@@ -286,6 +309,9 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 onPlan: null,
                 CaptureAnswer,
                 approve,
+                // Specialists never gate on phases — only the lead (which owns the phase plan) does.
+                autoFlowPhases: true,
+                phaseGate: null,
                 ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -558,7 +584,10 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 })),
             // The lead is a main agent: it owns the project handbook. update_docs writes only to the fixed
             // .AI/AI_DOCS.md path (so it isn't allow-list-gated) and is shared verbatim with the single agent.
-            new("update_docs", ProjectAgentService.UpdateDocsToolDescription, ProjectAgentService.UpdateDocsSchema())
+            new("update_docs", ProjectAgentService.UpdateDocsToolDescription, ProjectAgentService.UpdateDocsSchema()),
+            // The lead owns the phase plan it coordinates the team around (ungated UI-only side effect),
+            // advertised via the same schema/description as the single agent.
+            new("update_plan", ProjectAgentService.UpdatePlanToolDescription, ProjectAgentService.UpdatePlanSchema())
         };
 
         if (leadTools.Allows(AgentToolGroup.ReadFiles))
