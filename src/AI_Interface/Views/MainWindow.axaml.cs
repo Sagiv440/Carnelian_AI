@@ -17,6 +17,7 @@ namespace AI_Interface.Views;
 public partial class MainWindow : Window
 {
     private MainWindowViewModel? _vm;
+    private bool _startedUp; // guards the one-time init + startup launcher (Loaded can re-fire on re-attach)
 
     public MainWindow()
     {
@@ -31,8 +32,12 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
-            await vm.InitializeAsync();
+        // The startup launcher is now an in-window overlay (MainWindowViewModel.ShowStartupLauncher), so
+        // OnLoaded just runs the one-time model init. Loaded can re-fire on re-attach — guard against it.
+        if (_startedUp || DataContext is not MainWindowViewModel vm)
+            return;
+        _startedUp = true;
+        await vm.InitializeAsync();
     }
 
     protected override void OnClosed(EventArgs e)

@@ -86,6 +86,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 AgentPromptBuilder.PersonaPrefix(lead, memoryBlock) +
                 SystemPrompt(project, roster) +
                 DocsDirective +
+                AgentPromptBuilder.ClarifyDirective() +
                 AgentPromptBuilder.PhasesDirective() +
                 thinkingDirective)
         };

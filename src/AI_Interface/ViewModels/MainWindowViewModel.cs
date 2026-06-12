@@ -212,6 +212,33 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>Root of the project file tree (one node = the project directory) for the Files tab.</summary>
     public ObservableCollection<FileNode> FileTree { get; } = new();
 
+    // --- Startup launcher (in-place: the window opens on this, then switches to the chat UI) ---
+
+    /// <summary>True while the in-place startup launcher overlay is shown (recent projects + Local Chat).</summary>
+    [ObservableProperty]
+    private bool _showStartupLauncher = true;
+
+    /// <summary>How many recent projects the launcher shows.</summary>
+    private const int MaxShownRecentProjects = 8;
+
+    /// <summary>Recent projects shown on the launcher (most-recent-first, pruned to folders that still exist).</summary>
+    public ObservableCollection<RecentProject> StartupRecentProjects { get; } = new();
+
+    /// <summary>True when there's at least one recent project (toggles the launcher's empty-state hint).</summary>
+    public bool HasStartupRecentProjects { get; private set; }
+
+    /// <summary>Dismisses the launcher and stays in the global (no-project) chat.</summary>
+    [RelayCommand]
+    private void StartLocalChat() => ShowStartupLauncher = false;
+
+    /// <summary>Opens a recent project from the launcher (ActivateProjectAsync dismisses the launcher).</summary>
+    [RelayCommand]
+    private async Task OpenRecentProject(RecentProject? recent)
+    {
+        if (recent is not null && !string.IsNullOrWhiteSpace(recent.Directory))
+            await ActivateProjectAsync(new Project(recent.Name, recent.Directory));
+    }
+
     // Live file-tree updates. A FileSystemWatcher runs only while the Files tab is open (switching to it
     // already rebuilds the tree, so staleness only matters while it stays open). Bursty FS events are
     // coalesced through a short debounce, then each touched directory node is reconciled in place.
@@ -279,6 +306,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         foreach (var session in _history.Load())
             ChatLog.Add(session);
+
+        // The window starts on the in-place startup launcher (recent projects + Local Chat).
+        foreach (var r in PrunedRecent(settings.Current.RecentProjects, MaxShownRecentProjects))
+            StartupRecentProjects.Add(r);
+        HasStartupRecentProjects = StartupRecentProjects.Count > 0;
     }
 
     // Design-time / fallback constructor so the XAML previewer can instantiate the window.
@@ -913,9 +945,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             var (approval, maxSteps) = AutonomyMap.ForApprovalMode(approvalMode);
             // Under AutoRun the agent gets a plan-then-execute directive appended to the system prompt; it
             // slots in alongside the Thinking directive (both lead with their own blank line, both may be empty).
-            // PhasesDirective (approval-independent) tells it to structure complex work into named phases.
+            // ClarifyDirective (ask when vague) + PhasesDirective (structure complex work into named phases)
+            // are approval-independent.
             var directives = ThinkingDirective() + AgentPromptBuilder.PlanningDirective(approvalMode)
-                + AgentPromptBuilder.PhasesDirective();
+                + AgentPromptBuilder.ClarifyDirective() + AgentPromptBuilder.PhasesDirective();
 
             // ProjectContext() = the AI_DOCS.md handbook + project skills, injected only in Project mode.
             // allowDocsUpdate: true — the active top-level agent is the main agent and may maintain the
@@ -1373,6 +1406,60 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         FileTree.Add(root);
     }
 
+    /// <summary>Records a just-opened project at the front of the recent list (deduped, capped) and persists it.</summary>
+    private void AddRecentProject(Project project)
+    {
+        _settings.Current.RecentProjects =
+            WithRecentProjectAtFront(_settings.Current.RecentProjects, project, MaxRecentProjects, PathCmp);
+        _settings.Save();
+    }
+
+    /// <summary>How many recent projects are kept on disk (the launcher shows up to <c>StartupViewModel.MaxShown</c>).</summary>
+    private const int MaxRecentProjects = 12;
+
+    /// <summary>
+    /// Returns a new recent-projects list with <paramref name="project"/> moved to the front (deduped by
+    /// directory using <paramref name="cmp"/>, blank entries dropped, capped at <paramref name="cap"/>). Pure —
+    /// unit-tested.
+    /// </summary>
+    internal static List<RecentProject> WithRecentProjectAtFront(
+        IReadOnlyList<RecentProject> existing, Project project, int cap, StringComparison cmp)
+    {
+        var list = new List<RecentProject> { new() { Name = project.Name, Directory = project.Directory } };
+        if (existing is not null)
+            foreach (var r in existing)
+            {
+                if (list.Count >= cap)
+                    break; // checked before adding so the result never exceeds the cap
+                if (r is null || string.IsNullOrWhiteSpace(r.Directory))
+                    continue;
+                if (string.Equals(r.Directory, project.Directory, cmp))
+                    continue; // the moved-to-front entry already represents this directory
+                list.Add(r);
+            }
+        return list;
+    }
+
+    /// <summary>
+    /// Keeps the recents whose directory still exists, in order, up to <paramref name="max"/> — so a deleted
+    /// project folder silently drops off the launcher. Blank/missing entries are skipped. <c>internal</c> for tests.
+    /// </summary>
+    internal static IReadOnlyList<RecentProject> PrunedRecent(IReadOnlyList<RecentProject>? recents, int max)
+    {
+        var result = new List<RecentProject>();
+        if (recents is null)
+            return result;
+        foreach (var r in recents)
+        {
+            if (result.Count >= max)
+                break;
+            if (r is null || string.IsNullOrWhiteSpace(r.Directory) || !Directory.Exists(r.Directory))
+                continue;
+            result.Add(r);
+        }
+        return result;
+    }
+
     /// <summary>Start watching when the Files tab opens; stop when it closes (or the project exits).</summary>
     partial void OnShowProjectFilesChanged(bool value)
     {
@@ -1511,7 +1598,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _currentSession = new ChatSession();
         Messages.Clear();
         StatusText = "";
+        ShowStartupLauncher = false;      // any project activation leaves the launcher
         ActiveProject = project;          // project store is now active
+        AddRecentProject(project);        // remember it for the startup launcher
         SetMode(AppMode.Project);
         ShowProjectFiles = false;         // start on the Chat Log tab
         LoadLog();                        // load this project's chats into the sidebar log

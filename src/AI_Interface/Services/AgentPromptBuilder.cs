@@ -101,6 +101,17 @@ public static class AgentPromptBuilder
         "trivial tasks.";
 
     /// <summary>
+    /// Project-mode directive telling the agent to ask a couple of clarifying questions when a request is
+    /// vague rather than guessing — and to just proceed when it's clear. The agent asks by replying in plain
+    /// text (no tool calls), which ends the turn so the user can answer. Led by a blank line.
+    /// </summary>
+    public static string ClarifyDirective() =>
+        "\n\nIf the request is vague or underspecified — missing decisions you'd need to build the right " +
+        "thing (e.g. scope, the kind of app / platform / UI, language or framework, or important " +
+        "constraints) — do NOT guess: ask 1–3 short, specific clarifying questions first and stop for the " +
+        "answer before creating files or running commands. If the request is already clear enough, just proceed.";
+
+    /// <summary>
     /// The combined text of the agent's selected <b>built-in</b> skill packs, each prefixed with its name,
     /// led by a blank line so it slots after preceding content. Empty when no built-in packs are selected.
     /// (Project <c>SKILL.md</c> selections are resolved separately, in Project mode only.)

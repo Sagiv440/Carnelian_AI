@@ -1210,6 +1210,78 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- Startup launcher overlay: the window opens on this and switches to the chat UI in place when a
+             choice is made (recent project / Local Chat / open a project). Covers both columns, on top. -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding ShowStartupLauncher}"
+                Background="{DynamicResource AppWindowBackground}">
+            <Border Classes="card" CornerRadius="6" Width="480" Padding="26,24"
+                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+
+                    <TextBlock Grid.Row="0" Classes="brand" FontSize="20" Text="AI Interface"/>
+                    <TextBlock Grid.Row="1" Classes="muted" Margin="0,3,0,18"
+                               Text="Open a recent project, or start chatting locally."/>
+
+                    <!-- Primary action: start a local (no-project) chat. -->
+                    <Button Grid.Row="2" Classes="cta" Content="💬   Local Chat"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="0,13" FontSize="15" Command="{Binding StartLocalChatCommand}"/>
+
+                    <!-- Recent projects -->
+                    <StackPanel Grid.Row="3" Margin="0,22,0,0">
+                        <TextBlock Classes="navheader" Text="RECENT PROJECTS" Margin="2,0,0,6"/>
+
+                        <!-- Empty state -->
+                        <Border IsVisible="{Binding !HasStartupRecentProjects}" Padding="0,16">
+                            <StackPanel HorizontalAlignment="Center" Spacing="4">
+                                <TextBlock Text="📂" FontSize="26" Opacity="0.5" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="muted" HorizontalAlignment="Center" Text="No recent projects yet."/>
+                                <TextBlock Classes="muted" HorizontalAlignment="Center" Text="Open one below to get started."/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Recent list -->
+                        <ScrollViewer MaxHeight="248" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto"
+                                      IsVisible="{Binding HasStartupRecentProjects}">
+                            <ItemsControl ItemsSource="{Binding StartupRecentProjects}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Spacing="1"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:RecentProject">
+                                        <!-- CompileBindings off: reach the window VM's command + bind the row's RecentProject. -->
+                                        <Button Classes="nav" Padding="10,7" x:CompileBindings="False"
+                                                Command="{Binding DataContext.OpenRecentProjectCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip.Tip="{Binding Directory}">
+                                            <Grid ColumnDefinitions="Auto,*">
+                                                <TextBlock Grid.Column="0" Text="📁" FontSize="15"
+                                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource AppTextPrimary}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Directory}" Classes="muted" FontSize="11"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+
+                    <!-- Footer: open a project not in the list (New / Open dialog). -->
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"
+                                Spacing="10" Margin="0,18,0,0">
+                        <Button Classes="ghost" Content="Open a project…" Command="{Binding OpenProjectCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
 
 </Window>

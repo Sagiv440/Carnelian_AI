@@ -51,4 +51,17 @@ public class AgentPromptBuilderTests
         Assert.Contains("update_plan", directive);
         Assert.StartsWith("\n\n", directive); // leads with a blank line so it slots after preceding content
     }
+
+    // --- ClarifyDirective: always present, tells the agent to ask when vague --------------------
+
+    [Fact]
+    public void ClarifyDirective_IsNonEmpty_AndMentionsClarifyingQuestionsWhenVague()
+    {
+        var directive = AgentPromptBuilder.ClarifyDirective();
+
+        Assert.False(string.IsNullOrEmpty(directive));
+        Assert.Contains("clarifying questions", directive);
+        Assert.Contains("vague", directive);
+        Assert.StartsWith("\n\n", directive); // leads with a blank line so it slots after preceding content
+    }
 }

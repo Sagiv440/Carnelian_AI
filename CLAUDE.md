@@ -158,7 +158,10 @@ see **Project skills**), and `update_docs` (offered only to the top-level/main a
   to `BuildLeadTools`, routed via `ExecuteLeadTool`→`ProjectAgentService.UpdatePlan`); delegated specialists
   stay suppressed (`onPlan: null`). `AgentPromptBuilder.PhasesDirective()` (approval-independent) nudges the
   model to organise complex work into phases; it's threaded into the single agent's `directives` and the Lead
-  system prompt. `ParsePlanSteps`/`ParseStepsArray`/`ParsePhases`/`ParseStatus` are `internal static` (unit-tested).
+  system prompt. `AgentPromptBuilder.ClarifyDirective()` (same two prompts) tells the agent to ask 1–3 short
+  clarifying questions when a request is **vague** (and just proceed when it's clear) — it "asks" by replying
+  with no tool calls, which ends the turn naturally (no extra plumbing).
+  `ParsePlanSteps`/`ParseStepsArray`/`ParsePhases`/`ParseStatus` are `internal static` (unit-tested).
 - **Phase gate (`AppSettings.AutoFlowPhases`, default true).** When the agent works in phases, this single
   setting (Settings → Autonomy & Memory → *Phases*; **independent** of `AgentApproval`) decides flow: ON =
   auto-advance; OFF = pause at each phase boundary for a Continue/Stop confirmation. `RunAsync` (both the
@@ -561,6 +564,20 @@ referenced by `<ApplicationIcon>` in the csproj and `Window.Icon` in `MainWindow
 - `SettingsWindow` uses a **grouped left nav** (section headers + `Button.nav` entries) with the selected
   category's content on the right (toggled by `IsVisible`). The *Models* category nests a small inner
   `TabControl` (Local AI / Web Models).
+
+**Startup launcher (in-place).** The window opens **on a launcher state** rather than a separate window: a
+full-window overlay (the last child of MainWindow's root grid, spanning both columns) bound to
+`MainWindowViewModel.ShowStartupLauncher` (default true) covers the chat UI until a choice is made, then the
+same window switches in place. It shows a prominent **Local Chat** button (`StartLocalChatCommand` → just sets
+`ShowStartupLauncher=false`), up to **8 recent projects** (`StartupRecentProjects`, each a `nav` button → the
+`OpenRecentProjectCommand(RecentProject)` reached via `RelativeSource AncestorType=Window` +
+`x:CompileBindings=False`), and an *Open a project…* footer (`OpenProjectCommand`, the existing New/Open
+dialog). Any project activation dismisses the launcher (`ActivateProjectAsync` sets `ShowStartupLauncher=false`
+first). Recents live in `AppSettings.RecentProjects` (`List<RecentProject>` Name+Directory, most-recent-first,
+capped at 12 on write); `ActivateProjectAsync` records the project via the pure
+`MainWindowViewModel.WithRecentProjectAtFront` (move-to-front, dedupe by directory using the OS-aware `PathCmp`,
+skip blank, cap-before-add), and `MainWindowViewModel.PrunedRecent` (run in the ctor) drops entries whose folder
+no longer exists (so a deleted project silently falls off). Both helpers are `internal static` (unit-tested).
 
 **Sidebar.** New Chat + Project buttons, then the chat log, the Deep Research toggle, the active-project
 card, and the model/connection footer. When a project is active a **Chat Log / Files** tab strip appears:

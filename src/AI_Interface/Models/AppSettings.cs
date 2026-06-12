@@ -102,6 +102,9 @@ public sealed class AppSettings
     /// </summary>
     public bool AutoFlowPhases { get; set; } = true;
 
+    /// <summary>Recently opened projects (most-recent-first), shown in the startup launcher. Capped on write.</summary>
+    public List<RecentProject> RecentProjects { get; set; } = new();
+
     // --- MCP (Model Context Protocol) servers ---
 
     /// <summary>
