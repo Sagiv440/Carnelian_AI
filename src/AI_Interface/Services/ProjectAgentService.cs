@@ -32,13 +32,16 @@ public sealed class ProjectAgentService : IProjectAgentService
     private readonly IProjectDocsService _docs;
     private readonly IWebSearchService _search;
     private readonly IMcpService _mcp;
+    private readonly IAgentService _agents;
 
-    public ProjectAgentService(IMemoryService memory, IProjectDocsService docs, IWebSearchService search, IMcpService mcp)
+    public ProjectAgentService(IMemoryService memory, IProjectDocsService docs, IWebSearchService search,
+        IMcpService mcp, IAgentService agents)
     {
         _memory = memory;
         _docs = docs;
         _search = search;
         _mcp = mcp;
+        _agents = agents;
     }
 
     // ---- limits for the search/find tools --------------------------------------------------
@@ -392,6 +395,9 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "remember"       => Remember(project, GetString(call.Arguments, "text"), GetString(call.Arguments, "scope")),
                 "create_skill"   => CreateSkill(project, GetString(call.Arguments, "name"),
                                         GetString(call.Arguments, "content"), GetString(call.Arguments, "description")),
+                "create_agent"   => CreateAgent(project, GetString(call.Arguments, "name"),
+                                        GetString(call.Arguments, "persona"), GetString(call.Arguments, "description"),
+                                        GetString(call.Arguments, "glyph"), GetString(call.Arguments, "tools")),
                 "update_docs"    => UpdateDocs(project, GetString(call.Arguments, "content")),
                 _ => $"Unknown tool '{call.Name}'."
             };
@@ -448,6 +454,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
         "remember"       => ("Remember a note", GetString(call.Arguments, "text") ?? "", false),
         "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
+        "create_agent"   => ("Create project agent", GetString(call.Arguments, "name") ?? "", false),
         "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName, true),
         _ => (call.Name, "", true)
         };
@@ -492,6 +499,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "update_plan"      => "📝",
         "remember"         => "💾",
         "create_skill"     => "✨",
+        "create_agent"     => "👤",
         "update_docs"      => "📘",
         _ when McpToolName.IsMcp(tool) => "🔌",
         _                  => "🔧"
@@ -721,6 +729,43 @@ public sealed class ProjectAgentService : IProjectAgentService
 
         return $"Created skill '{name}' at {Rel(project, file)} ({content.Length} chars). " +
                "It loads as project guidance the next time this project is opened.";
+    }
+
+    /// <summary>
+    /// Authors a NEW project-scoped agent (a specialist persona) at <c>.AI/agents/&lt;slug&gt;.md</c> via
+    /// <see cref="IAgentService.SaveCustom"/>. Always offered (it writes only to that controlled location). The
+    /// new agent becomes a delegation target for the Lead and appears in the agent picker. Built-in ids are
+    /// refused (they can't be overwritten); an existing custom id is updated in place.
+    /// </summary>
+    private string CreateAgent(Project project, string? name, string? persona, string? description, string? glyph, string? tools)
+    {
+        name = (name ?? "").Trim();
+        persona = (persona ?? "").Trim();
+        if (name.Length == 0 || persona.Length == 0)
+            return "Provide both an agent 'name' and a 'persona' (its role/instructions).";
+
+        var id = Slugify(name);
+        if (id.Length == 0)
+            return "Couldn't derive a valid id from that name — use letters or digits.";
+
+        var existing = _agents.Get(id, project.Directory);
+        if (existing is { IsBuiltIn: true })
+            return $"'{id}' is a built-in agent id and can't be overwritten — choose a different name.";
+
+        var agent = new Agent
+        {
+            Id = id,
+            Name = name,
+            Glyph = string.IsNullOrWhiteSpace(glyph) ? "🤖" : glyph!.Trim(),
+            Description = (description ?? "").Trim(),
+            Persona = persona,
+            Tools = AgentMarkdown.ParseTools(tools), // null/"all" ⇒ unrestricted (capped by the Lead when delegated)
+            Scope = AgentScope.Project
+        };
+        _agents.SaveCustom(agent, project.Directory);
+
+        return $"{(existing is null ? "Created" : "Updated")} project agent '{name}' (id '{id}') at " +
+               $".AI/agents/{id}.md. It's available as a specialist the Lead can delegate to, and in the agent picker.";
     }
 
     /// <summary>
@@ -1548,6 +1593,27 @@ public sealed class ProjectAgentService : IProjectAgentService
                     content = new { type = "string", description = "The full skill guidance as structured Markdown (sections, do/don't, examples)." }
                 },
                 required = new[] { "name", "content" }
+            })));
+
+        // create_agent: a meta tool that writes a NEW project-scoped specialist agent under .AI/agents/.
+        // Always offered (writes only to that controlled location) so the agent can build out its team.
+        tools.Add(new AgentTool("create_agent",
+            "Create a new project-scoped specialist agent (saved under .AI/agents/) that the Lead can delegate " +
+            "subtasks to and that appears in the agent picker. Use this to build out a team — e.g. \"create an " +
+            "agent for writing tests\" or \"add a code-reviewer agent\". Give it a clear 'name' and a thorough " +
+            "'persona' (its role, expertise, tone, and how it should work). Optionally restrict 'tools'.",
+            Schema(new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string", description = "Short agent name, e.g. \"Test Writer\" (also becomes its id)." },
+                    persona = new { type = "string", description = "The agent's system-prompt body: role, expertise, tone, working style." },
+                    description = new { type = "string", description = "One-line \"when to use this agent\" summary." },
+                    glyph = new { type = "string", description = "A single emoji avatar (optional; defaults to 🤖)." },
+                    tools = new { type = "string", description = "Optional allow-list: 'all' (default) or a comma-separated subset of read, write, delete, run, install." }
+                },
+                required = new[] { "name", "persona" }
             })));
 
         // update_docs: maintains the project handbook (.AI/AI_DOCS.md). Like create_skill it writes only to a

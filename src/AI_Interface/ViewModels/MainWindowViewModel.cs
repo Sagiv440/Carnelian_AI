@@ -965,7 +965,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         // The turn may have created/edited project skills (create_skill, or write_file under .AI/skills) —
         // re-scan so they load on the next turn and the sidebar's "N skills" count stays current.
         if (ActiveProject is not null)
+        {
             await LoadProjectSkillsAsync(ActiveProject);
+            // The turn may also have authored a project agent (create_agent) — refresh the picker so it
+            // appears now (LoadAgents preserves the current selection). The Lead reads the roster from disk.
+            LoadAgents();
+        }
     }
 
     /// <summary>Asks the view to confirm a tool call (raised on a background thread, marshalled to the UI).</summary>

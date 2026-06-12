@@ -126,9 +126,10 @@ public static class AgentMarkdown
     /// <summary>
     /// Parses the <c>tools</c> frontmatter into an allow-list. "all" / missing ⇒ unrestricted. Otherwise
     /// each token sets a group; common Claude-Code tool names are mapped best-effort (Read→read,
-    /// Write/Edit→write, Bash→run, …) so a foreign agent file degrades sensibly.
+    /// Write/Edit→write, Bash→run, …) so a foreign agent file degrades sensibly. <c>internal</c> so the
+    /// <c>create_agent</c> tool can reuse it when authoring a project agent.
     /// </summary>
-    private static AgentTools ParseTools(string? csv)
+    internal static AgentTools ParseTools(string? csv)
     {
         if (string.IsNullOrWhiteSpace(csv) || csv.Trim().Equals("all", StringComparison.OrdinalIgnoreCase))
             return new AgentTools { AllowAll = true };

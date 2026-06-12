@@ -125,7 +125,8 @@ first-occurrence replace), `move_file` (move/rename), `copy_file`, `create_folde
 `web_search` (always offered — reuses `IWebSearchService`; ungated, network read),
 `update_plan` (always offered — a UI-only checklist; ungated — see below),
 `remember` (offered only when memory is on — see **Memory**), `create_skill` (always offered —
-see **Project skills**), and `update_docs` (offered only to the top-level/main agent when
+see **Project skills**), `create_agent` (always offered — authors a project-scoped specialist agent under
+`.AI/agents/`; see **`create_agent` tool**), and `update_docs` (offered only to the top-level/main agent when
 `allowDocsUpdate` — see **`update_docs` tool**).
 - **Per-agent tool allow-list (Phase 2).** `RunAsync` takes the active agent's `AgentTools`; `BuildTools`
   advertises **only the permitted groups** (ReadFiles→list/read/**search_files**/**find_files**, WriteFiles→
@@ -241,6 +242,15 @@ see **Project skills**), and `update_docs` (offered only to the top-level/main a
   `.AI/skills/<slug>.skill.md` (frontmatter `name`/`description` + the model-authored Markdown body); the
   path is computed from a slugified name so the model can't write outside the skills folder. Intended for
   "create a skill for &lt;subject&gt;" — the model authors thorough, structured guidance and the tool persists it.
+- **`create_agent` tool.** Always offered in Project mode (writes only under `.AI/agents/`, ungated like
+  `create_skill`). `ProjectAgentService.CreateAgent(name, persona, description?, glyph?, tools?)` builds an
+  `Agent` (id = slugified name, `Scope=Project`, `Tools` via the reused `AgentMarkdown.ParseTools` — `null`/
+  `"all"` ⇒ unrestricted) and calls `IAgentService.SaveCustom`, which writes `.AI/agents/<slug>.md` and
+  **refuses built-in ids** (pre-checked via `_agents.Get(id).IsBuiltIn` for a clear message; an existing custom
+  id is updated). `ProjectAgentService` now injects `IAgentService`. Lets the agent **build out its team**
+  ("create an agent for writing tests") — the new agent is a delegation target for the Lead (which reads the
+  roster from disk each run) and the VM calls `LoadAgents()` after each project turn so it appears in the
+  picker immediately (selection preserved).
 
 **Project mode — the orchestrator / lead agent** (`IAgentOrchestrator`/`AgentOrchestrator`). A built-in
 **Lead** agent (`Id="lead"`, glyph 🧭, `IsOrchestrator=true`, and a build-capable
