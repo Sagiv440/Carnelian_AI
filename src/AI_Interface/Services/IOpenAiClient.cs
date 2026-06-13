@@ -24,3 +24,8 @@ public interface IDeepSeekClient : IChatClient
 public interface INvidiaClient : IChatClient
 {
 }
+
+/// <summary>Marker interface so the Mistral AI client gets its own typed <see cref="System.Net.Http.HttpClient"/>.</summary>
+public interface IMistralClient : IChatClient
+{
+}

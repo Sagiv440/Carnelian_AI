@@ -69,7 +69,7 @@ public partial class App : Application
             client.BaseAddress = new Uri("https://api.anthropic.com/");
             client.Timeout = TimeSpan.FromMinutes(10);
         });
-        // DeepSeek + Nvidia NIM are OpenAI-compatible — same client logic, different base URL + key.
+        // DeepSeek + Nvidia NIM + Mistral are OpenAI-compatible — same client logic, different base URL + key.
         services.AddHttpClient<IDeepSeekClient, DeepSeekClient>(client =>
         {
             client.BaseAddress = new Uri("https://api.deepseek.com/");
@@ -78,6 +78,11 @@ public partial class App : Application
         services.AddHttpClient<INvidiaClient, NvidiaClient>(client =>
         {
             client.BaseAddress = new Uri("https://integrate.api.nvidia.com/");
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
+        services.AddHttpClient<IMistralClient, MistralClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.mistral.ai/");
             client.Timeout = TimeSpan.FromMinutes(10);
         });
 

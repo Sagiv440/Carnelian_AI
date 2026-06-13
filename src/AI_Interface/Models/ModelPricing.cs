@@ -60,6 +60,15 @@ public static class ModelPricing
             },
             // Nvidia NIM hosts many models at varied prices; use one coarse blended estimate.
             AiProvider.Nvidia => (0.20m, 0.60m),
+            AiProvider.Mistral => id switch
+            {
+                _ when id.Contains("ministral-3b") => (0.04m, 0.04m),
+                _ when id.Contains("ministral-8b") || id.Contains("nemo") => (0.10m, 0.10m),
+                _ when id.Contains("codestral") => (0.30m, 0.90m),
+                _ when id.Contains("large") => (2.00m, 6.00m),
+                _ when id.Contains("small") || id.Contains("pixtral") => (0.20m, 0.60m),
+                _ => (0.20m, 0.60m) // mistral-small-class default
+            },
             // Local Ollama models are free to run.
             _ => (0m, 0m)
         };

@@ -26,6 +26,9 @@ public sealed class AppSettings
     /// <summary>Nvidia NIM API key (OpenAI-compatible). Blank = provider disabled.</summary>
     public string NvidiaApiKey { get; set; } = "";
 
+    /// <summary>Mistral AI API key (OpenAI-compatible). Blank = provider disabled.</summary>
+    public string MistralApiKey { get; set; } = "";
+
     /// <summary>
     /// Cloud providers the user has <b>added</b> (Settings → Web Models → Active Providers): their chosen
     /// billing mode + the running estimated spend. The API key itself stays in the per-provider field above.

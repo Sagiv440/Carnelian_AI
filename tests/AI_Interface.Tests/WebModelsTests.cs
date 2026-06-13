@@ -48,6 +48,12 @@ public sealed class WebModelsTests
     [InlineData(AiProvider.DeepSeek, "deepseek-chat", 0.27, 1.10)]
     [InlineData(AiProvider.DeepSeek, "deepseek-reasoner", 0.55, 2.19)]
     [InlineData(AiProvider.Nvidia, "meta/llama-3.1-8b-instruct", 0.20, 0.60)]
+    [InlineData(AiProvider.Mistral, "mistral-large-latest", 2.00, 6.00)]
+    [InlineData(AiProvider.Mistral, "mistral-small-latest", 0.20, 0.60)]
+    [InlineData(AiProvider.Mistral, "codestral-latest", 0.30, 0.90)]
+    [InlineData(AiProvider.Mistral, "ministral-3b-latest", 0.04, 0.04)]
+    [InlineData(AiProvider.Mistral, "open-mistral-nemo", 0.10, 0.10)]
+    [InlineData(AiProvider.Mistral, "mystery-model", 0.20, 0.60)]    // provider fallback
     [InlineData(AiProvider.Ollama, "llama3", 0, 0)]
     public void For_MatchesBySubstring_WithProviderFallback(
         AiProvider provider, string model, double input, double output)
@@ -123,7 +129,7 @@ public sealed class WebModelsTests
     public void CloudProviders_AreTheFiveAddableProviders_AndExcludeOllama()
     {
         Assert.Equal(
-            new[] { AiProvider.OpenAI, AiProvider.Gemini, AiProvider.Anthropic, AiProvider.DeepSeek, AiProvider.Nvidia },
+            new[] { AiProvider.OpenAI, AiProvider.Gemini, AiProvider.Anthropic, AiProvider.DeepSeek, AiProvider.Nvidia, AiProvider.Mistral },
             AiProviderExtensions.CloudProviders);
         Assert.DoesNotContain(AiProvider.Ollama, AiProviderExtensions.CloudProviders);
     }

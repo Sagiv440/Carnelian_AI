@@ -9,8 +9,8 @@ namespace AI_Interface.Services;
 
 /// <summary>
 /// Default <see cref="IModelRouter"/>. Holds every chat client (Ollama + the cloud providers OpenAI,
-/// Gemini, Anthropic, DeepSeek, Nvidia) and fans out model listing across whichever are configured and
-/// reachable.
+/// Gemini, Anthropic, DeepSeek, Nvidia, Mistral) and fans out model listing across whichever are configured
+/// and reachable.
 /// </summary>
 public sealed class ChatRouter : IModelRouter
 {
@@ -23,9 +23,10 @@ public sealed class ChatRouter : IModelRouter
         IGeminiClient gemini,
         IAnthropicClient anthropic,
         IDeepSeekClient deepSeek,
-        INvidiaClient nvidia)
+        INvidiaClient nvidia,
+        IMistralClient mistral)
     {
-        _clients = new IChatClient[] { ollama, openAi, gemini, anthropic, deepSeek, nvidia };
+        _clients = new IChatClient[] { ollama, openAi, gemini, anthropic, deepSeek, nvidia, mistral };
     }
 
     public async Task<IReadOnlyList<ChatModel>> ListAllModelsAsync(CancellationToken ct = default)

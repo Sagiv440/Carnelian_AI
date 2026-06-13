@@ -22,7 +22,10 @@ public enum AiProvider
     DeepSeek,
 
     /// <summary>Nvidia NIM cloud API (OpenAI-compatible).</summary>
-    Nvidia
+    Nvidia,
+
+    /// <summary>Mistral AI cloud API (OpenAI-compatible).</summary>
+    Mistral
 }
 
 /// <summary>Friendly labels for <see cref="AiProvider"/> values.</summary>
@@ -37,6 +40,7 @@ public static class AiProviderExtensions
         AiProvider.Anthropic => "Anthropic (Claude)",
         AiProvider.DeepSeek => "DeepSeek",
         AiProvider.Nvidia => "Nvidia (NIM)",
+        AiProvider.Mistral => "Mistral AI",
         _ => provider.ToString()
     };
 
@@ -49,6 +53,7 @@ public static class AiProviderExtensions
         AiProvider.Anthropic => "Claude",
         AiProvider.DeepSeek => "DeepSeek",
         AiProvider.Nvidia => "Nvidia",
+        AiProvider.Mistral => "Mistral",
         _ => provider.ToString()
     };
 
@@ -61,12 +66,14 @@ public static class AiProviderExtensions
         AiProvider.Anthropic => "🟠",
         AiProvider.DeepSeek => "🟣",
         AiProvider.Nvidia => "🟩",
+        AiProvider.Mistral => "🟡",
         _ => "🤖"
     };
 
     /// <summary>The cloud providers (everything except local Ollama) — the ones added in Web Models.</summary>
     public static readonly AiProvider[] CloudProviders =
     {
-        AiProvider.OpenAI, AiProvider.Gemini, AiProvider.Anthropic, AiProvider.DeepSeek, AiProvider.Nvidia
+        AiProvider.OpenAI, AiProvider.Gemini, AiProvider.Anthropic, AiProvider.DeepSeek, AiProvider.Nvidia,
+        AiProvider.Mistral
     };
 }

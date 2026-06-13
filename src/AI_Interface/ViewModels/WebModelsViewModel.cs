@@ -133,6 +133,7 @@ public sealed partial class WebModelsViewModel : ViewModelBase
         AiProvider.Anthropic => "sk-ant-…",
         AiProvider.DeepSeek => "sk-…",
         AiProvider.Nvidia => "nvapi-…",
+        AiProvider.Mistral => "API key…",
         _ => "API key"
     };
 
@@ -385,6 +386,7 @@ public sealed partial class WebModelsViewModel : ViewModelBase
             AiProvider.Anthropic => s.AnthropicApiKey,
             AiProvider.DeepSeek => s.DeepSeekApiKey,
             AiProvider.Nvidia => s.NvidiaApiKey,
+            AiProvider.Mistral => s.MistralApiKey,
             _ => ""
         };
     }
@@ -399,6 +401,7 @@ public sealed partial class WebModelsViewModel : ViewModelBase
             case AiProvider.Anthropic: s.AnthropicApiKey = key; break;
             case AiProvider.DeepSeek: s.DeepSeekApiKey = key; break;
             case AiProvider.Nvidia: s.NvidiaApiKey = key; break;
+            case AiProvider.Mistral: s.MistralApiKey = key; break;
         }
     }
 }
