@@ -528,7 +528,11 @@
         <!-- ===================== SIDEBAR ===================== -->
         <Border Grid.Column="0" Classes="card" CornerRadius="4" Margin="10" Padding="12">
             <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
-                <TextBlock Grid.Row="0" Classes="brand" Text="AI Interface" Margin="4,2,0,12"/>
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4,2,0,12" Spacing="6">
+                    <TextBlock Classes="brand" Text="AI Interface" VerticalAlignment="Center"/>
+                    <TextBlock Classes="muted" Text="{Binding AppVersion}" VerticalAlignment="Bottom" Margin="0,0,0,2"
+                               ToolTip.Tip="App version"/>
+                </StackPanel>
 
                 <!-- New Chat -->
                 <Button Grid.Row="1" Classes="cta" Content="＋  New Chat"
@@ -1328,6 +1332,7 @@
              choice is made (recent project / Local Chat / open a project). Covers both columns, on top. -->
         <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding ShowStartupLauncher}"
                 Background="{DynamicResource AppWindowBackground}">
+            <Panel>
             <Border Classes="card" CornerRadius="6" Width="480" Padding="26,24"
                     VerticalAlignment="Center" HorizontalAlignment="Center">
                 <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
@@ -1394,6 +1399,12 @@
                     </StackPanel>
                 </Grid>
             </Border>
+
+            <!-- App version, bottom-right corner of the start window. -->
+            <TextBlock Classes="muted" Text="{Binding AppVersion}"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,12"
+                       ToolTip.Tip="App version"/>
+            </Panel>
         </Border>
     </Grid>
 

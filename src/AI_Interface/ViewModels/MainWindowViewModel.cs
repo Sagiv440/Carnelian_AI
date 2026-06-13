@@ -96,6 +96,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>Raised before installing Piper so the view can confirm; the decision returns via the TCS.</summary>
     public event EventHandler<TaskCompletionSource<bool>>? InstallPiperConfirmationRequested;
 
+    /// <summary>App version label (e.g. "v1.0.2"), from the assembly version — shown by the app name and in the launcher.</summary>
+    public string AppVersion { get; } =
+        "v" + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0");
+
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
 
     /// <summary>Models offered in the top-bar picker, across every configured provider.</summary>

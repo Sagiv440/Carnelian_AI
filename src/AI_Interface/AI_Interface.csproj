@@ -10,6 +10,8 @@
     <ApplicationIcon>Assets/app-logo.ico</ApplicationIcon>
     <AssemblyName>AI_Interface</AssemblyName>
     <RootNamespace>AI_Interface</RootNamespace>
+    <!-- App version: stamps the assembly + published binary and is shown in the UI (sidebar + launcher). -->
+    <Version>1.0.2</Version>
     <!-- Trimming is disabled: it breaks reflection-based XAML/JSON. Enable selectively if needed. -->
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
