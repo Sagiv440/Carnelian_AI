@@ -976,13 +976,39 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:MessageSegment">
                                                     <Panel>
-                                                        <!-- Prose: inline Markdown (**bold**, *italic*, `code`) is
-                                                             rendered via the MarkdownText attached property rather than
-                                                             shown as raw symbols. -->
-                                                        <SelectableTextBlock IsVisible="{Binding !IsCode}"
+                                                        <!-- Paragraph: inline Markdown (**bold**, *italic*, `code`,
+                                                             ~~strike~~, [links](url)) via the MarkdownText attached
+                                                             property rather than raw symbols. -->
+                                                        <SelectableTextBlock IsVisible="{Binding IsParagraph}"
                                                                              beh:MarkdownText.Text="{Binding Text}"
                                                                              TextWrapping="Wrap"
                                                                              Foreground="{DynamicResource AppTextPrimary}"/>
+
+                                                        <!-- Heading: larger + bold, inline Markdown still applies -->
+                                                        <SelectableTextBlock IsVisible="{Binding IsHeading}"
+                                                                             beh:MarkdownText.Text="{Binding Text}"
+                                                                             TextWrapping="Wrap" Margin="0,8,0,2"
+                                                                             FontWeight="Bold"
+                                                                             FontSize="{Binding HeadingFontSize}"
+                                                                             Foreground="{DynamicResource AppTextPrimary}"/>
+
+                                                        <!-- List item: a gutter marker (• / 1.) + wrapping content -->
+                                                        <Grid IsVisible="{Binding IsListItem}" Margin="6,1,0,1"
+                                                              ColumnDefinitions="Auto,*">
+                                                            <TextBlock Grid.Column="0" Text="{Binding Marker}"
+                                                                       Margin="0,0,8,0" MinWidth="16"
+                                                                       TextAlignment="Right"
+                                                                       Foreground="{DynamicResource AppTextSecondary}"/>
+                                                            <SelectableTextBlock Grid.Column="1"
+                                                                                 beh:MarkdownText.Text="{Binding Text}"
+                                                                                 TextWrapping="Wrap"
+                                                                                 Foreground="{DynamicResource AppTextPrimary}"/>
+                                                        </Grid>
+
+                                                        <!-- Horizontal divider -->
+                                                        <Border IsVisible="{Binding IsDivider}" Height="1" Margin="0,8"
+                                                                HorizontalAlignment="Stretch"
+                                                                Background="{DynamicResource AppSurfaceBorderBrush}"/>
 
                                                         <!-- Code / command bubble -->
                                                         <Border IsVisible="{Binding IsCode}" Classes="codeBubble">

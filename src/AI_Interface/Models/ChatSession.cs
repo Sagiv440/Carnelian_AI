@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace AI_Interface.Models;
 
-/// <summary>One persisted turn of a conversation (role + text). Attachments/sources are not stored.</summary>
+/// <summary>One persisted turn of a conversation (role + text, plus web sources and the agent activity log).</summary>
 public sealed class ChatTurn
 {
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -14,6 +14,18 @@ public sealed class ChatTurn
 
     /// <summary>Model that produced this turn (assistant turns only); restores the header on reopen.</summary>
     public string? ModelName { get; set; }
+
+    /// <summary>
+    /// Web sources backing this turn (Web Search / Deep Research). Restored as the clickable "Sources"
+    /// list on reopen. Page <see cref="SearchResult.Content"/> is intentionally not persisted (too large).
+    /// </summary>
+    public List<SearchResult>? Sources { get; set; }
+
+    /// <summary>
+    /// The agent's activity / reasoning log for this turn (Project mode's tool feed flattened to text, or a
+    /// Thinking turn's reasoning). Restored into the message's "Activity" disclosure on reopen.
+    /// </summary>
+    public string? Work { get; set; }
 }
 
 /// <summary>A saved conversation shown in the sidebar chat log and persisted across runs.</summary>

@@ -90,4 +90,87 @@ public sealed class InlineMarkdownTests
         Assert.Equal("`unclosed", One("`unclosed").Text);
         Assert.Equal("**unclosed bold", One("**unclosed bold").Text);
     }
+
+    [Fact]
+    public void Strikethrough_IsExtracted()
+    {
+        var span = One("~~gone~~");
+        Assert.Equal("gone", span.Text);
+        Assert.Equal(InlineStyle.Strikethrough, span.Style);
+
+        // Space-padded tildes stay literal.
+        Assert.Equal(InlineStyle.Normal, One("a ~~ b").Style);
+    }
+
+    [Fact]
+    public void Link_CapturesLabelAndHref()
+    {
+        var span = One("[Google](https://google.com)");
+        Assert.Equal("Google", span.Text);
+        Assert.Equal("https://google.com", span.Href);
+    }
+
+    [Fact]
+    public void Link_InAParagraph_SplitsAroundIt()
+    {
+        var spans = InlineMarkdown.Parse("see [docs](http://x) now").ToList();
+        Assert.Collection(spans,
+            s => { Assert.Equal("see ", s.Text); Assert.Null(s.Href); },
+            s => { Assert.Equal("docs", s.Text); Assert.Equal("http://x", s.Href); },
+            s => { Assert.Equal(" now", s.Text); Assert.Null(s.Href); });
+    }
+
+    [Fact]
+    public void NonLinkBrackets_StayLiteral()
+    {
+        // No "(url)" follows → not a link.
+        var span = One("an [array] index");
+        Assert.Equal("an [array] index", span.Text);
+        Assert.Null(span.Href);
+    }
+
+    [Fact]
+    public void EmptyLabelOrHref_StaysLiteral()
+    {
+        Assert.Null(One("[](foo)").Href);    // empty label → not a link
+        Assert.Null(One("[label]()").Href);  // empty href → not a link
+    }
+
+    [Fact]
+    public void BareUrl_IsAutoLinked()
+    {
+        var span = One("https://example.com/page");
+        Assert.Equal("https://example.com/page", span.Text);
+        Assert.Equal("https://example.com/page", span.Href);
+    }
+
+    [Fact]
+    public void BareUrl_InASentence_ExcludesTrailingPunctuation()
+    {
+        var spans = InlineMarkdown.Parse("see https://example.com.").ToList();
+        Assert.Collection(spans,
+            s => { Assert.Equal("see ", s.Text); Assert.Null(s.Href); },
+            s => { Assert.Equal("https://example.com", s.Text); Assert.Equal("https://example.com", s.Href); },
+            s => { Assert.Equal(".", s.Text); Assert.Null(s.Href); });
+    }
+
+    [Fact]
+    public void PlainWordStartingWithH_IsNotALink()
+    {
+        var span = One("however this is fine");
+        Assert.Equal("however this is fine", span.Text);
+        Assert.Null(span.Href);
+    }
+
+    [Theory]
+    [InlineData("https://example.com", true)]
+    [InlineData("http://example.com", true)]
+    [InlineData("mailto:a@b.com", true)]
+    [InlineData("file:///etc/passwd", false)]
+    [InlineData("javascript:alert(1)", false)]
+    [InlineData("/relative/path", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsAllowedLinkScheme_OnlyHttpHttpsMailto(string? href, bool allowed) =>
+        Assert.Equal(allowed, InlineMarkdown.IsAllowedLinkScheme(href));
 }

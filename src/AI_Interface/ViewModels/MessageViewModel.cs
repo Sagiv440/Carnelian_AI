@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Text;
 using AI_Interface.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -59,12 +60,13 @@ public sealed partial class MessageViewModel : ObservableObject
         for (var i = 0; i < parts.Count; i++)
         {
             var p = parts[i];
-            if (i < Segments.Count && Segments[i].IsCode == p.IsCode && Segments[i].Language == p.Language)
-                Segments[i].Text = p.Text;                 // same kind of part — just grow it
+            if (i < Segments.Count && Segments[i].Kind == p.Kind
+                                   && Segments[i].Language == p.Language && Segments[i].Marker == p.Marker)
+                Segments[i].Text = p.Text;                 // same kind of block — just grow it
             else if (i < Segments.Count)
-                Segments[i] = new MessageSegment(p.IsCode, p.Language, p.Text);
+                Segments[i] = new MessageSegment(p.Kind, p.Text, p.Language, p.Marker);
             else
-                Segments.Add(new MessageSegment(p.IsCode, p.Language, p.Text));
+                Segments.Add(new MessageSegment(p.Kind, p.Text, p.Language, p.Marker));
         }
 
         while (Segments.Count > parts.Count)
@@ -294,6 +296,65 @@ public sealed partial class MessageViewModel : ObservableObject
         foreach (var s in sources)
             Sources.Add(s);
         HasSources = Sources.Count > 0;
+    }
+
+    /// <summary>Per-activity result cap when flattening to a persistable log (keeps the chat file small).</summary>
+    private const int MaxLoggedResultChars = 1000;
+
+    /// <summary>
+    /// A plain-text record of this turn's agent activity for persistence. Project runs render their work as
+    /// the structured <see cref="Activities"/> / <see cref="Delegations"/> feed live; this flattens that to
+    /// text so a reopened conversation keeps a readable log (shown in the "Activity" disclosure). Falls back
+    /// to the raw <see cref="Work"/> (a Thinking turn's reasoning), or "" when there's nothing to record.
+    /// </summary>
+    public string BuildActivityLog()
+    {
+        if (Activities.Count == 0 && Delegations.Count == 0)
+            return Work;
+
+        var sb = new StringBuilder();
+        foreach (var a in Activities)
+            AppendActivityLine(sb, a, "");
+        foreach (var d in Delegations)
+        {
+            sb.Append(d.Header);
+            if (!string.IsNullOrWhiteSpace(d.Task))
+                sb.Append(" — ").Append(d.Task.Trim());
+            sb.Append('\n');
+            foreach (var a in d.Activities)
+                AppendActivityLine(sb, a, "    ");
+            if (!string.IsNullOrWhiteSpace(d.Result))
+                sb.Append("    → ").Append(Cap(d.Result)).Append('\n');
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    private static void AppendActivityLine(StringBuilder sb, ActivityStepViewModel a, string indent)
+    {
+        sb.Append(indent);
+        if (a.IsNote)
+        {
+            sb.Append(a.Text.Trim()).Append('\n');
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(a.StatusGlyph))
+            sb.Append(a.StatusGlyph).Append(' ');
+        if (!string.IsNullOrWhiteSpace(a.Icon))
+            sb.Append(a.Icon).Append(' ');
+        sb.Append(a.Title);
+        if (!string.IsNullOrWhiteSpace(a.Detail))
+            sb.Append(": ").Append(a.Detail.Trim());
+        sb.Append('\n');
+
+        if (!string.IsNullOrWhiteSpace(a.Result))
+            sb.Append(indent).Append("    ").Append(Cap(a.Result)).Append('\n');
+    }
+
+    private static string Cap(string text)
+    {
+        var t = text.Trim();
+        return t.Length <= MaxLoggedResultChars ? t : t[..MaxLoggedResultChars] + " …";
     }
 
     public void SetAttachments(IEnumerable<Attachment> attachments)

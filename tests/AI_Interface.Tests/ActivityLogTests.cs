@@ -1,0 +1,74 @@
+using AI_Interface.Models;
+using AI_Interface.ViewModels;
+using Xunit;
+
+namespace AI_Interface.Tests;
+
+/// <summary>
+/// Unit tests for <see cref="MessageViewModel.BuildActivityLog"/> — the flattening of a project run's
+/// structured activity/delegation feed into the plain-text log persisted in the conversation file.
+/// </summary>
+public sealed class ActivityLogTests
+{
+    [Fact]
+    public void NoActivity_NoWork_IsEmpty()
+    {
+        var vm = new MessageViewModel(ChatRole.Assistant, "answer");
+        Assert.Equal("", vm.BuildActivityLog());
+    }
+
+    [Fact]
+    public void FallsBackToWork_WhenThereIsNoStructuredFeed()
+    {
+        var vm = new MessageViewModel(ChatRole.Assistant, "answer");
+        vm.SetWork("step 1\nstep 2");
+        Assert.Equal("step 1\nstep 2", vm.BuildActivityLog());
+    }
+
+    [Fact]
+    public void FlattensTheSingleAgentActivityFeed()
+    {
+        var vm = new MessageViewModel(ChatRole.Assistant, "done");
+        vm.ApplyActivity(new ActivityUpdate(ActivityPhase.Note, 0, "", "", "", "Reading the project", false));
+        vm.ApplyActivity(new ActivityUpdate(ActivityPhase.Started, 1, "✏️", "Write file", "src/App.jsx", "", false));
+        vm.ApplyActivity(new ActivityUpdate(ActivityPhase.Finished, 1, "", "", "", "wrote 10 lines", false));
+
+        var log = vm.BuildActivityLog();
+
+        Assert.Contains("Reading the project", log);
+        Assert.Contains("Write file", log);
+        Assert.Contains("src/App.jsx", log);
+        Assert.Contains("wrote 10 lines", log);
+        Assert.Contains("✓", log); // finished successfully
+    }
+
+    [Fact]
+    public void IncludesDelegationCards_WithTaskActivityAndResult()
+    {
+        var vm = new MessageViewModel(ChatRole.Assistant, "done");
+        vm.StartDelegation(0, "Coder", "🛠", "build the feature");
+        vm.ApplyDelegationActivity(0, new ActivityUpdate(ActivityPhase.Started, 0, "📄", "Read file", "x.cs", "", false));
+        vm.ApplyDelegationActivity(0, new ActivityUpdate(ActivityPhase.Finished, 0, "", "", "", "ok", false));
+        vm.FinishDelegation(0, "built the feature");
+
+        var log = vm.BuildActivityLog();
+
+        Assert.Contains("Coder", log);
+        Assert.Contains("build the feature", log);
+        Assert.Contains("Read file", log);
+        Assert.Contains("built the feature", log);
+    }
+
+    [Fact]
+    public void LongResults_AreCappedNotUnbounded()
+    {
+        var vm = new MessageViewModel(ChatRole.Assistant, "done");
+        vm.ApplyActivity(new ActivityUpdate(ActivityPhase.Started, 0, "📄", "Read file", "big.txt", "", false));
+        vm.ApplyActivity(new ActivityUpdate(ActivityPhase.Finished, 0, "", "", "", new string('x', 5000), false));
+
+        var log = vm.BuildActivityLog();
+
+        Assert.True(log.Length < 2000); // the 5000-char result is capped
+        Assert.Contains("…", log);
+    }
+}

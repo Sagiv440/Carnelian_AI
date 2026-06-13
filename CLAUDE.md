@@ -250,7 +250,12 @@ see **Project skills**), `create_agent` (always offered — authors a project-sc
 - **Per-project chats.** While a project is active the chat log persists to `<project>/.AI/chats`
   (one JSON per session) via `IChatHistoryService.LoadFrom/SaveTo`; opening a project loads them,
   exiting restores the global log (`%APPDATA%/AI_Interface/chats.json`). The VM routes every save/load
-  through `SaveLog()` / `LoadLog()`.
+  through `SaveLog()` / `LoadLog()`. Each persisted `ChatTurn` stores Role/Text/ModelName **plus** the
+  turn's **web `Sources`** (Web Search / Deep Research citations — restored as the clickable Sources list;
+  the bulky fetched-page `Content` is dropped) and a **`Work`** activity log (Project mode's structured
+  tool/delegation feed flattened to text via `MessageViewModel.BuildActivityLog`, or a Thinking turn's
+  reasoning — restored into the message's "Activity" disclosure). `PersistCurrentSession` writes them and
+  `OpenSession` restores them (`SetSources`/`SetWork`).
 - **`AI_DOCS.md` project handbook.** `IProjectDocsService`/`ProjectDocsService` reads `<project>/.AI/AI_DOCS.md`
   — the app's equivalent of how Claude Code reads CLAUDE.md: a hand-authored, authoritative per-project
   handbook the **Project-mode agent follows**. Loaded off the UI thread in `LoadProjectSkillsAsync` (so an
@@ -712,25 +717,32 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   than the window's `x:DataType`.
 - **Message bubble styling** uses Avalonia style classes toggled from data: `Classes.user="{Binding
   IsUser}"` plus `Border.bubble` / `Border.bubble.user` selectors. No value converters.
-- **Code/command bubbles.** The transcript renders an assistant reply from `MessageViewModel.Segments`
-  (not the raw `Text`): `MarkdownSegmenter` (in `ViewModels/MessageSegment.cs`) splits the text into prose
-  vs. fenced ```` ``` ```` code parts, and `RebuildSegments` reconciles them **in place** on every streamed
-  delta (so a streaming code block grows without recreating its container). The answer `ItemsControl`
-  spans the **full transcript width** (`HorizontalAlignment="Stretch"`, no `MaxWidth`). Prose renders as
-  wrapped text; code renders as a monospace `Border.codeBubble` with a language header + per-block 📋 copy
-  (`OnCopyCode`). The code body is a wrapping `SelectableTextBlock` that **sizes to its content** — no inner
-  `ScrollViewer` (one under-measured the text height and clipped the last lines); long code just makes a
-  taller message and the transcript scrolls. The raw `Text` is still the source of truth for
-  copy/persist/speak.
-- **Inline Markdown in prose.** A prose segment's text is rendered with inline formatting — `**bold**`,
-  `*italic*`, `***both***`, and `` `code` `` — instead of showing the raw symbols. The pure tokenizer
-  `InlineMarkdown.Parse` (in `ViewModels/InlineMarkdown.cs`, unit-tested) turns the prose into styled
-  `InlineSpan`s, and the `Behaviors/MarkdownText` attached property (`beh:MarkdownText.Text="{Binding Text}"`
-  on the prose `SelectableTextBlock`) renders them as Avalonia `Run` inlines (bold/italic via FontWeight/
-  FontStyle, code via the monospace family), re-parsing on each streamed delta. It's deliberately
+- **Markdown blocks + bubbles.** The transcript renders an assistant reply from `MessageViewModel.Segments`
+  (not the raw `Text`): `MarkdownSegmenter` (in `ViewModels/MessageSegment.cs`) splits the text into
+  **block-level** parts — paragraphs, ATX headings (`#`/`##`/`###+`), bullet/numbered list items,
+  horizontal dividers (`---`/`***`/`___`), and fenced ```` ``` ```` code blocks — each a `MessageSegment`
+  with a `SegmentKind`. `RebuildSegments` reconciles them **in place** on every streamed delta (matching
+  Kind + Language + Marker, so a growing block keeps its container). The answer `ItemsControl` spans the
+  **full transcript width** (`HorizontalAlignment="Stretch"`, no `MaxWidth`). The per-segment template
+  (a `Panel` of mutually-exclusive `IsVisible` children) renders: paragraph/heading/list-item as wrapping
+  `SelectableTextBlock`s (heading bigger+bold via `HeadingFontSize`; list item = a marker gutter + content),
+  a divider as a hairline `Border`, and code as a monospace `Border.codeBubble` with a language header +
+  per-block 📋 copy (`OnCopyCode`). The code body is a wrapping `SelectableTextBlock` that **sizes to its
+  content** — no inner `ScrollViewer` (one under-measured the text height and clipped the last lines); long
+  code just makes a taller message and the transcript scrolls. The raw `Text` is still the source of truth
+  for copy/persist/speak.
+- **Inline Markdown in prose.** Within each non-code block, inline formatting is rendered — `**bold**`,
+  `*italic*`, `***both***`, `` `code` ``, `~~strikethrough~~`, clickable `[text](url)` links, and
+  **auto-linked bare URLs** (`https://…`, trailing sentence punctuation excluded) — instead of showing the
+  raw symbols. The pure tokenizer `InlineMarkdown.Parse` (in `ViewModels/InlineMarkdown.cs`,
+  unit-tested) turns the text into styled `InlineSpan`s (with an optional `Href`), and the
+  `Behaviors/MarkdownText` attached property (`beh:MarkdownText.Text="{Binding Text}"` on the block's
+  `SelectableTextBlock`) renders them as Avalonia inlines — `Run`s for styled text (bold/italic via
+  FontWeight/FontStyle, monospace for code, `TextDecorations.Strikethrough`), and an `InlineUIContainer`
+  hosting an accent-coloured, underlined, clickable `TextBlock` for a link (opens via `Process.Start`,
+  mirroring `MainWindowViewModel.OpenUrl`) — re-parsing on each streamed delta. It's deliberately
   conservative — underscores are **not** emphasis (so `run_command` / `AI_DOCS.md` stay intact) and a
-  space-padded or unmatched asterisk stays literal (so "2 * 3" isn't italicised). Fenced code blocks are
-  still split out first by `MarkdownSegmenter`; this only restyles the prose runs.
+  space-padded or unmatched asterisk/tilde stays literal (so "2 * 3" isn't italicised).
 - **Transcript scrolling / last-line clipping.** The transcript `ScrollViewer` (`TranscriptScroll` in
   `MainWindow.axaml`) sets `HorizontalScrollBarVisibility="Disabled"` (so wrapped text is measured at the
   real finite width, never infinite) and gets its bottom breathing room from a **real measured spacer

@@ -1961,7 +1961,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         PersistCurrentSession(); // save the conversation we're leaving
         Messages.Clear();
         foreach (var turn in session.Messages)
-            Messages.Add(new MessageViewModel(turn.Role, turn.Text) { ModelName = turn.ModelName });
+        {
+            var vm = new MessageViewModel(turn.Role, turn.Text) { ModelName = turn.ModelName };
+            if (turn.Sources is { Count: > 0 })
+                vm.SetSources(turn.Sources);          // restore the clickable "Sources" list
+            if (!string.IsNullOrEmpty(turn.Work))
+                vm.SetWork(turn.Work);                // restore the agent activity / reasoning log
+            Messages.Add(vm);
+        }
 
         _currentSession = session;
         // Project sessions need a live active project (not persisted); fall back to chat without one.
@@ -1989,6 +1996,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
     /// <summary>Captures the transcript into the current session and persists the whole log.</summary>
     private void PersistCurrentSession()
     {
@@ -1997,7 +2006,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (string.IsNullOrEmpty(m.Text))
                 continue;
-            turns.Add(new ChatTurn { Role = m.Role, Text = m.Text, ModelName = m.ModelName });
+            turns.Add(new ChatTurn
+            {
+                Role = m.Role,
+                Text = m.Text,
+                ModelName = m.ModelName,
+                // Save web/deep-search sources (without the bulky fetched page Content) so the clickable
+                // Sources list survives a reopen.
+                Sources = m.Sources.Count == 0
+                    ? null
+                    : m.Sources.Select(s => new SearchResult { Title = s.Title, Url = s.Url, Snippet = s.Snippet }).ToList(),
+                // Save the agent's activity log (Project mode) / reasoning (Thinking) as text.
+                Work = NullIfEmpty(m.BuildActivityLog())
+            });
         }
 
         if (turns.Count == 0)
