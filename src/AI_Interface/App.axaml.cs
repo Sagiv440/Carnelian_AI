@@ -130,6 +130,8 @@ public partial class App : Application
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IAttachmentService, AttachmentService>();
         services.AddSingleton<IChatHistoryService, ChatHistoryService>();
+        // Office-document generation (Word .docx via OpenXML, PDF via QuestPDF) for the project agent's tools.
+        services.AddSingleton<IDocumentService, DocumentService>();
         // MCP (Model Context Protocol): connects to configured MCP servers and aggregates their tools for the
         // project agent. Singleton — it caches live connections (stdio servers are child processes).
         services.AddSingleton<IMcpService, McpService>();

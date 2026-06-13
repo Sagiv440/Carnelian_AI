@@ -52,15 +52,17 @@ public sealed class ProjectAgentService : IProjectAgentService
     private readonly IWebSearchService _search;
     private readonly IMcpService _mcp;
     private readonly IAgentService _agents;
+    private readonly IDocumentService _documents;
 
     public ProjectAgentService(IMemoryService memory, IProjectDocsService docs, IWebSearchService search,
-        IMcpService mcp, IAgentService agents)
+        IMcpService mcp, IAgentService agents, IDocumentService documents)
     {
         _memory = memory;
         _docs = docs;
         _search = search;
         _mcp = mcp;
         _agents = agents;
+        _documents = documents;
     }
 
     // ---- limits for the search/find tools --------------------------------------------------
@@ -407,6 +409,11 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "copy_file"      => CopyFile(project, GetString(call.Arguments, "source"),
                                         GetString(call.Arguments, "destination")),
                 "create_folder"  => CreateFolder(project, path),
+                "create_word"    => CreateWord(project, path, GetString(call.Arguments, "content") ?? ""),
+                "edit_word"      => EditWord(project, path, GetString(call.Arguments, "operation"),
+                                        GetString(call.Arguments, "text"), GetString(call.Arguments, "find"),
+                                        GetString(call.Arguments, "replace")),
+                "create_pdf"     => CreatePdf(project, path, GetString(call.Arguments, "content") ?? ""),
                 "delete_file"    => DeleteFile(project, path),
                 "delete_folder"  => DeleteFolder(project, path),
                 "web_search"     => await WebSearchAsync(GetString(call.Arguments, "query"),
@@ -467,6 +474,9 @@ public sealed class ProjectAgentService : IProjectAgentService
         "search_files"   => ("Search files", GetString(call.Arguments, "pattern") ?? "", false),
         "find_files"     => ("Find files", GetString(call.Arguments, "glob") ?? "", false),
         "create_folder"  => ("Create folder", path ?? "", false),
+        "create_word"    => ("Create Word document", path ?? "", WouldOverwrite(project, path)),
+        "edit_word"      => ("Edit Word document", path ?? "", true),
+        "create_pdf"     => ("Create PDF", path ?? "", WouldOverwrite(project, path)),
         "write_file"     => ("Write file", path ?? "", WouldOverwrite(project, path)),
         "edit_file"      => ("Edit file", path ?? "", true),
         "move_file"      => ("Move/rename file", GetString(call.Arguments, "source") ?? "", true),
@@ -517,6 +527,9 @@ public sealed class ProjectAgentService : IProjectAgentService
         "move_file"        => "➡️",
         "copy_file"        => "📋",
         "create_folder"    => "📁",
+        "create_word"      => "📝",
+        "edit_word"        => "📝",
+        "create_pdf"       => "📕",
         "delete_file"      => "🗑",
         "delete_folder"    => "🗑",
         "run_command"      => "⌘",
@@ -966,7 +979,8 @@ public sealed class ProjectAgentService : IProjectAgentService
         "list_directory" or "read_file"
             or "search_files" or "find_files"          => AgentToolGroup.ReadFiles,
         "write_file" or "create_folder"
-            or "edit_file" or "move_file" or "copy_file" => AgentToolGroup.WriteFiles,
+            or "edit_file" or "move_file" or "copy_file"
+            or "create_word" or "edit_word" or "create_pdf" => AgentToolGroup.WriteFiles,
         "delete_file" or "delete_folder"               => AgentToolGroup.DeleteFiles,
         "run_command"                                  => AgentToolGroup.RunCommands,
         "install_software"                             => AgentToolGroup.InstallSoftware,
@@ -1035,6 +1049,62 @@ public sealed class ProjectAgentService : IProjectAgentService
             return error;
         Directory.CreateDirectory(full);
         return $"Created folder {Rel(project, full)}.";
+    }
+
+    // ---- documents (Word / PDF) ------------------------------------------------------------
+
+    private string CreateWord(Project project, string? path, string content)
+    {
+        if (!TryResolve(project.Directory, path, out var full, out var error))
+            return error;
+        if (IsHandbookPath(project, full))
+            return HandbookGuardMessage;
+        EnsureParentDir(full);
+        var n = _documents.CreateWord(full, content);
+        return $"Created Word document {Rel(project, full)} ({n} paragraph(s)).";
+    }
+
+    private string EditWord(Project project, string? path, string? operation,
+        string? text, string? find, string? replace)
+    {
+        if (!TryResolve(project.Directory, path, out var full, out var error))
+            return error;
+        if (!File.Exists(full))
+            return $"File not found: {Rel(project, full)}. Use create_word to make a new document.";
+
+        switch ((operation ?? "").Trim().ToLowerInvariant())
+        {
+            case "append":
+                var added = _documents.AppendWord(full, text ?? "");
+                return $"Appended {added} paragraph(s) to {Rel(project, full)}.";
+            case "replace":
+                if (string.IsNullOrEmpty(find))
+                    return "edit_word replace needs a non-empty 'find'.";
+                var n = _documents.ReplaceInWord(full, find, replace ?? "");
+                return n == 0
+                    ? $"No occurrence of that text in {Rel(project, full)} — nothing changed."
+                    : $"Replaced {n} occurrence(s) in {Rel(project, full)}.";
+            default:
+                return "edit_word needs operation = \"append\" or \"replace\".";
+        }
+    }
+
+    private string CreatePdf(Project project, string? path, string content)
+    {
+        if (!TryResolve(project.Directory, path, out var full, out var error))
+            return error;
+        if (IsHandbookPath(project, full))
+            return HandbookGuardMessage;
+        EnsureParentDir(full);
+        var n = _documents.CreatePdf(full, content);
+        return $"Created PDF {Rel(project, full)} ({n} block(s)).";
+    }
+
+    private static void EnsureParentDir(string full)
+    {
+        var dir = Path.GetDirectoryName(full);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
     }
 
     private static string DeleteFile(Project project, string? path)
@@ -1674,6 +1744,51 @@ public sealed class ProjectAgentService : IProjectAgentService
                     required = new[] { "source", "destination" }
                 })));
             tools.Add(new("create_folder", "Create a folder (and any missing parents) in the project.", pathOnly));
+
+            tools.Add(new("create_word",
+                "Create (or overwrite) a Microsoft Word .docx document. 'content' is light markdown: lines " +
+                "starting with #, ##, ### become headings, '- ' becomes bullets, blank lines add spacing, " +
+                "everything else is a paragraph.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        path = new { type = "string", description = "Destination .docx path, relative to the project root." },
+                        content = new { type = "string", description = "The document text (light markdown)." }
+                    },
+                    required = new[] { "path", "content" }
+                })));
+            tools.Add(new("edit_word",
+                "Modify an existing Word .docx. operation \"append\" adds 'text' (light markdown) as new " +
+                "paragraphs at the end; operation \"replace\" replaces occurrences of 'find' with 'replace' " +
+                "(matches within a single run — exact text). Use create_word to make a new document.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        path = new { type = "string", description = "Existing .docx path, relative to the project root." },
+                        operation = new { type = "string", description = "\"append\" or \"replace\"." },
+                        text = new { type = "string", description = "For append: the markdown text to add." },
+                        find = new { type = "string", description = "For replace: the exact text to find." },
+                        replace = new { type = "string", description = "For replace: the replacement text." }
+                    },
+                    required = new[] { "path", "operation" }
+                })));
+            tools.Add(new("create_pdf",
+                "Create (or overwrite) a PDF document. 'content' is light markdown (same heading/bullet rules " +
+                "as create_word). PDFs are generated fresh — there is no edit_pdf; regenerate to change one.",
+                Schema(new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        path = new { type = "string", description = "Destination .pdf path, relative to the project root." },
+                        content = new { type = "string", description = "The document text (light markdown)." }
+                    },
+                    required = new[] { "path", "content" }
+                })));
         }
 
         if (allowed.Allows(AgentToolGroup.DeleteFiles))
