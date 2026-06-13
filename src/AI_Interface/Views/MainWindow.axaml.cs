@@ -61,6 +61,7 @@ public partial class MainWindow : Window
             _vm.ToolApprovalRequested -= OnToolApprovalRequested;
             _vm.PhaseGateRequested -= OnPhaseGateRequested;
             _vm.ClarificationRequested -= OnClarificationRequested;
+            _vm.DeleteFileRequested -= OnDeleteFileRequested;
             _vm.ModelConfigRequested -= OnModelConfigRequested;
             _vm.VoiceBrowserRequested -= OnVoiceBrowserRequested;
             _vm.InstallOllamaConfirmationRequested -= OnInstallOllamaConfirmationRequested;
@@ -79,6 +80,7 @@ public partial class MainWindow : Window
             _vm.ToolApprovalRequested += OnToolApprovalRequested;
             _vm.PhaseGateRequested += OnPhaseGateRequested;
             _vm.ClarificationRequested += OnClarificationRequested;
+            _vm.DeleteFileRequested += OnDeleteFileRequested;
             _vm.ModelConfigRequested += OnModelConfigRequested;
             _vm.VoiceBrowserRequested += OnVoiceBrowserRequested;
             _vm.InstallOllamaConfirmationRequested += OnInstallOllamaConfirmationRequested;
@@ -167,6 +169,14 @@ public partial class MainWindow : Window
         var dialog = new ClarifyWindow { DataContext = new ClarifyViewModel(e.Request) };
         var answer = await dialog.ShowDialog<string?>(this);
         e.Completion.TrySetResult(answer);
+    }
+
+    private async void OnDeleteFileRequested(object? sender, DeleteFileEventArgs e)
+    {
+        var dialog = new ConfirmWindow(
+            "Delete file?",
+            $"“{e.FileName}” will be permanently deleted from disk. This can't be undone.");
+        e.Completion.TrySetResult(await dialog.ShowDialog<bool>(this));
     }
 
     private async void OnAttachFilesRequested(object? sender, AttachmentKind kind)
@@ -279,6 +289,18 @@ public partial class MainWindow : Window
     {
         if ((sender as Control)?.DataContext is FileNode node)
             _vm?.RevealInFolderCommand.Execute(node);
+    }
+
+    private void OnAttachFile(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FileNode node)
+            _vm?.AttachFromTreeCommand.Execute(node);
+    }
+
+    private void OnDeleteFile(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FileNode node)
+            _vm?.DeleteFileCommand.Execute(node);
     }
 
     private async void OnCopyCode(object? sender, RoutedEventArgs e)

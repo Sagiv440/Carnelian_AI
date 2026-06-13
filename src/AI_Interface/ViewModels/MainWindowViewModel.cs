@@ -81,6 +81,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>Raised when the project agent asks a clarifying question (the <c>ask_user</c> tool).</summary>
     public event EventHandler<ClarifyEventArgs>? ClarificationRequested;
 
+    /// <summary>Raised before deleting a file from the project tree so the view can confirm; decision via the args' TCS.</summary>
+    public event EventHandler<DeleteFileEventArgs>? DeleteFileRequested;
+
     /// <summary>Raised from the sidebar Tools menu to open the hardware-aware Model Config tool.</summary>
     public event EventHandler? ModelConfigRequested;
 
@@ -2178,6 +2181,50 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (node is { IsDirectory: false, FullPath.Length: > 0 })
             ShellOpenFile(node.FullPath);
+    }
+
+    /// <summary>Context menu (file): stage the file as a prompt attachment (same as the composer's 📎 menu).</summary>
+    [RelayCommand]
+    private void AttachFromTree(FileNode? node)
+    {
+        if (node is not { IsDirectory: false, FullPath.Length: > 0 })
+            return;
+
+        AddAttachments(new[]
+        {
+            new Attachment
+            {
+                Path = node.FullPath,
+                FileName = node.Name,
+                Kind = Attachment.KindForPath(node.FullPath)
+            }
+        });
+        StatusText = $"Attached {node.Name} to the prompt.";
+    }
+
+    /// <summary>Context menu (file): delete the file from disk after the user confirms (the tree watcher then removes the row).</summary>
+    [RelayCommand]
+    private async Task DeleteFile(FileNode? node)
+    {
+        if (node is not { IsDirectory: false, FullPath.Length: > 0 })
+            return;
+
+        var completion = new TaskCompletionSource<bool>();
+        DeleteFileRequested?.Invoke(this, new DeleteFileEventArgs(node.Name, completion));
+        if (!await completion.Task)
+            return;
+
+        try
+        {
+            File.Delete(node.FullPath);
+            StatusText = $"Deleted {node.Name}.";
+            // While the Files tab is open a FileSystemWatcher is running, so the tree reconciles the
+            // removal automatically (same path as any external delete).
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Couldn't delete {node.Name}: {ex.Message}";
+        }
     }
 
     // OS shell launchers — best-effort; opening something in the file manager must never crash the app.

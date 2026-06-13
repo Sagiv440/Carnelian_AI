@@ -503,12 +503,30 @@
             <Setter Property="Background" Value="#33F2542D"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
+
+        <!-- Draggable divider that resizes the sidebar: invisible at rest, a thin accent line on hover/drag -->
+        <Style Selector="GridSplitter.sidebarSplitter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <Style Selector="GridSplitter.sidebarSplitter:pointerover">
+            <Setter Property="Background" Value="#33F2542D"/>
+        </Style>
+        <Style Selector="GridSplitter.sidebarSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
     </Window.Styles>
 
-    <Grid ColumnDefinitions="Auto,*">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <!-- Sidebar: resizable (drag the GridSplitter); starts at 260px, clamped 220–600. -->
+            <ColumnDefinition Width="260" MinWidth="220" MaxWidth="600"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
         <!-- ===================== SIDEBAR ===================== -->
-        <Border Grid.Column="0" Classes="card" CornerRadius="4" Margin="10" Padding="12" Width="240">
+        <Border Grid.Column="0" Classes="card" CornerRadius="4" Margin="10" Padding="12">
             <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
                 <TextBlock Grid.Row="0" Classes="brand" Text="AI Interface" Margin="4,2,0,12"/>
 
@@ -635,6 +653,13 @@
                                             <MenuItem Header="View in Folder"
                                                       IsVisible="{Binding !IsDirectory}"
                                                       Click="OnViewInFolder"/>
+                                            <MenuItem Header="Attach to prompt"
+                                                      IsVisible="{Binding !IsDirectory}"
+                                                      Click="OnAttachFile"/>
+                                            <Separator IsVisible="{Binding !IsDirectory}"/>
+                                            <MenuItem Header="Delete"
+                                                      IsVisible="{Binding !IsDirectory}"
+                                                      Click="OnDeleteFile"/>
                                         </ContextMenu>
                                     </StackPanel.ContextMenu>
                                     <TextBlock Text="{Binding Glyph}"/>
@@ -671,8 +696,13 @@
             </Grid>
         </Border>
 
+        <!-- Drag to resize the sidebar -->
+        <GridSplitter Grid.Column="1" Classes="sidebarSplitter" Width="5"
+                      ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                      VerticalAlignment="Stretch" HorizontalAlignment="Center"/>
+
         <!-- ===================== MAIN AREA ===================== -->
-        <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto" Margin="0,10,10,10">
+        <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto,Auto" Margin="0,10,10,10">
 
             <!-- Top bar: agent picker + model picker + connection dot + settings -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8"
@@ -1296,7 +1326,7 @@
 
         <!-- Startup launcher overlay: the window opens on this and switches to the chat UI in place when a
              choice is made (recent project / Local Chat / open a project). Covers both columns, on top. -->
-        <Border Grid.Column="0" Grid.ColumnSpan="2" IsVisible="{Binding ShowStartupLauncher}"
+        <Border Grid.Column="0" Grid.ColumnSpan="3" IsVisible="{Binding ShowStartupLauncher}"
                 Background="{DynamicResource AppWindowBackground}">
             <Border Classes="card" CornerRadius="6" Width="480" Padding="26,24"
                     VerticalAlignment="Center" HorizontalAlignment="Center">
