@@ -721,7 +721,16 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   (`OnCopyCode`). The code body is a wrapping `SelectableTextBlock` that **sizes to its content** — no inner
   `ScrollViewer` (one under-measured the text height and clipped the last lines); long code just makes a
   taller message and the transcript scrolls. The raw `Text` is still the source of truth for
-  copy/persist/speak. Inline single-backtick spans stay literal.
+  copy/persist/speak.
+- **Inline Markdown in prose.** A prose segment's text is rendered with inline formatting — `**bold**`,
+  `*italic*`, `***both***`, and `` `code` `` — instead of showing the raw symbols. The pure tokenizer
+  `InlineMarkdown.Parse` (in `ViewModels/InlineMarkdown.cs`, unit-tested) turns the prose into styled
+  `InlineSpan`s, and the `Behaviors/MarkdownText` attached property (`beh:MarkdownText.Text="{Binding Text}"`
+  on the prose `SelectableTextBlock`) renders them as Avalonia `Run` inlines (bold/italic via FontWeight/
+  FontStyle, code via the monospace family), re-parsing on each streamed delta. It's deliberately
+  conservative — underscores are **not** emphasis (so `run_command` / `AI_DOCS.md` stay intact) and a
+  space-padded or unmatched asterisk stays literal (so "2 * 3" isn't italicised). Fenced code blocks are
+  still split out first by `MarkdownSegmenter`; this only restyles the prose runs.
 - **Transcript scrolling / last-line clipping.** The transcript `ScrollViewer` (`TranscriptScroll` in
   `MainWindow.axaml`) sets `HorizontalScrollBarVisibility="Disabled"` (so wrapped text is measured at the
   real finite width, never infinite) and gets its bottom breathing room from a **real measured spacer

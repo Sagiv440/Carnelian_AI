@@ -976,9 +976,12 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:MessageSegment">
                                                     <Panel>
-                                                        <!-- Prose -->
+                                                        <!-- Prose: inline Markdown (**bold**, *italic*, `code`) is
+                                                             rendered via the MarkdownText attached property rather than
+                                                             shown as raw symbols. -->
                                                         <SelectableTextBlock IsVisible="{Binding !IsCode}"
-                                                                             Text="{Binding Text}" TextWrapping="Wrap"
+                                                                             beh:MarkdownText.Text="{Binding Text}"
+                                                                             TextWrapping="Wrap"
                                                                              Foreground="{DynamicResource AppTextPrimary}"/>
 
                                                         <!-- Code / command bubble -->
