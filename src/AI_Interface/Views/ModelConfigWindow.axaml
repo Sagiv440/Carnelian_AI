@@ -10,7 +10,7 @@
         Width="760" Height="670"
         MinWidth="660" MinHeight="540"
         WindowStartupLocation="CenterOwner"
-        Title="Model Config">
+        Title="LLM Browser">
 
     <Design.DataContext>
         <vm:ModelConfigViewModel/>
@@ -50,7 +50,7 @@
 
             <!-- Header -->
             <StackPanel Grid.Row="0">
-                <TextBlock Classes="brand" Text="Model Config"/>
+                <TextBlock Classes="brand" Text="LLM Browser"/>
                 <TextBlock Classes="muted" TextWrapping="Wrap"
                            Text="Scan your machine, then pick what you need — the list ranks Ollama models from the best match for your hardware to the worst. Select a model to download or remove it."/>
             </StackPanel>

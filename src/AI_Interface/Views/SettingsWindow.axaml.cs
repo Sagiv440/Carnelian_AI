@@ -52,6 +52,8 @@ public partial class SettingsWindow : Window
             await vm.AgentsPanel.LoadModelsAsync();
             // Populate the Deep Research planning/synthesis model pickers (best-effort).
             await vm.LoadResearchModelsAsync();
+            // Load the Web Models active-providers list + each provider's browse model list (best-effort).
+            await vm.WebModelsPanel.InitializeAsync();
         }
     }
 

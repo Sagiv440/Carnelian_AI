@@ -69,6 +69,17 @@ public partial class App : Application
             client.BaseAddress = new Uri("https://api.anthropic.com/");
             client.Timeout = TimeSpan.FromMinutes(10);
         });
+        // DeepSeek + Nvidia NIM are OpenAI-compatible — same client logic, different base URL + key.
+        services.AddHttpClient<IDeepSeekClient, DeepSeekClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.deepseek.com/");
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
+        services.AddHttpClient<INvidiaClient, NvidiaClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://integrate.api.nvidia.com/");
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
 
         // Routes a chosen ChatModel to the right provider client and aggregates the model list.
         services.AddSingleton<IModelRouter, ChatRouter>();
@@ -126,12 +137,15 @@ public partial class App : Application
         services.AddSingleton<IHardwareService, HardwareService>();
         services.AddSingleton<IAgentService, AgentService>();
         services.AddSingleton<IMemoryService, MemoryService>();
+        // Accumulates an estimated dollar spend per added cloud provider (Web Models budget tracking).
+        services.AddSingleton<IUsageTracker, UsageTracker>();
 
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<AgentsViewModel>();
         services.AddTransient<McpViewModel>();
         services.AddTransient<McpResourceBrowserViewModel>();
+        services.AddTransient<WebModelsViewModel>();
         services.AddTransient<ProjectViewModel>();
         services.AddTransient<ModelConfigViewModel>();
         services.AddTransient<VoiceBrowserViewModel>();

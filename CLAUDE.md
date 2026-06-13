@@ -76,22 +76,49 @@ and routes through the `IChatClient` surface (see **Providers & routing**).
 
 **Providers & routing.** `IChatClient` (`Services/IChatClient.cs`) is the provider-agnostic chat surface
 (`Provider`, `ChatStreamAsync`, `CompleteAsync`, `ChatWithToolsAsync`, `ListModelsAsync`,
-`IsConfiguredAndReachableAsync`). Four implementations: `OllamaClient` (local; `IOllamaClient : IChatClient`)
-and the cloud clients `OpenAiClient`/`GeminiClient`/`AnthropicClient` (each behind a marker interface
-`IOpenAiClient`/`IGeminiClient`/`IAnthropicClient` so DI gives each its own typed `HttpClient`). Each cloud
-client reads its API key from `ISettingsService` on every call (blank key ⇒ empty model list + unreachable),
-builds the provider's request/response in that one file, and surfaces HTTP errors via an
+`IsConfiguredAndReachableAsync`). Implementations: `OllamaClient` (local; `IOllamaClient : IChatClient`) and
+the cloud clients `OpenAiClient`/`GeminiClient`/`AnthropicClient`/`DeepSeekClient`/`NvidiaClient` (each behind
+a marker interface `IOpenAiClient`/`IGeminiClient`/`IAnthropicClient`/`IDeepSeekClient`/`INvidiaClient` so DI
+gives each its own typed `HttpClient` with the right base URL). **OpenAI-compatible providers share one base
+class** `OpenAiCompatibleClient` (all the chat/stream/tool/model-list/error wire logic): `OpenAiClient`,
+`DeepSeekClient` (`api.deepseek.com`), and `NvidiaClient` (`integrate.api.nvidia.com`, NIM) each subclass it
+and only supply `Provider`, the `ApiKey` settings field, a `ProviderLabel`, and a model-list filter
+(`KeepModelId`); Gemini/Anthropic have their own non-OpenAI clients. Each cloud client reads its API key from
+`ISettingsService` on every call (blank key ⇒ empty model list + unreachable) and surfaces HTTP errors via an
 `InvalidOperationException` (mirrors `OllamaClient.BuildErrorMessage`). `IModelRouter`/`ChatRouter` holds all
-four clients: `ListAllModelsAsync` queries every configured+reachable provider in parallel (best-effort —
+clients: `ListAllModelsAsync` queries every configured+reachable provider in parallel (best-effort —
 a failing provider contributes nothing) and aggregates `ChatModel`s (Ollama first, then cloud);
 `For(provider)` resolves the client. The picker is `ObservableCollection<ChatModel>` (`Models`) with
 `SelectedModel : ChatModel?`; the saved selection is persisted as `"{provider}:{id}"` in
 `AppSettings.DefaultModel` and parsed back on load (a bare legacy value is treated as Ollama). Cloud API
-keys live in `AppSettings.OpenAiApiKey`/`GeminiApiKey`/`AnthropicApiKey`. Tool-call id threading: the app's
+keys live in `AppSettings.OpenAiApiKey`/`GeminiApiKey`/`AnthropicApiKey`/`DeepSeekApiKey`/`NvidiaApiKey`. Tool-call id threading: the app's
 `ChatMessage` carries only tool *names*, so OpenAI/Anthropic clients synthesise deterministic ids
 (`call_{n}` / `toolu_{n}`) per assistant tool call and pair each tool result to the next pending call of the
 same name when re-serialising the running conversation. Gemini has no system role (extracted into
 `systemInstruction`) and uses `user`/`model` roles. `think` is honored only by Ollama; cloud clients ignore it.
+
+**Web Models — Add Provider / Active Providers + budget tracking** (`WebModelsViewModel`). Settings → AI
+Model → *Web Models* is a master/detail panel (`SettingsViewModel.WebModelsPanel`, mirroring Agents/MCP).
+An **Add Provider** form (a provider dropdown from `AiProviderExtensions.CloudProviders` — OpenAI, Google/Gemini,
+Anthropic/Claude, DeepSeek, Nvidia — → API-key field →
+a Billing choice *Budget ($)* / *Subscription* → **Connect** then **Add**) sits over an **Active Providers**
+list. *Connect* writes the typed key to the per-provider `AppSettings` field then probes
+(`IChatClient.IsConfiguredAndReachableAsync`); success enables *Add*. *Add* upserts a
+`Models/ProviderAccount.cs` (`Provider`, `ProviderBilling`, `BudgetUsd`, running `SpentUsd`) into
+`AppSettings.ActiveProviders` and raises `ProvidersChanged` (which `SettingsViewModel` forwards to its
+`ConnectRequested` so the main picker reloads). *Remove* drops the account **and clears the key** (so the
+provider falls out of the picker — routing still keys off "has a valid key"). `MigrateLegacyKeys` turns a
+pre-existing key with no account into a Subscription account on load (back-compat). Each row shows the
+provider glyph (`AiProvider.Glyph()`), name, a billing line (`$spent of $budget (est.)` red when over, or
+`Subscription`), a **browse** dropdown of that provider's models (`ListModelsAsync`, informational), and
+Remove. **Budget tracking is an estimate:** `IUsageTracker`/`UsageTracker` is called from
+`MainWindowViewModel.SendAsync` after each completed cloud reply and adds `ModelPricing.EstimateCostUsd`
+(≈4-chars/token × a coarse per-model price table) to that provider's `SpentUsd` — Ollama and un-added
+providers are no-ops; history/system-prompt/tool round-trips aren't counted, so Project-mode/agent turns are
+under-counted (ballpark, not a bill). Pure helpers (`ModelPricing`, `UsageTracker`, `WebModelsViewModel.ParseBudget`,
+`ActiveProviderViewModel` billing display) are unit-tested. Cloud API keys still live in
+`AppSettings.OpenAiApiKey`/`GeminiApiKey`/`AnthropicApiKey` (plaintext, like the search keys); DI registers
+`IUsageTracker`→`UsageTracker` + `AddTransient<WebModelsViewModel>`.
 
 **Ollama integration** (`OllamaClient`). Implements `IChatClient` plus Ollama-only model management
 (`PingAsync`/`PullModelAsync`/`DeleteModelAsync`, used by Model Config). The base URL is read from
@@ -558,8 +585,9 @@ entries, and a right `Panel` whose category panels toggle by `IsVisible` bound t
   *Layout* (placeholder).
 - **AI FEATURES** — *Models* (Local AI: Ollama URL, *Quick setup*, **Download & install Ollama** — the
   one-click `IOllamaInstaller` flow, confirmed via `ConfirmWindow` then auto-connects, *Test connection*,
-  *Model_Config*; and Web Models: per-provider API key + Connect, which persists the key, probes, and raises
-  `ConnectRequested` so the main window reloads the dropdown), **Agents** (the agent roster master/detail),
+  *LLM Browser* (the Model Config tool, `ModelConfigCommand`); and **Web Models** — an **Add Provider** /
+  **Active Providers** panel (`WebModelsViewModel`, a master/detail like Agents/MCP; see *Web Models* below)),
+  **Agents** (the agent roster master/detail),
   **MCP Servers** (the MCP server roster master/detail — add/edit/remove + Test connection; see *MCP* above),
   *Autonomy & Memory*
   (agent approval mode + software-install permission + **persistent-memory** toggle and per-scope fact
@@ -607,8 +635,26 @@ capped at 12 on write); `ActivateProjectAsync` records the project via the pure
 skip blank, cap-before-add), and `MainWindowViewModel.PrunedRecent` (run in the ctor) drops entries whose folder
 no longer exists (so a deleted project silently falls off). Both helpers are `internal static` (unit-tested).
 
-**Sidebar.** New Chat + Project buttons, then the chat log, the Deep Research toggle, the active-project
-card, and the model/connection footer. When a project is active a **Chat Log / Files** tab strip appears:
+**Sidebar.** New Chat + Project + **Tools** buttons, then the chat log, the Deep Research toggle, the
+active-project card, and the model/connection footer.
+- **Tools menu.** A 🛠 **Tools** ghost button (under Project) opens a `Button.Flyout` with two entries:
+  **LLM Browser** (the hardware-aware Model Config recommender) and **Voice Browser** (the Piper voice catalog) —
+  the same windows Settings opens, reachable directly from the sidebar. Each entry is **gated by its prerequisite**:
+  the *LLM Browser* button's `OpenModelConfigCommand` is `CanExecute = IsOllamaReady` (grayed out until the Ollama
+  server is reachable) and *Voice Browser*'s `OpenVoiceBrowserCommand` is `CanExecute = IsPiperReady` (until the
+  Piper engine is installed). When a prerequisite is missing, an inline **⬇ Download & Install** button appears
+  below the grayed-out entry (`InstallOllamaCommand`/`InstallPiperCommand`, gated by `IsInstalling…`), reusing
+  `IOllamaInstaller`/`IPiperInstaller` exactly like Settings (confirm via `InstallOllama/PiperConfirmationRequested`
+  → `ConfirmWindow`; progress → `OllamaInstallStatus`/`PiperInstallStatus`, shown via `Has…InstallStatus`). An
+  Ollama install then `RefreshAsync()` (reload the model picker) + re-probes; a Piper install flips
+  `SpeechProvider=Piper` + `RefreshVoiceAvailability()`. `RefreshToolsAvailabilityAsync()` (ping Ollama +
+  `IPiperInstaller.IsEngineInstalled`) runs in `InitializeAsync` and on each Tools click (`OnToolsOpening`) so the
+  entries reflect reality. Opening either window reloads the picker / refreshes voice on close. The flyout content
+  is `x:CompileBindings="False"` (popup binds the inherited window VM). `MainWindowViewModel` injects
+  `IOllamaClient` + `IOllamaInstaller` + `IPiperInstaller`; the windows are opened from `MainWindow.axaml.cs`
+  (`ModelConfigRequested`/`VoiceBrowserRequested` events, mirroring Settings).
+
+When a project is active a **Chat Log / Files** tab strip appears:
 *Files* shows a lazy-loading `TreeView` of the project directory backed by `FileNode` (children load on
 expand; a ⟳ button refreshes). It also updates **live**: while the Files tab is open a `FileSystemWatcher`
 (started/stopped by `OnShowProjectFilesChanged`, scoped to the project dir, `NotifyFilter` =

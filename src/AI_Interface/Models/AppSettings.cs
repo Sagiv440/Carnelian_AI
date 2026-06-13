@@ -20,6 +20,18 @@ public sealed class AppSettings
     /// <summary>Anthropic (Claude) API key. Blank = provider disabled.</summary>
     public string AnthropicApiKey { get; set; } = "";
 
+    /// <summary>DeepSeek API key (OpenAI-compatible). Blank = provider disabled.</summary>
+    public string DeepSeekApiKey { get; set; } = "";
+
+    /// <summary>Nvidia NIM API key (OpenAI-compatible). Blank = provider disabled.</summary>
+    public string NvidiaApiKey { get; set; } = "";
+
+    /// <summary>
+    /// Cloud providers the user has <b>added</b> (Settings → Web Models → Active Providers): their chosen
+    /// billing mode + the running estimated spend. The API key itself stays in the per-provider field above.
+    /// </summary>
+    public List<ProviderAccount> ActiveProviders { get; set; } = new();
+
     // --- Theme ---
 
     /// <summary>Light / dark / follow-system appearance. Defaults to Dark — the site's native look.</summary>

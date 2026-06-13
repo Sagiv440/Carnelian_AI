@@ -509,7 +509,7 @@
 
         <!-- ===================== SIDEBAR ===================== -->
         <Border Grid.Column="0" Classes="card" CornerRadius="4" Margin="10" Padding="12" Width="240">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
                 <TextBlock Grid.Row="0" Classes="brand" Text="AI Interface" Margin="4,2,0,12"/>
 
                 <!-- New Chat -->
@@ -523,10 +523,64 @@
                         Command="{Binding OpenProjectCommand}"
                         ToolTip.Tip="Create a project the agent can edit files and run commands in"/>
 
+                <!-- Tools: a flyout with the LLM Browser + Voice Browser tools. Each entry is grayed out
+                     until its prerequisite is set up, with a one-click "Download & Install" offered inline. -->
+                <Button Grid.Row="3" Classes="ghost" Content="🛠  Tools" Margin="0,8,0,0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Click="OnToolsOpening"
+                        ToolTip.Tip="LLM Browser and Voice Browser tools">
+                    <Button.Flyout>
+                        <Flyout Placement="Right">
+                            <!-- CompileBindings off: popup content binds against the inherited window VM. -->
+                            <Border Classes="card" CornerRadius="5" Padding="10" MinWidth="248"
+                                    x:CompileBindings="False">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Classes="muted" Text="TOOLS" Margin="2,0,0,2"/>
+
+                                    <!-- LLM Browser (grayed out until Ollama is reachable) -->
+                                    <Button Classes="nav" Content="⚙  LLM Browser"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                            Command="{Binding OpenModelConfigCommand}"
+                                            ToolTip.Tip="Hardware-aware model recommender (needs Ollama running)"/>
+                                    <StackPanel Spacing="6" Margin="8,0,0,0" IsVisible="{Binding !IsOllamaReady}">
+                                        <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                   Text="Ollama isn't running. Install it to use the LLM Browser."/>
+                                        <Button Classes="cta" Content="⬇  Download &amp; Install Ollama"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                                Command="{Binding InstallOllamaCommand}"/>
+                                        <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasOllamaInstallStatus}"
+                                                   Text="{Binding OllamaInstallStatus}"/>
+                                    </StackPanel>
+
+                                    <Border Height="1" Margin="0,2"
+                                            Background="{DynamicResource AppSurfaceBorderBrush}"/>
+
+                                    <!-- Voice Browser (grayed out until the Piper engine is installed) -->
+                                    <Button Classes="nav" Content="🔊  Voice Browser"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                            Command="{Binding OpenVoiceBrowserCommand}"
+                                            ToolTip.Tip="Browse and download Piper voices (needs the Piper engine)"/>
+                                    <StackPanel Spacing="6" Margin="8,0,0,0" IsVisible="{Binding !IsPiperReady}">
+                                        <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                   Text="The Piper voice engine isn't installed. Install it to use Voice Browser."/>
+                                        <Button Classes="cta" Content="⬇  Download &amp; Install Piper"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                                Command="{Binding InstallPiperCommand}"/>
+                                        <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasPiperInstallStatus}"
+                                                   Text="{Binding PiperInstallStatus}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
                 <!-- Header: plain "CHAT LOG" with no project; Chat Log / Files tabs with a project -->
-                <TextBlock Grid.Row="3" Classes="muted" Text="CHAT LOG" Margin="4,16,0,4"
+                <TextBlock Grid.Row="4" Classes="muted" Text="CHAT LOG" Margin="4,16,0,4"
                            IsVisible="{Binding !HasActiveProject}"/>
-                <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,14,0,4"
+                <Grid Grid.Row="4" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,14,0,4"
                       IsVisible="{Binding HasActiveProject}">
                     <Button Grid.Column="0" Classes="tab" Content="Chat Log"
                             Classes.active="{Binding IsChatLogTabSelected}"
@@ -540,7 +594,7 @@
                 </Grid>
 
                 <!-- Chat Log: all saved conversations -->
-                <ScrollViewer Grid.Row="4" HorizontalScrollBarVisibility="Disabled"
+                <ScrollViewer Grid.Row="5" HorizontalScrollBarVisibility="Disabled"
                               IsVisible="{Binding !ShowProjectFiles}">
                     <ItemsControl ItemsSource="{Binding ChatLog}">
                         <ItemsControl.ItemTemplate>
@@ -564,7 +618,7 @@
                 </ScrollViewer>
 
                 <!-- Project files: hierarchical tree with expand/collapse arrows -->
-                <ScrollViewer Grid.Row="4" HorizontalScrollBarVisibility="Auto"
+                <ScrollViewer Grid.Row="5" HorizontalScrollBarVisibility="Auto"
                               IsVisible="{Binding ShowProjectFiles}">
                     <TreeView x:Name="ProjectFileTree" Classes="files" ItemsSource="{Binding FileTree}"
                               DoubleTapped="OnFileTreeDoubleTapped">
@@ -593,7 +647,7 @@
                 </ScrollViewer>
 
                 <!-- Active project card (shown only in project mode) -->
-                <Border Grid.Row="5" Classes="card" CornerRadius="4" Padding="12,10" Margin="0,10,0,0"
+                <Border Grid.Row="6" Classes="card" CornerRadius="4" Padding="12,10" Margin="0,10,0,0"
                         IsVisible="{Binding HasActiveProject}">
                     <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="📁 PROJECT" Classes="muted"/>

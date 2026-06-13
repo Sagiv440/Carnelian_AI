@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -60,6 +61,10 @@ public partial class MainWindow : Window
             _vm.ToolApprovalRequested -= OnToolApprovalRequested;
             _vm.PhaseGateRequested -= OnPhaseGateRequested;
             _vm.ClarificationRequested -= OnClarificationRequested;
+            _vm.ModelConfigRequested -= OnModelConfigRequested;
+            _vm.VoiceBrowserRequested -= OnVoiceBrowserRequested;
+            _vm.InstallOllamaConfirmationRequested -= OnInstallOllamaConfirmationRequested;
+            _vm.InstallPiperConfirmationRequested -= OnInstallPiperConfirmationRequested;
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -74,7 +79,60 @@ public partial class MainWindow : Window
             _vm.ToolApprovalRequested += OnToolApprovalRequested;
             _vm.PhaseGateRequested += OnPhaseGateRequested;
             _vm.ClarificationRequested += OnClarificationRequested;
+            _vm.ModelConfigRequested += OnModelConfigRequested;
+            _vm.VoiceBrowserRequested += OnVoiceBrowserRequested;
+            _vm.InstallOllamaConfirmationRequested += OnInstallOllamaConfirmationRequested;
+            _vm.InstallPiperConfirmationRequested += OnInstallPiperConfirmationRequested;
         }
+    }
+
+    /// <summary>Tools button clicked: refresh which entries are available before the flyout shows them.</summary>
+    private void OnToolsOpening(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is not null)
+            _ = _vm.RefreshToolsAvailabilityAsync();
+    }
+
+    private async void OnModelConfigRequested(object? sender, EventArgs e)
+    {
+        var window = new ModelConfigWindow
+        {
+            DataContext = App.Services.GetRequiredService<ModelConfigViewModel>()
+        };
+        await window.ShowDialog(this);
+
+        // A local model may have been downloaded/removed in there — reload the main window's picker.
+        _vm?.RefreshCommand.Execute(null);
+    }
+
+    private async void OnVoiceBrowserRequested(object? sender, EventArgs e)
+    {
+        var window = new VoiceBrowserWindow
+        {
+            DataContext = App.Services.GetRequiredService<VoiceBrowserViewModel>()
+        };
+        await window.ShowDialog(this);
+
+        // A voice may now be installed — refresh the composer's Auto-read toggle visibility.
+        _vm?.RefreshVoiceAvailability();
+    }
+
+    private async void OnInstallOllamaConfirmationRequested(object? sender, TaskCompletionSource<bool> completion)
+    {
+        var dialog = new ConfirmWindow(
+            "Install additional software?",
+            "Additional software (the Ollama runtime) will be downloaded and " +
+            "installed on your computer. Click Accept to continue, or Exit to cancel.");
+        completion.TrySetResult(await dialog.ShowDialog<bool>(this));
+    }
+
+    private async void OnInstallPiperConfirmationRequested(object? sender, TaskCompletionSource<bool> completion)
+    {
+        var dialog = new ConfirmWindow(
+            "Install additional software?",
+            "Additional software (the Piper text-to-speech engine) will be downloaded and " +
+            "installed on your computer. Click Accept to continue, or Exit to cancel.");
+        completion.TrySetResult(await dialog.ShowDialog<bool>(this));
     }
 
     private async void OnProjectRequested(object? sender, EventArgs e)

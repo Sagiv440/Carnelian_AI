@@ -14,3 +14,13 @@ public interface IGeminiClient : IChatClient
 public interface IAnthropicClient : IChatClient
 {
 }
+
+/// <summary>Marker interface so the DeepSeek client gets its own typed <see cref="System.Net.Http.HttpClient"/>.</summary>
+public interface IDeepSeekClient : IChatClient
+{
+}
+
+/// <summary>Marker interface so the Nvidia (NIM) client gets its own typed <see cref="System.Net.Http.HttpClient"/>.</summary>
+public interface INvidiaClient : IChatClient
+{
+}

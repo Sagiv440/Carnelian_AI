@@ -16,7 +16,13 @@ public enum AiProvider
     Gemini,
 
     /// <summary>Anthropic (Claude) cloud API.</summary>
-    Anthropic
+    Anthropic,
+
+    /// <summary>DeepSeek cloud API (OpenAI-compatible).</summary>
+    DeepSeek,
+
+    /// <summary>Nvidia NIM cloud API (OpenAI-compatible).</summary>
+    Nvidia
 }
 
 /// <summary>Friendly labels for <see cref="AiProvider"/> values.</summary>
@@ -26,9 +32,11 @@ public static class AiProviderExtensions
     public static string DisplayName(this AiProvider provider) => provider switch
     {
         AiProvider.Ollama => "Ollama (local)",
-        AiProvider.OpenAI => "ChatGPT",
-        AiProvider.Gemini => "Gemini",
-        AiProvider.Anthropic => "Claude",
+        AiProvider.OpenAI => "OpenAI (ChatGPT)",
+        AiProvider.Gemini => "Google (Gemini)",
+        AiProvider.Anthropic => "Anthropic (Claude)",
+        AiProvider.DeepSeek => "DeepSeek",
+        AiProvider.Nvidia => "Nvidia (NIM)",
         _ => provider.ToString()
     };
 
@@ -39,6 +47,26 @@ public static class AiProviderExtensions
         AiProvider.OpenAI => "OpenAI",
         AiProvider.Gemini => "Gemini",
         AiProvider.Anthropic => "Claude",
+        AiProvider.DeepSeek => "DeepSeek",
+        AiProvider.Nvidia => "Nvidia",
         _ => provider.ToString()
+    };
+
+    /// <summary>A small "logo" glyph for the provider (emoji, matching the app's glyph aesthetic).</summary>
+    public static string Glyph(this AiProvider provider) => provider switch
+    {
+        AiProvider.Ollama => "🦙",
+        AiProvider.OpenAI => "🟢",
+        AiProvider.Gemini => "🔷",
+        AiProvider.Anthropic => "🟠",
+        AiProvider.DeepSeek => "🟣",
+        AiProvider.Nvidia => "🟩",
+        _ => "🤖"
+    };
+
+    /// <summary>The cloud providers (everything except local Ollama) — the ones added in Web Models.</summary>
+    public static readonly AiProvider[] CloudProviders =
+    {
+        AiProvider.OpenAI, AiProvider.Gemini, AiProvider.Anthropic, AiProvider.DeepSeek, AiProvider.Nvidia
     };
 }

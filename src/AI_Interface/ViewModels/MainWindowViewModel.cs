@@ -38,6 +38,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly IAgentService _agents;
     private readonly IMemoryService _memory;
     private readonly IMcpService _mcp;
+    private readonly IOllamaClient _ollama;
+    private readonly IOllamaInstaller _ollamaInstaller;
+    private readonly IPiperInstaller _piperInstaller;
+    private readonly IUsageTracker _usage;
+
+    /// <summary>Fallback when no Ollama URL is configured (matches the AppSettings default).</summary>
+    private const string DefaultOllamaUrl = "http://localhost:11434";
 
     /// <summary>Skill files loaded from the active project (empty when not in a project).</summary>
     private IReadOnlyList<ProjectSkill> _projectSkills = Array.Empty<ProjectSkill>();
@@ -73,6 +80,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>Raised when the project agent asks a clarifying question (the <c>ask_user</c> tool).</summary>
     public event EventHandler<ClarifyEventArgs>? ClarificationRequested;
+
+    /// <summary>Raised from the sidebar Tools menu to open the hardware-aware Model Config tool.</summary>
+    public event EventHandler? ModelConfigRequested;
+
+    /// <summary>Raised from the sidebar Tools menu to open the Piper Voice browser.</summary>
+    public event EventHandler? VoiceBrowserRequested;
+
+    /// <summary>Raised before installing Ollama so the view can confirm; the decision returns via the TCS.</summary>
+    public event EventHandler<TaskCompletionSource<bool>>? InstallOllamaConfirmationRequested;
+
+    /// <summary>Raised before installing Piper so the view can confirm; the decision returns via the TCS.</summary>
+    public event EventHandler<TaskCompletionSource<bool>>? InstallPiperConfirmationRequested;
 
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
 
@@ -124,6 +143,141 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>Re-evaluate <see cref="IsVoiceConfigured"/> (e.g. after Settings → Voice may have changed).</summary>
     public void RefreshVoiceAvailability() => OnPropertyChanged(nameof(IsVoiceConfigured));
+
+    // ---- Sidebar Tools menu (Model Config / Voice Browser) -------------------------------------
+
+    /// <summary>True when the local Ollama server is reachable — gates the Tools ▸ Model Config entry.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenModelConfigCommand))]
+    private bool _isOllamaReady;
+
+    /// <summary>True when the Piper engine is installed — gates the Tools ▸ Voice Browser entry.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenVoiceBrowserCommand))]
+    private bool _isPiperReady;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallOllamaCommand))]
+    private bool _isInstallingOllama;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallPiperCommand))]
+    private bool _isInstallingPiper;
+
+    /// <summary>Transient status shown under the Model Config entry while/after an Ollama install.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOllamaInstallStatus))]
+    private string _ollamaInstallStatus = "";
+
+    /// <summary>Transient status shown under the Voice Browser entry while/after a Piper install.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPiperInstallStatus))]
+    private string _piperInstallStatus = "";
+
+    public bool HasOllamaInstallStatus => !string.IsNullOrEmpty(OllamaInstallStatus);
+    public bool HasPiperInstallStatus => !string.IsNullOrEmpty(PiperInstallStatus);
+
+    /// <summary>
+    /// Re-evaluate which Tools entries are available — Ollama reachable (ping) and the Piper engine
+    /// installed. Called when the Tools menu opens so the entries reflect reality. Best-effort: a failed
+    /// probe just means "not ready" (the entry stays grayed out with its install option offered).
+    /// </summary>
+    public async Task RefreshToolsAvailabilityAsync()
+    {
+        // Best-effort throughout (this is called fire-and-forget from the Tools click): a throwing
+        // filesystem scan or ping must not surface as an unobserved task fault — just mean "not ready".
+        try { IsPiperReady = _piperInstaller.IsEngineInstalled; }
+        catch { IsPiperReady = false; }
+
+        var url = string.IsNullOrWhiteSpace(OllamaBaseUrl) ? DefaultOllamaUrl : OllamaBaseUrl.Trim();
+        try { IsOllamaReady = await _ollama.PingAsync(url).ConfigureAwait(true); }
+        catch { IsOllamaReady = false; }
+    }
+
+    /// <summary>Open the hardware-aware Model Config tool (enabled only when Ollama is reachable).</summary>
+    [RelayCommand(CanExecute = nameof(IsOllamaReady))]
+    private void OpenModelConfig() => ModelConfigRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Open the Piper Voice browser (enabled only when the Piper engine is installed).</summary>
+    [RelayCommand(CanExecute = nameof(IsPiperReady))]
+    private void OpenVoiceBrowser() => VoiceBrowserRequested?.Invoke(this, EventArgs.Empty);
+
+    private bool CanInstallOllama => !IsInstallingOllama;
+
+    /// <summary>Download and install the local Ollama runtime, then reload the model list + re-probe.</summary>
+    [RelayCommand(CanExecute = nameof(CanInstallOllama))]
+    private async Task InstallOllama()
+    {
+        // Confirm first — this downloads and installs additional software onto the user's machine.
+        if (InstallOllamaConfirmationRequested is not null)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            InstallOllamaConfirmationRequested.Invoke(this, tcs);
+            if (!await tcs.Task)
+                return;
+        }
+
+        IsInstallingOllama = true;
+        // Idempotent: when Ollama is already present, InstallAsync just starts the server.
+        OllamaInstallStatus = _ollamaInstaller.IsOllamaInstalled
+            ? "Ollama already installed — starting…"
+            : "Downloading Ollama…";
+        var progress = new Progress<string>(s => OllamaInstallStatus = s);
+        try
+        {
+            await _ollamaInstaller.InstallAsync(progress, CancellationToken.None);
+            await RefreshAsync();                  // reload the model picker now Ollama may be up
+            await RefreshToolsAvailabilityAsync(); // re-evaluate the Model Config gate
+            OllamaInstallStatus = IsOllamaReady ? "Ollama ready." : "Installed — start Ollama, then reopen this menu.";
+        }
+        catch (Exception ex)
+        {
+            OllamaInstallStatus = $"Install failed: {ex.Message}";
+        }
+        finally
+        {
+            IsInstallingOllama = false;
+        }
+    }
+
+    private bool CanInstallPiper => !IsInstallingPiper;
+
+    /// <summary>Download and install the Piper voice engine, then switch the voice provider on.</summary>
+    [RelayCommand(CanExecute = nameof(CanInstallPiper))]
+    private async Task InstallPiper()
+    {
+        // Confirm first — this downloads and installs additional software onto the user's machine.
+        if (InstallPiperConfirmationRequested is not null)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            InstallPiperConfirmationRequested.Invoke(this, tcs);
+            if (!await tcs.Task)
+                return;
+        }
+
+        IsInstallingPiper = true;
+        PiperInstallStatus = "Downloading Piper…";
+        var progress = new Progress<string>(s => PiperInstallStatus = s);
+        try
+        {
+            // InstallEngineAsync persists the resolved executable path to settings; make Piper the active
+            // engine so a voice picked in the browser is used right away (a voice is still needed to speak).
+            await _piperInstaller.InstallEngineAsync(progress, CancellationToken.None);
+            _settings.Current.SpeechProvider = SpeechProvider.Piper;
+            _settings.Save();
+            IsPiperReady = _piperInstaller.IsEngineInstalled;
+            RefreshVoiceAvailability();
+            PiperInstallStatus = "Piper installed — open Voice Browser to add a voice.";
+        }
+        catch (Exception ex)
+        {
+            PiperInstallStatus = $"Install failed: {ex.Message}";
+        }
+        finally
+        {
+            IsInstallingPiper = false;
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
@@ -270,7 +424,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         ISpeechService speech,
         IAgentService agents,
         IMemoryService memory,
-        IMcpService mcp)
+        IMcpService mcp,
+        IOllamaClient ollama,
+        IOllamaInstaller ollamaInstaller,
+        IPiperInstaller piperInstaller,
+        IUsageTracker usage)
     {
         _router = router;
         _search = search;
@@ -286,6 +444,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _agents = agents;
         _memory = memory;
         _mcp = mcp;
+        _ollama = ollama;
+        _ollamaInstaller = ollamaInstaller;
+        _piperInstaller = piperInstaller;
+        _usage = usage;
         _autoSpeakEnabled = settings.Current.AutoSpeakReplies;
 
         Modes = new[]
@@ -324,7 +486,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                new DesignProjectAgentService(), new DesignAgentOrchestrator(),
                new DesignProjectSkillService(), new DesignProjectDocsService(),
                new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService(),
-               new DesignMcpService())
+               new DesignMcpService(), new DesignOllamaClient(), new DesignOllamaInstaller(),
+               new DesignPiperInstaller(), new DesignUsageTracker())
     {
     }
 
@@ -558,6 +721,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         RefreshVoiceAvailability(); // reflect a previously-installed voice in the composer toggle
         await RefreshAsync().ConfigureAwait(true);
+        await RefreshToolsAvailabilityAsync().ConfigureAwait(true); // prime the Tools menu's entries
     }
 
     [RelayCommand]
@@ -691,6 +855,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             if (assistant.Text.Length == 0 && assistant.Work.Length == 0)
                 assistant.Text = "_(no response)_";
+
+            // Count this reply's estimated cost against the provider's budget (no-op for Ollama / providers
+            // the user hasn't added). Input is approximated by the prompt + any attached context.
+            if (!ct.IsCancellationRequested && assistant.Text.Length > 0 && assistant.Text != "_(no response)_")
+            {
+                var inputText = string.IsNullOrEmpty(user.AttachedContext) ? prompt : prompt + "\n" + user.AttachedContext;
+                _usage.RecordEstimatedUsage(selected.Provider, model, inputText, assistant.Text);
+            }
 
             // Phase 5: a proactive agent ends its turn with suggested next steps (best-effort, gated).
             if (SelectedAgent?.Proactive == true && !ct.IsCancellationRequested

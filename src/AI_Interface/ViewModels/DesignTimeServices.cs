@@ -149,6 +149,11 @@ internal sealed class DesignOllamaInstaller : IOllamaInstaller
     public Task InstallAsync(IProgress<string>? progress, CancellationToken ct) => Task.CompletedTask;
 }
 
+internal sealed class DesignUsageTracker : IUsageTracker
+{
+    public void RecordEstimatedUsage(AiProvider provider, string modelId, string? inputText, string? outputText) { }
+}
+
 internal sealed class DesignPiperVoiceCatalog : IPiperVoiceCatalog
 {
     public Task<IReadOnlyList<PiperVoiceInfo>> ListAvailableAsync(CancellationToken ct) =>
