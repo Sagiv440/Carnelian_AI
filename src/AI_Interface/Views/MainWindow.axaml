@@ -12,7 +12,7 @@
         Icon="/Assets/app-logo.ico"
         Width="1000" Height="700"
         MinWidth="780" MinHeight="520"
-        Title="AI Interface — Local AI">
+        Title="Carnelian — Local AI">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -529,7 +529,7 @@
         <Border Grid.Column="0" Classes="card" CornerRadius="4" Margin="10" Padding="12">
             <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4,2,0,12" Spacing="6">
-                    <TextBlock Classes="brand" Text="AI Interface" VerticalAlignment="Center"/>
+                    <TextBlock Classes="brand" Text="Carnelian" VerticalAlignment="Center"/>
                     <TextBlock Classes="muted" Text="{Binding AppVersion}" VerticalAlignment="Bottom" Margin="0,0,0,2"
                                ToolTip.Tip="App version"/>
                 </StackPanel>
@@ -1337,7 +1337,7 @@
                     VerticalAlignment="Center" HorizontalAlignment="Center">
                 <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
 
-                    <TextBlock Grid.Row="0" Classes="brand" FontSize="20" Text="AI Interface"/>
+                    <TextBlock Grid.Row="0" Classes="brand" FontSize="20" Text="Carnelian"/>
                     <TextBlock Grid.Row="1" Classes="muted" Margin="0,3,0,18"
                                Text="Open a recent project, or start chatting locally."/>
 
