@@ -24,3 +24,18 @@ public sealed record ToolApprovalRequest(string ToolName, string Summary, string
 /// (true) to continue or declines (false) to stop the run.
 /// </summary>
 public sealed record PhaseGate(string CompletedPhase, string NextPhase);
+
+/// <summary>One question in a clarification request: the question text plus a few concrete options to pick from.</summary>
+public sealed record ClarificationQuestion(string Question, IReadOnlyList<string> Options);
+
+/// <summary>
+/// A clarification the agent asks the user mid-run (the <c>ask_user</c> tool): one or more
+/// <paramref name="Questions"/>. The view shows a popup — a tab per question when there's more than one —
+/// each with checkboxes + an "Other" free-text field; the combined answer is returned (null = dismissed).
+/// </summary>
+public sealed record UserClarificationRequest(IReadOnlyList<ClarificationQuestion> Questions)
+{
+    /// <summary>Single-question convenience (one subject).</summary>
+    public UserClarificationRequest(string question, IReadOnlyList<string> options)
+        : this(new[] { new ClarificationQuestion(question, options) }) { }
+}

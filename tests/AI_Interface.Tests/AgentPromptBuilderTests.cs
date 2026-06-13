@@ -55,12 +55,13 @@ public class AgentPromptBuilderTests
     // --- ClarifyDirective: always present, tells the agent to ask when vague --------------------
 
     [Fact]
-    public void ClarifyDirective_IsNonEmpty_AndMentionsClarifyingQuestionsWhenVague()
+    public void ClarifyDirective_IsNonEmpty_AndSteersToTheAskUserToolWhenVague()
     {
         var directive = AgentPromptBuilder.ClarifyDirective();
 
         Assert.False(string.IsNullOrEmpty(directive));
-        Assert.Contains("clarifying questions", directive);
+        Assert.Contains("ask_user", directive);   // steers the model to the structured popup tool
+        Assert.Contains("questions", directive);   // can batch several subjects into one popup (tabs)
         Assert.Contains("vague", directive);
         Assert.StartsWith("\n\n", directive); // leads with a blank line so it slots after preceding content
     }

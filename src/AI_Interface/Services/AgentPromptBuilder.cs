@@ -108,8 +108,10 @@ public static class AgentPromptBuilder
     public static string ClarifyDirective() =>
         "\n\nIf the request is vague or underspecified — missing decisions you'd need to build the right " +
         "thing (e.g. scope, the kind of app / platform / UI, language or framework, or important " +
-        "constraints) — do NOT guess: ask 1–3 short, specific clarifying questions first and stop for the " +
-        "answer before creating files or running commands. If the request is already clear enough, just proceed.";
+        "constraints) — do NOT guess: use the ask_user tool with 2–4 concrete options before creating files " +
+        "or running commands. If you're undecided about several subjects at once, pass them all in one " +
+        "ask_user call's 'questions' array (they show as tabs) rather than asking one at a time. If the " +
+        "request is already clear enough, just proceed.";
 
     /// <summary>
     /// The combined text of the agent's selected <b>built-in</b> skill packs, each prefixed with its name,

@@ -69,5 +69,6 @@ public interface IAgentOrchestrator
         Func<ToolApprovalRequest, Task<bool>> approve,
         bool autoFlowPhases,
         Func<PhaseGate, Task<bool>>? phaseGate,
+        Func<UserClarificationRequest, Task<string?>>? askUser,
         CancellationToken ct);
 }

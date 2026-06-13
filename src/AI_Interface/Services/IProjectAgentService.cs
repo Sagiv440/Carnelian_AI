@@ -36,6 +36,7 @@ public interface IProjectAgentService
     /// <param name="approve">Asked to approve a single tool call; returns false to skip it.</param>
     /// <param name="autoFlowPhases">When the agent works in phases: true advances automatically; false pauses at each phase boundary via <paramref name="phaseGate"/>.</param>
     /// <param name="phaseGate">Asked to continue past a phase boundary when <paramref name="autoFlowPhases"/> is false; returns false to stop the run. Null (or auto-flow) never pauses.</param>
+    /// <param name="askUser">Asked a clarifying question (the <c>ask_user</c> tool); returns the user's answer (null = dismissed). Null = no UI (the tool tells the model to proceed).</param>
     Task RunAsync(
         IChatClient client,
         Project project,
@@ -58,5 +59,6 @@ public interface IProjectAgentService
         Func<ToolApprovalRequest, Task<bool>> approve,
         bool autoFlowPhases,
         Func<PhaseGate, Task<bool>>? phaseGate,
+        Func<UserClarificationRequest, Task<string?>>? askUser,
         CancellationToken ct);
 }

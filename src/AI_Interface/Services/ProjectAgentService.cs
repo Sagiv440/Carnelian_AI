@@ -22,6 +22,25 @@ public sealed class ProjectAgentService : IProjectAgentService
     /// <summary>Fallback hard cap on tool-use rounds when a caller doesn't specify one (matches Guided).</summary>
     private const int DefaultMaxSteps = AutonomyMap.GuidedSteps;
 
+    /// <summary>Max times the agent may pop the ask_user clarification dialog in one run (then it must proceed).</summary>
+    internal const int MaxUserQuestions = 3;
+
+    /// <summary>
+    /// Wraps an ask_user callback with a per-run cap: after <see cref="MaxUserQuestions"/> popups it stops
+    /// showing the dialog and returns a "proceed" answer, so a model can't loop asking. Null stays null.
+    /// </summary>
+    internal static Func<UserClarificationRequest, Task<string?>>? CapAskUser(
+        Func<UserClarificationRequest, Task<string?>>? askUser)
+    {
+        if (askUser is null)
+            return null;
+        var asked = 0;
+        return req => ++asked > MaxUserQuestions
+            ? Task.FromResult<string?>(
+                "You've already asked the user enough for this task — proceed with your best judgement and state your assumptions.")
+            : askUser(req);
+    }
+
     /// <summary>Output kept per tool result (both for the model and the transcript).</summary>
     private const int MaxResultChars = 6000;
 
@@ -182,6 +201,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         Func<ToolApprovalRequest, Task<bool>> approve,
         bool autoFlowPhases,
         Func<PhaseGate, Task<bool>>? phaseGate,
+        Func<UserClarificationRequest, Task<string?>>? askUser,
         CancellationToken ct)
     {
         // A null allow-list (e.g. an agent with no tool profile) is treated as unrestricted.
@@ -222,6 +242,9 @@ public sealed class ProjectAgentService : IProjectAgentService
         // calls — used by the phase gate (pause between phases when AutoFlowPhases is off).
         string? previousActivePhase = null;
 
+        // Cap the clarification popups for this run so a model can't loop on ask_user.
+        var cappedAskUser = CapAskUser(askUser);
+
         for (var step = 0; step < maxSteps; step++)
         {
             ct.ThrowIfCancellationRequested();
@@ -261,7 +284,7 @@ public sealed class ProjectAgentService : IProjectAgentService
 
                 var result = await ExecuteAsync(
                     project, call, approvalMode, allowedTools, installPermission, allowDocsUpdate,
-                    status, onActivity, onPlan, approve, ct)
+                    status, onActivity, onPlan, approve, cappedAskUser, ct)
                     .ConfigureAwait(false);
 
                 // Structured feed: resolve the row with this tool's result + success/failure status.
@@ -295,7 +318,8 @@ public sealed class ProjectAgentService : IProjectAgentService
         Project project, AgentToolCall call, AgentApprovalMode approvalMode,
         AgentTools allowedTools, SoftwareInstallPermission installPermission, bool allowDocsUpdate,
         IProgress<string> status, Action<string> onActivity, Action<PlanUpdate>? onPlan,
-        Func<ToolApprovalRequest, Task<bool>> approve, CancellationToken ct)
+        Func<ToolApprovalRequest, Task<bool>> approve,
+        Func<UserClarificationRequest, Task<string?>>? askUser, CancellationToken ct)
     {
         var path = GetString(call.Arguments, "path");
         var (summary, detail, destructive) = Describe(project, call, path);
@@ -392,6 +416,7 @@ public sealed class ProjectAgentService : IProjectAgentService
                 "install_software" => await RunCommandAsync(project, GetString(call.Arguments, "command") ?? "", ct)
                                         .ConfigureAwait(false),
                 "update_plan"    => UpdatePlan(call.Arguments, onPlan),
+                "ask_user"       => await AskUserAsync(call.Arguments, askUser, ct).ConfigureAwait(false),
                 "remember"       => Remember(project, GetString(call.Arguments, "text"), GetString(call.Arguments, "scope")),
                 "create_skill"   => CreateSkill(project, GetString(call.Arguments, "name"),
                                         GetString(call.Arguments, "content"), GetString(call.Arguments, "description")),
@@ -451,6 +476,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "run_command"    => ("Run command", GetString(call.Arguments, "command") ?? "", true),
         "web_search"     => ("Web search", GetString(call.Arguments, "query") ?? "", false),
         "update_plan"    => ("Update plan", "", false),
+        "ask_user"       => ("Ask the user", GetString(call.Arguments, "question") ?? "", false),
         "install_software" => ("Install software", GetString(call.Arguments, "command") ?? "", true),
         "remember"       => ("Remember a note", GetString(call.Arguments, "text") ?? "", false),
         "create_skill"   => ("Create project skill", GetString(call.Arguments, "name") ?? "", false),
@@ -497,6 +523,7 @@ public sealed class ProjectAgentService : IProjectAgentService
         "install_software" => "📦",
         "web_search"       => "🌐",
         "update_plan"      => "📝",
+        "ask_user"         => "❓",
         "remember"         => "💾",
         "create_skill"     => "✨",
         "create_agent"     => "👤",
@@ -560,6 +587,122 @@ public sealed class ProjectAgentService : IProjectAgentService
         var done = steps.Count(s => s.Status == PlanStepStatus.Done);
         var active = steps.Count(s => s.Status == PlanStepStatus.Active);
         return $"Plan updated: {steps.Count} step(s) — {done} done, {active} in progress.";
+    }
+
+    /// <summary>
+    /// The ask_user tool's model-facing description. Shared with <see cref="AgentOrchestrator"/> so the Lead
+    /// and the single agent advertise an identical tool.
+    /// </summary>
+    internal const string AskUserToolDescription =
+        "Ask the user to clarify when the request is genuinely ambiguous and you can't proceed well without " +
+        "their decision. For ONE subject, send a 'question' + 2–4 concrete 'options'. If you're undecided about " +
+        "SEVERAL subjects, send a 'questions' array (each with its own question + options) — they show as tabs " +
+        "in one popup, so the user answers all at once. The user picks via checkboxes (plus an 'Other' free-text " +
+        "field) and their answers are returned to you. Use sparingly — don't ask when you can reasonably proceed.";
+
+    /// <summary>The JSON schema for the ask_user tool (one question, or a 'questions' array). Shared with the orchestrator.</summary>
+    internal static JsonElement AskUserSchema() => JsonSerializer.SerializeToElement(new
+    {
+        type = "object",
+        properties = new
+        {
+            question = new { type = "string", description = "A single clarifying question (use this OR 'questions')." },
+            options = new
+            {
+                type = "array",
+                description = "2–4 short, concrete options for the single 'question'.",
+                items = new { type = "string" }
+            },
+            questions = new
+            {
+                type = "array",
+                description = "Ask about MULTIPLE subjects at once — each item becomes a tab in the popup.",
+                items = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        question = new { type = "string", description = "The clarifying question for this subject." },
+                        options = new
+                        {
+                            type = "array",
+                            description = "2–4 short, concrete options for this question.",
+                            items = new { type = "string" }
+                        }
+                    },
+                    required = new[] { "question" }
+                }
+            }
+        }
+    });
+
+    /// <summary>
+    /// Runs the ask_user tool: asks the user one or more questions (popup, one tab each when several) and
+    /// returns their combined answer as the tool result (so the agent continues). Shared by the single agent
+    /// and the Lead. Falls back to a "proceed with best judgement" result when there's no UI or it's dismissed.
+    /// </summary>
+    internal static async Task<string> AskUserAsync(
+        JsonElement args, Func<UserClarificationRequest, Task<string?>>? askUser, CancellationToken ct)
+    {
+        var questions = ParseClarificationQuestions(args);
+        if (questions.Count == 0)
+            return "Provide a 'question' (or a 'questions' array) to ask the user.";
+        if (askUser is null)
+            return "(no way to ask the user here — proceed with your best judgement and state your assumption)";
+
+        ct.ThrowIfCancellationRequested();
+        var answer = await askUser(new UserClarificationRequest(questions)).ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(answer)
+            ? "(the user dismissed the question without answering — proceed with your best judgement)"
+            : answer!;
+    }
+
+    /// <summary>
+    /// Parses the ask_user args into one or more <see cref="ClarificationQuestion"/>s: a <c>questions</c> array
+    /// (each <c>{question, options}</c>) when present, otherwise the single <c>question</c> + <c>options</c>.
+    /// Value-kind guarded; items without a non-blank question are skipped. <c>internal</c> for tests.
+    /// </summary>
+    internal static IReadOnlyList<ClarificationQuestion> ParseClarificationQuestions(JsonElement args)
+    {
+        var list = new List<ClarificationQuestion>();
+        if (args.ValueKind == JsonValueKind.Object &&
+            args.TryGetProperty("questions", out var qs) && qs.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var q in qs.EnumerateArray())
+            {
+                if (q.ValueKind != JsonValueKind.Object)
+                    continue;
+                var text = (q.TryGetProperty("question", out var t) && t.ValueKind == JsonValueKind.String
+                    ? t.GetString() : "")?.Trim() ?? "";
+                if (text.Length == 0)
+                    continue;
+                list.Add(new ClarificationQuestion(text, ParseStringArray(q, "options")));
+            }
+            if (list.Count > 0)
+                return list;
+        }
+
+        var single = (GetString(args, "question") ?? "").Trim();
+        if (single.Length > 0)
+            list.Add(new ClarificationQuestion(single, ParseStringArray(args, "options")));
+        return list;
+    }
+
+    /// <summary>Parses a JSON string array property (e.g. ask_user's <c>options</c>), trimming + skipping blanks.</summary>
+    internal static IReadOnlyList<string> ParseStringArray(JsonElement args, string prop)
+    {
+        var list = new List<string>();
+        if (args.ValueKind == JsonValueKind.Object &&
+            args.TryGetProperty(prop, out var arr) && arr.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var el in arr.EnumerateArray())
+            {
+                var s = (el.ValueKind == JsonValueKind.String ? el.GetString() : el.ToString())?.Trim();
+                if (!string.IsNullOrEmpty(s))
+                    list.Add(s);
+            }
+        }
+        return list;
     }
 
     /// <summary>Parses the top-level <c>steps</c> array of update_plan into <see cref="PlanStep"/>s (flat plan).</summary>
@@ -1575,6 +1718,10 @@ public sealed class ProjectAgentService : IProjectAgentService
         // update_plan: a UI-only plan/checklist the agent maintains (no file/command side effects), so it's
         // ungated like web_search. The agent resends the full list each call (flat steps or named phases).
         tools.Add(new AgentTool("update_plan", UpdatePlanToolDescription, UpdatePlanSchema()));
+
+        // ask_user: pause and ask the user a clarifying question (popup with options). Ungated (no file/command
+        // side effect) and always offered, so the agent can disambiguate a vague request before acting.
+        tools.Add(new AgentTool("ask_user", AskUserToolDescription, AskUserSchema()));
 
         // create_skill: a meta tool that writes a reusable guidance file under .AI/skills/. Always offered
         // (it only writes to that controlled location), so "create a skill for X" works with any agent.

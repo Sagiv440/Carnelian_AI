@@ -70,6 +70,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         Func<ToolApprovalRequest, Task<bool>> approve,
         bool autoFlowPhases,
         Func<PhaseGate, Task<bool>>? phaseGate,
+        Func<UserClarificationRequest, Task<string?>>? askUser,
         CancellationToken ct)
     {
         // Roster the lead may delegate to: everyone EXCEPT orchestrators and the lead itself. Excluding
@@ -107,6 +108,9 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
 
         // Tracks the lead's current phase to gate moves into a new phase (when AutoFlowPhases is off).
         string? previousActivePhase = null;
+
+        // Cap the lead's clarification popups for this run so it can't loop on ask_user.
+        var cappedAskUser = ProjectAgentService.CapAskUser(askUser);
 
         for (var step = 0; step < MaxDelegations; step++)
         {
@@ -152,7 +156,10 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                         ActivityPhase.Started, idx, ProjectAgentService.IconFor(call.Name), summary, detail, "", false));
                     status.Report(ProjectAgentService.CurrentActionLabel(call.Name, summary, detail));
 
-                    result = ExecuteLeadTool(call, project, onPlan);
+                    // ask_user is async (it awaits the popup); everything else is a synchronous lead tool.
+                    result = string.Equals(call.Name, "ask_user", StringComparison.Ordinal)
+                        ? await ProjectAgentService.AskUserAsync(call.Arguments, cappedAskUser, ct).ConfigureAwait(false)
+                        : ExecuteLeadTool(call, project, onPlan);
 
                     onActivityStep(new ActivityUpdate(
                         ActivityPhase.Finished, idx, "", "", "", result, ProjectAgentService.IsFailure(result)));
@@ -215,6 +222,7 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
         "find_files"     => ("Find files", GetString(call.Arguments, "glob") ?? ""),
         "update_docs"    => ("Update project handbook", ".AI/" + ProjectDocsService.FileName),
         "update_plan"    => ("Update plan", ""),
+        "ask_user"       => ("Ask the user", GetString(call.Arguments, "question") ?? ""),
         _                => (call.Name, "")
     };
 
@@ -313,6 +321,8 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
                 // Specialists never gate on phases — only the lead (which owns the phase plan) does.
                 autoFlowPhases: true,
                 phaseGate: null,
+                // Specialists don't ask the user directly — the lead owns the conversation with the user.
+                askUser: null,
                 ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -588,7 +598,9 @@ public sealed class AgentOrchestrator : IAgentOrchestrator
             new("update_docs", ProjectAgentService.UpdateDocsToolDescription, ProjectAgentService.UpdateDocsSchema()),
             // The lead owns the phase plan it coordinates the team around (ungated UI-only side effect),
             // advertised via the same schema/description as the single agent.
-            new("update_plan", ProjectAgentService.UpdatePlanToolDescription, ProjectAgentService.UpdatePlanSchema())
+            new("update_plan", ProjectAgentService.UpdatePlanToolDescription, ProjectAgentService.UpdatePlanSchema()),
+            // The lead can ask the user to clarify before planning/delegating (popup with options).
+            new("ask_user", ProjectAgentService.AskUserToolDescription, ProjectAgentService.AskUserSchema())
         };
 
         if (leadTools.Allows(AgentToolGroup.ReadFiles))

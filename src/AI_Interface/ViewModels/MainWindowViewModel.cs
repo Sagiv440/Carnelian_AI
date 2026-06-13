@@ -71,6 +71,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>Raised when the project agent reaches a phase boundary and needs the user's OK to continue.</summary>
     public event EventHandler<PhaseGateEventArgs>? PhaseGateRequested;
 
+    /// <summary>Raised when the project agent asks a clarifying question (the <c>ask_user</c> tool).</summary>
+    public event EventHandler<ClarifyEventArgs>? ClarificationRequested;
+
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
 
     /// <summary>Models offered in the top-bar picker, across every configured provider.</summary>
@@ -934,7 +937,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 MemoryBlock(), MemoryActive(), ProjectContext(), ThinkingDirective(),
                 _settings.Current.SoftwareInstall, _settings.Current.AgentApproval,
                 progress, OnActivityStep, OnAnswer, OnDelegation, OnPlan,
-                RequestToolApprovalAsync, _settings.Current.AutoFlowPhases, RequestPhaseContinueAsync, ct);
+                RequestToolApprovalAsync, _settings.Current.AutoFlowPhases, RequestPhaseContinueAsync,
+                RequestClarificationAsync, ct);
         }
         else
         {
@@ -959,7 +963,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 PersonaPrefix(), directives, ProjectContext(), _settings.Current.SoftwareInstall, MemoryActive(),
                 allowDocsUpdate: true, progress,
                 OnActivity, OnActivityStep, OnPlan, OnAnswer, RequestToolApprovalAsync,
-                _settings.Current.AutoFlowPhases, RequestPhaseContinueAsync, ct);
+                _settings.Current.AutoFlowPhases, RequestPhaseContinueAsync, RequestClarificationAsync, ct);
         }
 
         // The turn may have created/edited project skills (create_skill, or write_file under .AI/skills) —
@@ -997,6 +1001,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         var tcs = new TaskCompletionSource<bool>();
         Dispatcher.UIThread.Post(() =>
             PhaseGateRequested?.Invoke(this, new PhaseGateEventArgs(gate, tcs)));
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// Asks the view to pop a clarifying question (the agent's <c>ask_user</c> tool). Raised from the agent's
+    /// background loop and marshalled to the UI; returns the user's answer string, or null if dismissed / no UI.
+    /// </summary>
+    private Task<string?> RequestClarificationAsync(UserClarificationRequest request)
+    {
+        if (ClarificationRequested is null)
+            return Task.FromResult<string?>(null); // no UI wired (e.g. design time)
+
+        var tcs = new TaskCompletionSource<string?>();
+        Dispatcher.UIThread.Post(() =>
+            ClarificationRequested?.Invoke(this, new ClarifyEventArgs(request, tcs)));
         return tcs.Task;
     }
 

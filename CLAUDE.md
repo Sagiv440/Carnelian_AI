@@ -124,6 +124,7 @@ first-occurrence replace), `move_file` (move/rename), `copy_file`, `create_folde
 `delete_file`, `delete_folder`, `run_command`, `install_software` (offered only when permitted),
 `web_search` (always offered — reuses `IWebSearchService`; ungated, network read),
 `update_plan` (always offered — a UI-only checklist; ungated — see below),
+`ask_user` (always offered — a clarification popup; ungated — see **`ask_user` tool**),
 `remember` (offered only when memory is on — see **Memory**), `create_skill` (always offered —
 see **Project skills**), `create_agent` (always offered — authors a project-scoped specialist agent under
 `.AI/agents/`; see **`create_agent` tool**), and `update_docs` (offered only to the top-level/main agent when
@@ -161,8 +162,25 @@ see **Project skills**), `create_agent` (always offered — authors a project-sc
   model to organise complex work into phases; it's threaded into the single agent's `directives` and the Lead
   system prompt. `AgentPromptBuilder.ClarifyDirective()` (same two prompts) tells the agent to ask 1–3 short
   clarifying questions when a request is **vague** (and just proceed when it's clear) — it "asks" by replying
-  with no tool calls, which ends the turn naturally (no extra plumbing).
+  via the **`ask_user`** tool (a clarification popup — see below).
   `ParsePlanSteps`/`ParseStepsArray`/`ParsePhases`/`ParseStatus` are `internal static` (unit-tested).
+- **`ask_user` tool — a clarification popup (multi-question/tabbed).** Always offered, ungated (no
+  file/command side effect). For ONE subject the agent sends `question` + `options`; when **undecided about
+  several subjects** it sends a `questions` array (each `{question, options}`) — `ParseClarificationQuestions`
+  builds a `UserClarificationRequest(IReadOnlyList<ClarificationQuestion>)` (single `question`+`options` is a
+  back-compat fallback). `ProjectAgentService.AskUserAsync` (internal static, shared `AskUserToolDescription`/
+  `AskUserSchema()`) awaits a `Func<UserClarificationRequest,Task<string?>>? askUser` and returns the user's
+  answer as the tool result so the run continues (no UI / dismissed ⇒ a "proceed with best judgement" string,
+  so it never hangs). The VM's `RequestClarificationAsync` mirrors the tool-approval/phase-gate plumbing
+  (`ClarificationRequested` event → `Dispatcher.UIThread.Post` a `ClarifyEventArgs` with a
+  `TaskCompletionSource<string?>`); the code-behind shows **`ClarifyWindow`** — a `TabControl` over
+  `ClarifyViewModel.Questions` (**one tab per question**, header marked ✓ when answered), each tab a checkbox
+  per option + an **"Other…"** free-text box. `CanSubmit` requires **every** question answered; `BuildAnswer`
+  returns just the answer for one question, else each question labelled (`<question>\n→ <answer>`). **Both
+  agents** offer it (single agent + Lead via `BuildLeadTools`; the lead loop awaits `ask_user` specially since
+  `ExecuteLeadTool` is synchronous); delegated specialists pass `askUser: null` (no popup).
+  `ProjectAgentService.CapAskUser` caps it at `MaxUserQuestions`=3 popups per run so a model can't loop.
+  `AskUserAsync`/`ParseClarificationQuestions`/`ParseStringArray`/`CapAskUser` + `ClarifyViewModel` are unit-tested.
 - **Phase gate (`AppSettings.AutoFlowPhases`, default true).** When the agent works in phases, this single
   setting (Settings → Autonomy & Memory → *Phases*; **independent** of `AgentApproval`) decides flow: ON =
   auto-advance; OFF = pause at each phase boundary for a Continue/Stop confirmation. `RunAsync` (both the

@@ -59,6 +59,7 @@ public partial class MainWindow : Window
             _vm.ProjectRequested -= OnProjectRequested;
             _vm.ToolApprovalRequested -= OnToolApprovalRequested;
             _vm.PhaseGateRequested -= OnPhaseGateRequested;
+            _vm.ClarificationRequested -= OnClarificationRequested;
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -72,6 +73,7 @@ public partial class MainWindow : Window
             _vm.ProjectRequested += OnProjectRequested;
             _vm.ToolApprovalRequested += OnToolApprovalRequested;
             _vm.PhaseGateRequested += OnPhaseGateRequested;
+            _vm.ClarificationRequested += OnClarificationRequested;
         }
     }
 
@@ -100,6 +102,13 @@ public partial class MainWindow : Window
             $"Finished the “{e.Gate.CompletedPhase}” phase. Continue to “{e.Gate.NextPhase}”?");
         var cont = await dialog.ShowDialog<bool>(this);
         e.Completion.TrySetResult(cont);
+    }
+
+    private async void OnClarificationRequested(object? sender, ClarifyEventArgs e)
+    {
+        var dialog = new ClarifyWindow { DataContext = new ClarifyViewModel(e.Request) };
+        var answer = await dialog.ShowDialog<string?>(this);
+        e.Completion.TrySetResult(answer);
     }
 
     private async void OnAttachFilesRequested(object? sender, AttachmentKind kind)
