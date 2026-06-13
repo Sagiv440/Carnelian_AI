@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Carnelian
+GenericName=AI Workbench
+Comment=Local-first AI workbench: chat, web search, deep research, and a tool-using project agent
+Exec=carnelian
+Icon=io.github.Sagiv440.Carnelian
+Terminal=false
+Categories=Utility;Development;Network;
+Keywords=AI;LLM;Ollama;Chat;Assistant;Agent;Research;
+StartupNotify=true
+StartupWMClass=Carnelian

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Sagiv440.Carnelian</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <!-- TODO: set the real project license once a LICENSE file is added to the repo. -->
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>Carnelian</name>
+  <summary>Local-first AI workbench</summary>
+  <description>
+    <p>
+      Carnelian is a cross-platform desktop AI client. It runs models locally through
+      Ollama, and optionally through cloud providers (OpenAI, Google Gemini, Anthropic,
+      DeepSeek, Nvidia, Mistral).
+    </p>
+    <p>It offers several ways to work:</p>
+    <ul>
+      <li>Chat — talk to a model directly.</li>
+      <li>Web Search — answer with a fresh web result injected as context.</li>
+      <li>Deep Research — plan queries, read pages, and synthesize a cited report.</li>
+      <li>Project — a tool-using agent that edits files and runs commands in a project directory.</li>
+    </ul>
+    <p>
+      Extras include selectable agent personas, a delegating "Lead" orchestrator, MCP server
+      support, persistent memory, and local text-to-speech via Piper.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.Sagiv440.Carnelian.desktop</launchable>
+  <provides>
+    <binary>carnelian</binary>
+  </provides>
+  <categories>
+    <category>Utility</category>
+    <category>Development</category>
+  </categories>
+  <url type="homepage">https://github.com/Sagiv440/Carnelian_AI</url>
+  <url type="bugtracker">https://github.com/Sagiv440/Carnelian_AI/issues</url>
+  <developer id="io.github.sagiv440">
+    <name>Sagiv Reuben</name>
+  </developer>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="1.0.2" date="2026-06-13" />
+  </releases>
+</component>

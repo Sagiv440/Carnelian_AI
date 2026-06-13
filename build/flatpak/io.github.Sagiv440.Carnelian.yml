@@ -1,0 +1,45 @@
+# Flatpak manifest for Carnelian.
+#
+# Bundles the self-contained linux-x64 publish (no .NET SDK extension needed). Build with
+# build/flatpak/build-flatpak.sh on a Linux host (needs flatpak + flatpak-builder).
+# Paths are relative to this manifest's folder (build/flatpak/).
+app-id: io.github.Sagiv440.Carnelian
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'   # bump to the current freedesktop runtime if needed
+sdk: org.freedesktop.Sdk
+command: carnelian
+
+finish-args:
+  - --share=network               # local Ollama + cloud providers + web search
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio           # Piper text-to-speech playback
+  - --device=dri
+  - --filesystem=home             # the Project agent reads/writes user-chosen project folders
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: carnelian
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 Carnelian /app/lib/carnelian/Carnelian
+      - mkdir -p /app/bin && ln -s ../lib/carnelian/Carnelian /app/bin/carnelian
+      - install -Dm644 io.github.Sagiv440.Carnelian.desktop /app/share/applications/io.github.Sagiv440.Carnelian.desktop
+      - install -Dm644 io.github.Sagiv440.Carnelian.metainfo.xml /app/share/metainfo/io.github.Sagiv440.Carnelian.metainfo.xml
+      - install -Dm644 carnelian-512.png /app/share/icons/hicolor/512x512/apps/io.github.Sagiv440.Carnelian.png
+      - install -Dm644 carnelian-256.png /app/share/icons/hicolor/256x256/apps/io.github.Sagiv440.Carnelian.png
+      - install -Dm644 carnelian-128.png /app/share/icons/hicolor/128x128/apps/io.github.Sagiv440.Carnelian.png
+    sources:
+      - type: file
+        path: ../../publish/linux-x64/Carnelian
+      - type: file
+        path: ../packaging/io.github.Sagiv440.Carnelian.desktop
+      - type: file
+        path: ../packaging/io.github.Sagiv440.Carnelian.metainfo.xml
+      - type: file
+        path: ../packaging/icons/carnelian-512.png
+      - type: file
+        path: ../packaging/icons/carnelian-256.png
+      - type: file
+        path: ../packaging/icons/carnelian-128.png
