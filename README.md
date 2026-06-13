@@ -1,7 +1,7 @@
 
 <h1 style="font-weight: bold;">
   <img src="src/AI_Interface/Assets/app-logo.png" alt="AI Interface logo" width="40" height="40" align="center" />
-  AI Interface
+  Carnelian
 </h1>
 A cross-platform desktop app for running AI. It runs models <strong>locally</strong> through a local
 [Ollama](https://ollama.com) server, and can **optionally** talk to cloud providers — OpenAI (ChatGPT),
