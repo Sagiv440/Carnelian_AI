@@ -618,7 +618,9 @@
                 <!-- Chat Log: all saved conversations -->
                 <ScrollViewer Grid.Row="5" HorizontalScrollBarVisibility="Disabled"
                               IsVisible="{Binding !ShowProjectFiles}">
-                    <ItemsControl ItemsSource="{Binding ChatLog}">
+                    <!-- Right margin reserves a gutter for the Fluent overlay scrollbar, which otherwise
+                         floats over the per-row ✕ delete button (Grid.Column=1) and eats the click. -->
+                    <ItemsControl ItemsSource="{Binding ChatLog}" Margin="0,0,14,0">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:CompileBindings="False">
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,1">
