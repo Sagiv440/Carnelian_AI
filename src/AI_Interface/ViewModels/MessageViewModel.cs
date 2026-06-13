@@ -125,6 +125,7 @@ public sealed partial class MessageViewModel : ObservableObject
 
     /// <summary>True once any delegation card exists (drives the delegations section's visibility).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWorkBlock))]
     private bool _hasDelegations;
 
     /// <summary>
@@ -161,10 +162,10 @@ public sealed partial class MessageViewModel : ObservableObject
 
     /// <summary>
     /// Whether to show the legacy monospace <see cref="Work"/> block: only when there's work text but no
-    /// structured feed (e.g. chat-with-thinking). Single-agent project runs populate <see cref="Activities"/>,
-    /// so the structured feed shows and the raw block is hidden (no duplicate display).
+    /// structured feed (e.g. chat-with-thinking). Project runs populate <see cref="Activities"/> /
+    /// <see cref="Delegations"/>, so the structured feed/cards show and the raw block is hidden (no duplicate).
     /// </summary>
-    public bool ShowWorkBlock => HasWork && !HasActivities;
+    public bool ShowWorkBlock => HasWork && !HasActivities && !HasDelegations;
 
     /// <summary>Web sources backing this answer (web-search / deep-research modes).</summary>
     public ObservableCollection<SearchResult> Sources { get; } = new();
@@ -372,4 +373,118 @@ public sealed partial class MessageViewModel : ObservableObject
             Suggestions.Add(s);
         HasSuggestions = Suggestions.Count > 0;
     }
+
+    // --- Structured persistence (Project mode): export the live plan / activity / delegation state to
+    //     serializable turn DTOs, and restore them back into the same cards when a saved chat is reopened. ---
+
+    /// <summary>Exports the plan (flat steps and/or named phases) for persistence; null when there is none.</summary>
+    public PlanTurn? ExportPlan()
+    {
+        if (!HasPlan && !HasPhases)
+            return null;
+
+        var turn = new PlanTurn();
+        foreach (var s in Plan)
+            turn.Steps.Add(new PlanStepTurn { Text = s.Text, Status = s.Status });
+        foreach (var p in Phases)
+        {
+            var phase = new PlanPhaseTurn { Name = p.Name, Status = p.Status };
+            foreach (var s in p.Steps)
+                phase.Steps.Add(new PlanStepTurn { Text = s.Text, Status = s.Status });
+            turn.Phases.Add(phase);
+        }
+        return turn;
+    }
+
+    /// <summary>Exports the single-agent activity feed for persistence; null when empty.</summary>
+    public List<ActivityTurn>? ExportActivities()
+    {
+        if (Activities.Count == 0)
+            return null;
+        var list = new List<ActivityTurn>(Activities.Count);
+        foreach (var a in Activities)
+            list.Add(ToActivityTurn(a));
+        return list;
+    }
+
+    /// <summary>Exports the orchestrator's delegation cards (subagent briefs, feeds, and results); null when none.</summary>
+    public List<DelegationTurn>? ExportDelegations()
+    {
+        if (Delegations.Count == 0)
+            return null;
+        var list = new List<DelegationTurn>(Delegations.Count);
+        foreach (var d in Delegations)
+        {
+            var card = new DelegationTurn
+            {
+                AgentName = d.AgentName, Glyph = d.Glyph, Task = d.Task, Result = d.Result
+            };
+            foreach (var a in d.Activities)
+                card.Activities.Add(ToActivityTurn(a));
+            list.Add(card);
+        }
+        return list;
+    }
+
+    private static ActivityTurn ToActivityTurn(ActivityStepViewModel a) => new()
+    {
+        IsNote = a.IsNote, Icon = a.Icon, Title = a.Title, Detail = a.Detail,
+        Text = a.Text, Result = a.Result, Failed = a.Failed
+    };
+
+    /// <summary>Rebuilds the plan card from a saved turn (reuses <see cref="SetPlan"/>). Call on the UI thread.</summary>
+    public void RestorePlan(PlanTurn plan)
+    {
+        var steps = new List<PlanStep>(plan.Steps.Count);
+        foreach (var s in plan.Steps)
+            steps.Add(new PlanStep(s.Text, s.Status));
+
+        var phases = new List<PlanPhase>(plan.Phases.Count);
+        foreach (var p in plan.Phases)
+        {
+            var inner = new List<PlanStep>(p.Steps.Count);
+            foreach (var s in p.Steps)
+                inner.Add(new PlanStep(s.Text, s.Status));
+            phases.Add(new PlanPhase(p.Name, p.Status, inner));
+        }
+        SetPlan(new PlanUpdate(steps, phases));
+    }
+
+    /// <summary>Rebuilds the single-agent activity feed from a saved turn (all rows finished). Call on the UI thread.</summary>
+    public void RestoreActivities(IEnumerable<ActivityTurn> rows)
+    {
+        Activities.Clear();
+        var index = 0;
+        foreach (var r in rows)
+            Activities.Add(FromActivityTurn(r, index++));
+        HasActivities = Activities.Count > 0;
+    }
+
+    /// <summary>Rebuilds the orchestrator's delegation cards from a saved turn (all finished). Call on the UI thread.</summary>
+    public void RestoreDelegations(IEnumerable<DelegationTurn> cards)
+    {
+        Delegations.Clear();
+        var index = 0;
+        foreach (var c in cards)
+        {
+            var card = new DelegationStepViewModel
+            {
+                Index = index++, AgentName = c.AgentName, Glyph = c.Glyph, Task = c.Task
+            };
+            var i = 0;
+            foreach (var a in c.Activities)
+                card.Activities.Add(FromActivityTurn(a, i++));
+            card.HasActivities = card.Activities.Count > 0;
+            card.Result = c.Result;
+            card.IsRunning = false;
+            Delegations.Add(card);
+        }
+        HasDelegations = Delegations.Count > 0;
+    }
+
+    private static ActivityStepViewModel FromActivityTurn(ActivityTurn r, int index) => new()
+    {
+        Index = index, IsNote = r.IsNote, Icon = r.Icon, Title = r.Title, Detail = r.Detail,
+        Text = r.Text, Result = r.Result, Failed = r.Failed, IsRunning = false
+    };
 }

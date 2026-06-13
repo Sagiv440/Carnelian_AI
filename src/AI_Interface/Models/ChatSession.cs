@@ -22,10 +22,90 @@ public sealed class ChatTurn
     public List<SearchResult>? Sources { get; set; }
 
     /// <summary>
-    /// The agent's activity / reasoning log for this turn (Project mode's tool feed flattened to text, or a
-    /// Thinking turn's reasoning). Restored into the message's "Activity" disclosure on reopen.
+    /// A Thinking turn's reasoning (or, for an older saved chat, the flattened agent activity log). Restored
+    /// into the message's monospace "Activity" disclosure on reopen — but only shown when no structured
+    /// <see cref="Activities"/>/<see cref="Delegations"/> were saved (those render the same cards instead).
     /// </summary>
     public string? Work { get; set; }
+
+    /// <summary>
+    /// The main agent's plan for this turn (the <c>update_plan</c> checklist / phases). Restored as the plan
+    /// card on reopen. Null when the turn had no plan.
+    /// </summary>
+    public PlanTurn? Plan { get; set; }
+
+    /// <summary>
+    /// A single-agent project run's structured activity feed (one entry per tool call / interim note).
+    /// Restored as the activity rows on reopen. Null when the turn produced none.
+    /// </summary>
+    public List<ActivityTurn>? Activities { get; set; }
+
+    /// <summary>
+    /// An orchestrator (lead) run's delegated subtasks — each subagent's brief, its own activity feed, and its
+    /// final output. Restored as the per-delegation cards on reopen. Null when the turn delegated nothing.
+    /// </summary>
+    public List<DelegationTurn>? Delegations { get; set; }
+}
+
+/// <summary>Persisted form of one plan step (<see cref="PlanStep"/>) — text + status.</summary>
+public sealed class PlanStepTurn
+{
+    public string Text { get; set; } = "";
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public PlanStepStatus Status { get; set; }
+}
+
+/// <summary>Persisted form of one named plan phase (<see cref="PlanPhase"/>).</summary>
+public sealed class PlanPhaseTurn
+{
+    public string Name { get; set; } = "";
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public PlanStepStatus Status { get; set; }
+
+    public List<PlanStepTurn> Steps { get; set; } = new();
+}
+
+/// <summary>Persisted form of the agent's plan (<see cref="PlanUpdate"/>): either flat steps or named phases.</summary>
+public sealed class PlanTurn
+{
+    public List<PlanStepTurn> Steps { get; set; } = new();
+    public List<PlanPhaseTurn> Phases { get; set; } = new();
+}
+
+/// <summary>Persisted form of one activity-feed row (a tool call or an interim note).</summary>
+public sealed class ActivityTurn
+{
+    /// <summary>True for the model's interim narration (a muted note) rather than a tool row.</summary>
+    public bool IsNote { get; set; }
+
+    public string Icon { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Detail { get; set; } = "";
+
+    /// <summary>The note narration text (note rows only).</summary>
+    public string Text { get; set; } = "";
+
+    /// <summary>The tool's result text, shown in the expandable body.</summary>
+    public string Result { get; set; } = "";
+
+    /// <summary>True when the tool finished but failed (drives the ✗ status glyph on reopen).</summary>
+    public bool Failed { get; set; }
+}
+
+/// <summary>Persisted form of one delegated subtask in an orchestrator run (subagent output + actions).</summary>
+public sealed class DelegationTurn
+{
+    public string AgentName { get; set; } = "";
+    public string Glyph { get; set; } = "";
+    public string Task { get; set; } = "";
+
+    /// <summary>The specialist's final answer (or an error string).</summary>
+    public string Result { get; set; } = "";
+
+    /// <summary>The specialist's own activity feed.</summary>
+    public List<ActivityTurn> Activities { get; set; } = new();
 }
 
 /// <summary>A saved conversation shown in the sidebar chat log and persisted across runs.</summary>

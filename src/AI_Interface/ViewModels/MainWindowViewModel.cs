@@ -1968,8 +1968,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             var vm = new MessageViewModel(turn.Role, turn.Text) { ModelName = turn.ModelName };
             if (turn.Sources is { Count: > 0 })
                 vm.SetSources(turn.Sources);          // restore the clickable "Sources" list
+            if (turn.Plan is not null)
+                vm.RestorePlan(turn.Plan);            // restore the main agent's plan card
+            if (turn.Activities is { Count: > 0 })
+                vm.RestoreActivities(turn.Activities);// restore the single-agent activity rows
+            if (turn.Delegations is { Count: > 0 })
+                vm.RestoreDelegations(turn.Delegations); // restore the subagent (delegation) cards
             if (!string.IsNullOrEmpty(turn.Work))
-                vm.SetWork(turn.Work);                // restore the agent activity / reasoning log
+                vm.SetWork(turn.Work);                // restore a Thinking turn's reasoning (or an older chat's text log)
             Messages.Add(vm);
         }
 
@@ -2009,6 +2015,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (string.IsNullOrEmpty(m.Text))
                 continue;
+            // Project mode: save the structured plan + activity feed + delegation cards so a reopened chat
+            // shows the same plan card, activity rows, and subagent (delegation) output/actions as the live
+            // run — not just a flat text dump. The monospace Work text is kept only for a Thinking turn's
+            // reasoning (or older saved chats), and is suppressed when structured data is present.
+            var plan = m.ExportPlan();
+            var activities = m.ExportActivities();
+            var delegations = m.ExportDelegations();
+            var hasStructured = activities is not null || delegations is not null;
+
             turns.Add(new ChatTurn
             {
                 Role = m.Role,
@@ -2019,8 +2034,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 Sources = m.Sources.Count == 0
                     ? null
                     : m.Sources.Select(s => new SearchResult { Title = s.Title, Url = s.Url, Snippet = s.Snippet }).ToList(),
-                // Save the agent's activity log (Project mode) / reasoning (Thinking) as text.
-                Work = NullIfEmpty(m.BuildActivityLog())
+                Work = hasStructured ? null : NullIfEmpty(m.BuildActivityLog()),
+                Plan = plan,
+                Activities = activities,
+                Delegations = delegations
             });
         }
 

@@ -252,10 +252,20 @@ see **Project skills**), `create_agent` (always offered — authors a project-sc
   exiting restores the global log (`%APPDATA%/AI_Interface/chats.json`). The VM routes every save/load
   through `SaveLog()` / `LoadLog()`. Each persisted `ChatTurn` stores Role/Text/ModelName **plus** the
   turn's **web `Sources`** (Web Search / Deep Research citations — restored as the clickable Sources list;
-  the bulky fetched-page `Content` is dropped) and a **`Work`** activity log (Project mode's structured
-  tool/delegation feed flattened to text via `MessageViewModel.BuildActivityLog`, or a Thinking turn's
-  reasoning — restored into the message's "Activity" disclosure). `PersistCurrentSession` writes them and
-  `OpenSession` restores them (`SetSources`/`SetWork`).
+  the bulky fetched-page `Content` is dropped) and, for Project mode, the **structured agent state**:
+  the main agent's **`Plan`** (the `update_plan` flat checklist *or* named phases), the single-agent
+  **`Activities`** feed (one entry per tool call / interim note), and the orchestrator's **`Delegations`**
+  (each subagent's brief, its own activity feed, and its final output) — so a reopened chat shows the same
+  **plan card, activity rows, and per-delegation (subagent) cards** as the live run, not just a flat dump.
+  These map to serializable DTOs in `Models/ChatSession.cs` (`PlanTurn`/`PlanPhaseTurn`/`PlanStepTurn`,
+  `ActivityTurn`, `DelegationTurn`; `PlanStepStatus` persists as a string). `MessageViewModel` does the
+  VM↔DTO mapping: `ExportPlan`/`ExportActivities`/`ExportDelegations` and `RestorePlan` (reuses `SetPlan`)/
+  `RestoreActivities`/`RestoreDelegations` (restored rows/cards are marked finished). The legacy monospace
+  **`Work`** field now carries only a **Thinking** turn's reasoning (or an older saved chat's flattened
+  `BuildActivityLog` text); it's suppressed when structured `Activities`/`Delegations` are present
+  (`ShowWorkBlock = HasWork && !HasActivities && !HasDelegations`). `PersistCurrentSession` writes all of
+  this and `OpenSession` restores it (`SetSources` + `RestorePlan`/`RestoreActivities`/`RestoreDelegations`
+  + `SetWork`). The export/restore round-trip + JSON schema are unit-tested (`MessageViewModelPersistenceTests`).
 - **`AI_DOCS.md` project handbook.** `IProjectDocsService`/`ProjectDocsService` reads `<project>/.AI/AI_DOCS.md`
   — the app's equivalent of how Claude Code reads CLAUDE.md: a hand-authored, authoritative per-project
   handbook the **Project-mode agent follows**. Loaded off the UI thread in `LoadProjectSkillsAsync` (so an
