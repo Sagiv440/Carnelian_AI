@@ -14,10 +14,10 @@ what changed). Note the project layering: `Models → Services → ViewModels �
 
 ## Test project setup (there is no test project yet)
 If `tests/` (or any `*.Tests` project) doesn't exist, create one and wire it in:
-- `tests/AI_Interface.Tests/AI_Interface.Tests.csproj` — `net9.0`, `<IsPackable>false</IsPackable>`,
+- `tests/AI_Interface.Tests/Carnelian.Tests.csproj` — `net9.0`, `<IsPackable>false</IsPackable>`,
   PackageReferences: `xunit`, `xunit.runner.visualstudio`, `Microsoft.NET.Test.Sdk` (+ `Microsoft.NET.Test.Sdk`),
-  and a `<ProjectReference>` to `../../src/AI_Interface/AI_Interface.csproj`.
-- Add the project to `AI_Interface.sln` (`dotnet sln AI_Interface.sln add tests/AI_Interface.Tests/AI_Interface.Tests.csproj`).
+  and a `<ProjectReference>` to `../../src/AI_Interface/Carnelian.csproj`.
+- Add the project to `Carnelian.sln` (`dotnet sln Carnelian.sln add tests/AI_Interface.Tests/Carnelian.Tests.csproj`).
 - Keep `TargetFramework` = `net9.0` everywhere (this SDK can't build net10.0).
 
 ## What to test (and what NOT to)
@@ -36,7 +36,7 @@ If `tests/` (or any `*.Tests` project) doesn't exist, create one and wire it in:
 2. Write `[Fact]`/`[Theory]` tests with clear Arrange/Act/Assert and descriptive names
    (`Method_State_Expected`). Cover the happy path, edges, and each OS branch you can exercise on the
    host (use `OperatingSystem.Is*` to skip branches that can't run here, and note them).
-3. Run `dotnet test AI_Interface.sln` — report pass/fail counts and any skips. Fix flaky/ordering issues.
+3. Run `dotnet test Carnelian.sln` — report pass/fail counts and any skips. Fix flaky/ordering issues.
 4. Keep the main build at 0 warnings / 0 errors.
 
 ## Output

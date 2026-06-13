@@ -1,11 +1,11 @@
 # Publishes a self-contained, single-file Windows x64 build.
-# Output: publish/win-x64/AI_Interface.exe  (no .NET install needed on the target machine)
+# Output: publish/win-x64/Carnelian.exe  (no .NET install needed on the target machine)
 #
 # Usage (from repo root or anywhere):  pwsh ./build/publish-windows.ps1
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $root 'src/AI_Interface/AI_Interface.csproj'
+$project = Join-Path $root 'src/AI_Interface/Carnelian.csproj'
 $out = Join-Path $root 'publish/win-x64'
 
 dotnet publish $project `

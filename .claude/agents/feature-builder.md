@@ -36,7 +36,7 @@ Strict layering, dependencies point downward:
 ## Workflow
 1. Restate the feature and list the exact files you'll touch (use a TodoWrite plan for multi-step work).
 2. Implement following the layering above. Match the surrounding code's style, naming, and comment density.
-3. Build: `dotnet build AI_Interface.sln` — it must stay **0 warnings / 0 errors**. Fix anything you introduce.
+3. Build: `dotnet build Carnelian.sln` — it must stay **0 warnings / 0 errors**. Fix anything you introduce.
 4. If you changed architecture, conventions, or commands, update `CLAUDE.md` (and the README if user-facing).
 5. Report what changed, how you verified it, and any follow-ups. Do not commit unless asked.
 

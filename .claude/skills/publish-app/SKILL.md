@@ -11,7 +11,7 @@ install. Output goes to `publish/<rid>/`.
 ## Commands
 
 ```bash
-# Windows x64  ->  publish/win-x64/AI_Interface.exe
+# Windows x64  ->  publish/win-x64/Carnelian.exe
 pwsh ./build/publish-windows.ps1
 
 # Linux x64    ->  publish/linux-x64/AI_Interface

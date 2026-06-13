@@ -32,7 +32,7 @@ Read `CLAUDE.md` and the current `src/AI_Interface/Views/MainWindow.axaml` (+ it
 1. Clarify the visual goal; if helpful, describe or sketch the layout before editing.
 2. Edit XAML/styles (and minimal code-behind for pure view concerns). Reuse existing styles; add new
    selectors to `Window.Styles` or `App.axaml` resources rather than inlining repeated setters.
-3. Verify it compiles: `dotnet build AI_Interface.sln` (XAML errors surface as `AVLN` diagnostics) —
+3. Verify it compiles: `dotnet build Carnelian.sln` (XAML errors surface as `AVLN` diagnostics) —
    keep it **0 warnings / 0 errors**.
 4. When practical, run the app (`dotnet run --project src/AI_Interface`) to eyeball the result; a live
    Ollama server isn't required just to see layout. Note anything you couldn't visually verify.

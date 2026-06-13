@@ -122,6 +122,6 @@ UI-bound state may only change on the UI thread.
 - Call `RequestScroll()` after appending streamed text so the transcript follows along.
 
 ## Verify
-`dotnet build AI_Interface.sln` must stay at 0 warnings / 0 errors, then run the app and exercise the
-new mode (see the `run-app` skill). Note: a running instance locks `AI_Interface.exe` on Windows — stop
-it (`Stop-Process -Name AI_Interface -Force`) before rebuilding.
+`dotnet build Carnelian.sln` must stay at 0 warnings / 0 errors, then run the app and exercise the
+new mode (see the `run-app` skill). Note: a running instance locks `Carnelian.exe` on Windows — stop
+it (`Stop-Process -Name Carnelian -Force`) before rebuilding.

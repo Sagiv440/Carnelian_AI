@@ -8,12 +8,12 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/app-logo.ico</ApplicationIcon>
-    <AssemblyName>AI_Interface</AssemblyName>
+    <!-- Output is Carnelian.exe. The C# namespace (RootNamespace) and the %APPDATA%/AI_Interface data folder
+         deliberately stay "AI_Interface" so existing saved settings/chats/agents aren't orphaned. -->
+    <AssemblyName>Carnelian</AssemblyName>
     <RootNamespace>AI_Interface</RootNamespace>
     <!-- App version: stamps the assembly + published binary and is shown in the UI (sidebar + launcher). -->
     <Version>1.0.2</Version>
-    <!-- Display name (file properties / About). The technical AssemblyName stays AI_Interface (exe filename,
-         app-data folder, build scripts) to avoid breaking tooling and orphaning saved settings. -->
     <Product>Carnelian</Product>
     <AssemblyTitle>Carnelian</AssemblyTitle>
     <!-- Trimming is disabled: it breaks reflection-based XAML/JSON. Enable selectively if needed. -->

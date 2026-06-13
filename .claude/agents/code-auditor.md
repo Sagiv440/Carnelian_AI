@@ -37,7 +37,7 @@ files plus their immediate collaborators.
    patterns/styles (e.g. `ConfirmWindow`, `HttpDownloads`, the `*Installer` shape) instead of re-deriving.
 
 ## Verify, don't just read
-Run `dotnet build AI_Interface.sln -v quiet -nologo` and confirm 0 warnings / 0 errors. If a test
+Run `dotnet build Carnelian.sln -v quiet -nologo` and confirm 0 warnings / 0 errors. If a test
 project exists, run it. Report what you actually ran and its result.
 
 ## Output format (this is your return value — make it directly actionable)

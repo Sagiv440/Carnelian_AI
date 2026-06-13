@@ -64,6 +64,6 @@
 
     <Application.Styles>
         <FluentTheme />
-        <StyleInclude Source="avares://AI_Interface/Styles/ControlStyles.axaml"/>
+        <StyleInclude Source="avares://Carnelian/Styles/ControlStyles.axaml"/>
     </Application.Styles>
 </Application>

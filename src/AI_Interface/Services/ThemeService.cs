@@ -19,7 +19,7 @@ public sealed class ThemeService : IThemeService
     public const string FontSizeKey = "AppFontSize";
 
     /// <summary>avares URI of the embedded Poppins font (selectable, but no longer the default).</summary>
-    private const string PoppinsUri = "avares://AI_Interface/Assets/Fonts#Poppins";
+    private const string PoppinsUri = "avares://Carnelian/Assets/Fonts#Poppins";
 
     public void Apply(AppSettings settings)
     {

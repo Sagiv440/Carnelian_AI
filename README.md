@@ -101,7 +101,7 @@ models appear in the same picker once you add a key under **Web Models**.
 Self-contained, single-file builds (no .NET install needed on the target machine):
 
 ```bash
-# Windows  ->  publish/win-x64/AI_Interface.exe
+# Windows  ->  publish/win-x64/Carnelian.exe
 pwsh ./build/publish-windows.ps1
 
 # Linux    ->  publish/linux-x64/AI_Interface
@@ -110,8 +110,8 @@ pwsh ./build/publish-windows.ps1
 
 Either script also cross-publishes from the other OS — the .NET SDK can target both RIDs.
 
-> On Windows a running instance locks `AI_Interface.exe`, so a rebuild's copy step fails while the app
-> is open. Stop it first: `Stop-Process -Name AI_Interface -Force`.
+> On Windows a running instance locks `Carnelian.exe`, so a rebuild's copy step fails while the app
+> is open. Stop it first: `Stop-Process -Name Carnelian -Force`.
 
 ## Using it
 

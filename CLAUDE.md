@@ -26,21 +26,21 @@ browser, and automatic language-matched voice selection; composer 🔊 *Auto-rea
 
 ```bash
 # Build / run (from repo root)
-dotnet build AI_Interface.sln
+dotnet build Carnelian.sln
 dotnet run --project src/AI_Interface
 
 # Publish self-contained single-file binaries
-pwsh ./build/publish-windows.ps1     # -> publish/win-x64/AI_Interface.exe
+pwsh ./build/publish-windows.ps1     # -> publish/win-x64/Carnelian.exe
 ./build/publish-linux.sh             # -> publish/linux-x64/AI_Interface
 ```
 
-Tests live in `tests/AI_Interface.Tests` (xUnit; `dotnet test AI_Interface.sln`) and cover the I/O-free
+Tests live in `tests/AI_Interface.Tests` (xUnit; `dotnet test Carnelian.sln`) and cover the I/O-free
 logic (pure helpers exposed via `InternalsVisibleTo`). To run the app end-to-end you need Ollama running
 locally (`ollama serve`) with at least one model pulled (`ollama pull llama3`); the Project agent needs a
 **tool-calling-capable** model (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`).
 
-> On Windows a running instance locks `AI_Interface.exe`, so a rebuild's final copy step fails while the
-> app is open. Stop it first: `Stop-Process -Name AI_Interface -Force`.
+> On Windows a running instance locks `Carnelian.exe`, so a rebuild's final copy step fails while the
+> app is open. Stop it first: `Stop-Process -Name Carnelian -Force`.
 
 ## Project skills (`.claude/skills/`)
 
