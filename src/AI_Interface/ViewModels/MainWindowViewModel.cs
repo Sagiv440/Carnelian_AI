@@ -2182,7 +2182,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private async Task SaveResearchToPdf(MessageViewModel? msg)
+    private Task SaveResearchToPdf(MessageViewModel? msg) => SaveResearchDocument(msg, "pdf");
+
+    [RelayCommand]
+    private Task SaveResearchToDocx(MessageViewModel? msg) => SaveResearchDocument(msg, "docx");
+
+    /// <summary>Renders a (research) reply + its Sources to <c>~/Documents/research/</c> as a PDF or Word
+    /// document, then opens it in the OS default app.</summary>
+    private async Task SaveResearchDocument(MessageViewModel? msg, string format)
     {
         if (msg is null) return;
         try
@@ -2196,10 +2203,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 sb.AppendLine("## Sources");
                 sb.AppendLine();
                 foreach (var s in msg.Sources)
-                {
-                    sb.AppendLine($"- **{s.Title}**");
-                    sb.AppendLine($"  {s.Url}");
-                }
+                    sb.AppendLine($"- [{s.Title}]({s.Url})");
             }
 
             var docsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -2207,15 +2211,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             Directory.CreateDirectory(researchFolder);
 
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss");
-            var filePath = Path.Combine(researchFolder, $"research-{timestamp}.pdf");
+            var filePath = Path.Combine(researchFolder, $"research-{timestamp}.{format}");
+            var content = sb.ToString();
 
-            await Task.Run(() => _docs.CreatePdf(filePath, sb.ToString()));
+            await Task.Run(() =>
+            {
+                if (format == "docx")
+                    _docs.CreateWord(filePath, content);
+                else
+                    _docs.CreatePdf(filePath, content);
+            });
 
             StatusText = $"Saved → {filePath}";
+            ShellOpenFile(filePath); // open in the OS default app
         }
         catch (Exception ex)
         {
-            StatusText = $"PDF save failed: {ex.Message}";
+            StatusText = $"Document save failed: {ex.Message}";
         }
     }
 

@@ -15,7 +15,14 @@ public enum SegmentKind
     Bullet,
     Numbered,
     Divider,
-    Code
+    Code,
+    Table
+}
+
+/// <summary>A parsed Markdown table: a header row plus body rows, all padded to the same column count.</summary>
+public sealed record TableData(IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows)
+{
+    public int ColumnCount => Header.Count;
 }
 
 /// <summary>
@@ -38,6 +45,9 @@ public sealed partial class MessageSegment : ObservableObject
     [ObservableProperty]
     private string _text;
 
+    // A table re-parses from Text, so a streamed table that grows row-by-row refreshes its grid.
+    partial void OnTextChanged(string value) => OnPropertyChanged(nameof(Table));
+
     public MessageSegment(SegmentKind kind, string text, string language = "", string marker = "")
     {
         Kind = kind;
@@ -51,6 +61,10 @@ public sealed partial class MessageSegment : ObservableObject
     public bool IsHeading => Kind is SegmentKind.Heading1 or SegmentKind.Heading2 or SegmentKind.Heading3;
     public bool IsListItem => Kind is SegmentKind.Bullet or SegmentKind.Numbered;
     public bool IsDivider => Kind == SegmentKind.Divider;
+    public bool IsTable => Kind == SegmentKind.Table;
+
+    /// <summary>The parsed table (header + rows) for a <see cref="SegmentKind.Table"/> block; else null.</summary>
+    public TableData? Table => Kind == SegmentKind.Table ? MarkdownSegmenter.ParseTable(Text) : null;
 
     /// <summary>Font size for a heading block (largest for H1); the base size for everything else.</summary>
     public double HeadingFontSize => Kind switch
@@ -101,8 +115,9 @@ internal static class MarkdownSegmenter
             code.Clear();
         }
 
-        foreach (var line in lines)
+        for (var li = 0; li < lines.Length; li++)
         {
+            var line = lines[li];
             var trimmedStart = line.TrimStart();
 
             // Fenced code: everything between ``` lines is verbatim.
@@ -136,6 +151,25 @@ internal static class MarkdownSegmenter
             if (trimmed.Length == 0)
             {
                 FlushParagraph();
+                continue;
+            }
+
+            // GFM table: a header row ("| a | b |") immediately followed by a separator ("|---|---|").
+            // Consume the header + separator + all following pipe rows as one Table block.
+            if (trimmed.Contains('|') && li + 1 < lines.Length && IsTableSeparator(lines[li + 1]))
+            {
+                FlushParagraph();
+                var table = new StringBuilder();
+                table.Append(line).Append('\n');
+                table.Append(lines[++li]).Append('\n'); // separator
+                while (li + 1 < lines.Length)
+                {
+                    var next = lines[li + 1];
+                    if (next.Trim().Length == 0 || !next.Contains('|'))
+                        break;
+                    table.Append(lines[++li]).Append('\n');
+                }
+                parts.Add(new Part(SegmentKind.Table, table.ToString().TrimEnd('\n')));
                 continue;
             }
 
@@ -234,5 +268,83 @@ internal static class MarkdownSegmenter
         marker = line[..digits] + ".";
         text = line[(digits + 2)..].Trim();
         return true;
+    }
+
+    /// <summary>True for a GFM table separator row: cells of dashes with optional leading/trailing colons
+    /// (alignment), e.g. <c>|---|:--:|--:|</c>. Requires at least one cell and one dash per cell.</summary>
+    internal static bool IsTableSeparator(string line)
+    {
+        var trimmed = line.Trim();
+        if (!trimmed.Contains('|'))
+            return false;
+
+        var cells = SplitCells(trimmed);
+        if (cells.Count == 0)
+            return false;
+
+        foreach (var raw in cells)
+        {
+            var c = raw.Trim();
+            if (c.Length == 0)
+                return false;
+            var i = 0;
+            if (c[i] == ':') i++;
+            var dashStart = i;
+            while (i < c.Length && c[i] == '-') i++;
+            if (i == dashStart) return false;          // need at least one dash
+            if (i < c.Length && c[i] == ':') i++;
+            if (i != c.Length) return false;            // trailing junk
+        }
+        return true;
+    }
+
+    /// <summary>Splits a table row into trimmed cell texts, dropping the outer leading/trailing pipes.</summary>
+    internal static List<string> SplitCells(string line)
+    {
+        var t = line.Trim();
+        if (t.StartsWith('|')) t = t[1..];
+        if (t.EndsWith('|')) t = t[..^1];
+        var cells = new List<string>();
+        foreach (var c in t.Split('|'))
+            cells.Add(c.Trim());
+        return cells;
+    }
+
+    /// <summary>Parses a raw table block (header line, separator line, then body rows) into a
+    /// <see cref="TableData"/> with every row padded to the widest column count.</summary>
+    internal static TableData ParseTable(string raw)
+    {
+        var header = new List<string>();
+        var rows = new List<IReadOnlyList<string>>();
+        var sepSeen = false;
+
+        foreach (var line in raw.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
+        {
+            if (line.Trim().Length == 0)
+                continue;
+            if (!sepSeen && IsTableSeparator(line))
+            {
+                sepSeen = true;
+                continue;
+            }
+            var cells = SplitCells(line);
+            if (header.Count == 0 && !sepSeen)
+                header.AddRange(cells);
+            else
+                rows.Add(cells);
+        }
+
+        var cols = header.Count;
+        foreach (var r in rows)
+            cols = System.Math.Max(cols, r.Count);
+
+        return new TableData(Pad(header, cols), rows.ConvertAll(r => (IReadOnlyList<string>)Pad(new List<string>(r), cols)));
+    }
+
+    private static List<string> Pad(List<string> cells, int cols)
+    {
+        while (cells.Count < cols)
+            cells.Add("");
+        return cells;
     }
 }

@@ -6,8 +6,11 @@
     <LangVersion>latest</LangVersion>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest Condition="'$(OS)' == 'Windows_NT'">app.manifest</ApplicationManifest>
-    <!-- .NET 10 on Linux uses OS-specific RID host packages that aren't on nuget.org yet; dotnet run works fine without the native host -->
-    <UseAppHost Condition="'$(OS)' != 'Windows_NT'">false</UseAppHost>
+    <!-- .NET 10 on Linux uses OS-specific RID host packages that aren't on nuget.org yet; dotnet run works
+         fine without the native host. Only suppress it for plain build/run — a self-contained single-file
+         publish (-r linux-x64) needs the apphost to produce the native Carnelian binary, and that RID's
+         host pack IS available. -->
+    <UseAppHost Condition="'$(OS)' != 'Windows_NT' AND '$(SelfContained)' != 'true'">false</UseAppHost>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/app-logo.ico</ApplicationIcon>
     <!-- Output is Carnelian.exe. The C# namespace (RootNamespace) and the %APPDATA%/AI_Interface data folder
@@ -15,7 +18,7 @@
     <AssemblyName>Carnelian</AssemblyName>
     <RootNamespace>AI_Interface</RootNamespace>
     <!-- App version: stamps the assembly + published binary and is shown in the UI (sidebar + launcher). -->
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Product>Carnelian</Product>
     <AssemblyTitle>Carnelian</AssemblyTitle>
     <!-- Trimming is disabled: it breaks reflection-based XAML/JSON. Enable selectively if needed. -->

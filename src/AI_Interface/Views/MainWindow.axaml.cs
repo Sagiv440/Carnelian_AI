@@ -325,6 +325,19 @@ public partial class MainWindow : Window
             _vm.RerunPromptCommand.Execute(message);
     }
 
+    // "Save document" dropdown — the flyout MenuItem inherits the row's MessageViewModel as DataContext.
+    private void OnSaveResearchPdf(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is MessageViewModel message)
+            _vm?.SaveResearchToPdfCommand.Execute(message);
+    }
+
+    private void OnSaveResearchDocx(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is MessageViewModel message)
+            _vm?.SaveResearchToDocxCommand.Execute(message);
+    }
+
     private void OnSpeakMessage(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: MessageViewModel message } && _vm is not null)
