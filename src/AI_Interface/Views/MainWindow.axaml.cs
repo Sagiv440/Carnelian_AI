@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using AI_Interface.Models;
 using AI_Interface.Services;
@@ -29,6 +30,15 @@ public partial class MainWindow : Window
         // Tunnel route: we must see Enter before TextBox's own bubble-phase handler inserts a
         // newline (AcceptsReturn="True") and marks the event handled, which would skip us.
         InputBox.AddHandler(InputElement.KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
+        // Auto-detect RTL: flip the composer's flow direction when the user starts typing in Hebrew/Arabic/etc.
+        InputBox.TextChanged += OnInputBoxTextChanged;
+    }
+
+    private void OnInputBoxTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        InputBox.FlowDirection = RtlHelper.IsRtl(InputBox.Text)
+            ? FlowDirection.RightToLeft
+            : FlowDirection.LeftToRight;
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
