@@ -297,7 +297,7 @@ public sealed class DocumentService : IDocumentService
             var rtl = IsRtl(plain);
 
             var runProps = new W.RunProperties();
-            if (bold) runProps.Append(new W.Bold());
+            if (bold) AddBold(runProps);
             if (rtl) runProps.Append(new W.RightToLeftText());
 
             var run = new W.Run(runProps, new W.Text(plain) { Space = SpaceProcessingModeValues.Preserve });
@@ -315,9 +315,9 @@ public sealed class DocumentService : IDocumentService
         var runProps = new W.RunProperties();
         switch (kind)
         {
-            case Block.Heading1: runProps.Append(new W.Bold(), new W.FontSize { Val = "36" }); break; // 18pt
-            case Block.Heading2: runProps.Append(new W.Bold(), new W.FontSize { Val = "30" }); break; // 15pt
-            case Block.Heading3: runProps.Append(new W.Bold(), new W.FontSize { Val = "26" }); break; // 13pt
+            case Block.Heading1: AddBold(runProps); AddSize(runProps, "36"); break; // 18pt
+            case Block.Heading2: AddBold(runProps); AddSize(runProps, "30"); break; // 15pt
+            case Block.Heading3: AddBold(runProps); AddSize(runProps, "26"); break; // 13pt
         }
         if (rtl) runProps.Append(new W.RightToLeftText());
 
@@ -326,13 +326,17 @@ public sealed class DocumentService : IDocumentService
         return new W.Paragraph(RtlParagraphProperties(rtl), run);
     }
 
-    /// <summary>Paragraph properties marking a right-to-left paragraph (bidi + right alignment) for RTL text,
-    /// or an empty (omitted) set for LTR. Word needs <c>bidi</c> so bullets/numbers/punctuation sit on the
-    /// correct side.</summary>
+    // Bold/size must be set with their complex-script twins (bCs/szCs) too, or Word/LibreOffice won't
+    // apply them to Hebrew/Arabic (complex-script) text — only to Latin runs.
+    private static void AddBold(W.RunProperties rp) => rp.Append(new W.Bold(), new W.BoldComplexScript());
+    private static void AddSize(W.RunProperties rp, string halfPoints) =>
+        rp.Append(new W.FontSize { Val = halfPoints }, new W.FontSizeComplexScript { Val = halfPoints });
+
+    /// <summary>Paragraph properties for an RTL paragraph: <c>bidi</c> alone (its default "start" alignment is
+    /// the right edge for RTL — adding <c>jc=right</c> would flip it back to the left under bidi). LTR gets an
+    /// empty set.</summary>
     private static W.ParagraphProperties RtlParagraphProperties(bool rtl) =>
-        rtl
-            ? new W.ParagraphProperties(new W.BiDi(), new W.Justification { Val = W.JustificationValues.Right })
-            : new W.ParagraphProperties();
+        rtl ? new W.ParagraphProperties(new W.BiDi()) : new W.ParagraphProperties();
 
     // ---- PDF -------------------------------------------------------------------------------
 
@@ -346,26 +350,25 @@ public sealed class DocumentService : IDocumentService
             {
                 page.Size(PageSizes.A4);
                 page.Margin(40);
-                // Fallback → the bundled Unicode font so Hebrew/Cyrillic/… render (not tofu); DirectionAuto
-                // lays out each line by its own base direction (RTL lines align/order right-to-left).
-                page.DefaultTextStyle(t => t
-                    .FontSize(11)
-                    .Fallback(f => f.FontFamily(FallbackFontFamily))
-                    .DirectionAuto());
+                // Fallback → the bundled Unicode font so Hebrew/Cyrillic/… render (not tofu).
+                page.DefaultTextStyle(t => t.FontSize(11).Fallback(f => f.FontFamily(FallbackFontFamily)));
                 page.Content().Column(col =>
                 {
                     col.Spacing(5);
                     foreach (var (kind, text) in blocks)
                     {
+                        if (kind == Block.Blank) { col.Item().Height(6); continue; }
+                        if (kind == Block.Table) { col.Item().PaddingVertical(4).Element(e => RenderTable(e, text)); continue; }
+
+                        // RTL blocks flow right-to-left (right-aligned + correct marker/punctuation side).
+                        var item = IsRtl(text) ? col.Item().ContentFromRightToLeft() : col.Item();
                         switch (kind)
                         {
-                            case Block.Blank: col.Item().Height(6); break;
-                            case Block.Heading1: col.Item().Text(StripInline(text)).FontSize(20).Bold(); break;
-                            case Block.Heading2: col.Item().Text(StripInline(text)).FontSize(16).Bold(); break;
-                            case Block.Heading3: col.Item().Text(StripInline(text)).FontSize(13).Bold(); break;
-                            case Block.Bullet: col.Item().Text(t => { t.Span("•  "); RenderInline(t, text); }); break;
-                            case Block.Table: col.Item().PaddingVertical(4).Element(e => RenderTable(e, text)); break;
-                            default: col.Item().Text(t => RenderInline(t, text)); break;
+                            case Block.Heading1: item.Text(StripInline(text)).FontSize(20).Bold(); break;
+                            case Block.Heading2: item.Text(StripInline(text)).FontSize(16).Bold(); break;
+                            case Block.Heading3: item.Text(StripInline(text)).FontSize(13).Bold(); break;
+                            case Block.Bullet: item.Text(t => { t.Span("•  "); RenderInline(t, text); }); break;
+                            default: item.Text(t => RenderInline(t, text)); break;
                         }
                     }
                 });
@@ -427,6 +430,10 @@ public sealed class DocumentService : IDocumentService
         var cols = header.Count;
         foreach (var r in rows) cols = Math.Max(cols, r.Count);
         if (cols == 0) return;
+
+        // RTL tables flow right-to-left: columns mirror and cell text right-aligns (matches the DOCX bidiVisual).
+        if (header.Any(IsRtl) || rows.Any(r => r.Any(IsRtl)))
+            container = container.ContentFromRightToLeft();
 
         container.Table(table =>
         {
