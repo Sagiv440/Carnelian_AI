@@ -3,6 +3,36 @@
 All notable user-facing changes to **Carnelian** (formerly "AI Interface").
 Versioning is informal; entries are grouped as Added / Changed / Fixed.
 
+## [1.0.3] — 2026-06-16 — "Deep Search & Save"
+
+Headline: richer document export (tables, hyperlinks, RTL/non-English), a one-click
+local SearXNG, a more resilient Deep Research, and a clipboard that pastes nicely.
+
+### Added
+- **Save a research report as a document.** A **Save document ▾** dropdown next to the
+  Deep Research sources offers **Save to PDF** / **Save to DOCX** → `~/Documents/research/`,
+  opened automatically after saving.
+- **Markdown tables.** Tables render as a real bordered grid in the transcript (theme-aware,
+  readable in dark mode) and as real tables in PDF/Word export. A per-table **📋 Copy table**
+  button copies a *real* table to the clipboard — HTML for Word/Google Docs/LibreOffice, TSV
+  for Excel/Sheets.
+- **One-click local SearXNG.** Settings → Web Search → **Install** / **Remove** buttons set up
+  (or tear down) a local SearXNG search instance via Docker, with the JSON API pre-configured.
+- **Right-to-left language support.** Hebrew/Arabic/… text is laid out right-to-left in the
+  composer and replies, and exports correctly: PDF embeds a Unicode fallback font (so non-Latin
+  scripts render instead of boxes) and right-aligns RTL content; DOCX marks paragraphs/tables RTL.
+
+### Changed
+- **Copy gives clean text.** The message **Copy** button now copies plain text with the markdown
+  symbols removed (`**`, `` ` ``, `#`, …), matching the document export — instead of raw markup.
+- **Document export polish.** PDF/Word now render `[label](url)` and bare URLs as clickable
+  hyperlinks and strip leftover formatting symbols (`#` headings, `[n]` citation markers).
+
+### Fixed
+- **Deep Research no longer fails mid-search.** A single failing or timed-out search query / page
+  fetch is now skipped (best-effort) instead of aborting the whole research run.
+- **Chat-log delete button.** The list's scrollbar no longer overlaps the ✕ that deletes a saved chat.
+
 ## [1.0.2] — 2026-06-13
 
 Everything new since the **1.0.0** build. Headline: the app was renamed to

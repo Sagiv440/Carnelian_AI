@@ -34,8 +34,13 @@ agent scoped to a project directory.
   for extra tools, resources, and prompts.
 - **Persistent memory** — global + per-project facts injected into every mode.
 - **Voice** — read replies aloud with a one-click local Piper TTS engine.
+- **Document export** — save a research report or any reply to **PDF / DOCX**
+  (clickable links, real tables, right-to-left/non-English scripts), or copy a
+  table to paste straight into Word, Google Docs, or Excel.
+- **Search providers** — DuckDuckGo out of the box, plus Brave / Tavily / Google,
+  or **one-click install a local SearXNG** instance (Docker).
 - **Extras** — per-prompt Thinking toggle, hardware-aware model recommender,
-  full Markdown rendering, image/document attachments, and Office-doc generation.
+  full Markdown rendering (tables, code, RTL), and image/document attachments.
 
 ## Quick Start
 ### Setup
@@ -66,7 +71,7 @@ agent scoped to a project directory.
 
 ## Build and run
 
-Requires the [.NET 9 SDK](https://dotnet.microsoft.com/download).
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```bash
 dotnet build Carnelian.sln

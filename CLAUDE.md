@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A cross-platform (Windows + Linux) Avalonia desktop app that runs AI locally through a local
 [Ollama](https://ollama.com) server, and optionally through cloud providers (OpenAI/ChatGPT,
-Google Gemini, Anthropic/Claude). .NET 9, MVVM via CommunityToolkit.Mvvm.
+Google Gemini, Anthropic/Claude). .NET 10, MVVM via CommunityToolkit.Mvvm.
 
 Four operating modes (`AppMode`), chosen from the sidebar / composer rather than a single picker:
 - **Chat** — talk to the model directly.
@@ -560,7 +560,29 @@ with inline Download/Remove and a "Downloaded" filter.
 - Scroll-to-bottom is signalled via the `ScrollToEndRequested` event, handled in `MainWindow.axaml.cs`.
 
 **Web scraping** (`WebSearchService`): keyless DuckDuckGo HTML endpoint + HtmlAgilityPack. `NormalizeUrl`
-unwraps `//duckduckgo.com/l/?uddg=…` links. The injected `HttpClient` has a desktop User-Agent.
+unwraps `//duckduckgo.com/l/?uddg=…` links. The injected `HttpClient` has a desktop User-Agent. Each
+provider returns an empty list on a transport error/timeout rather than throwing; and **Deep Research is
+best-effort per item** — `DeepResearchService` wraps each per-query search and per-page fetch in try/catch,
+so one failed/timed-out request is skipped (a genuine user-cancel still aborts), not fatal to the run.
+
+**Local SearXNG (one-click, Docker)** (`ISearxngInstaller`/`SearxngInstaller`, mirrors `IOllamaInstaller`).
+Settings → Web Search, when the **SearXNG** provider is selected, shows **Install** / **Remove** buttons.
+Install shells `docker run searxng/searxng` on `localhost:8888`, writing a `settings.yml` that enables the
+**JSON API** (`search.formats: [html, json]`) + disables the limiter (both required for `?format=json`),
+then fills in the URL; Remove drops the container/image/config. Docker is the prerequisite (a missing
+`docker` surfaces a clear message). Pure helpers (`RunArgs`, `BuildSettingsYaml`) are unit-tested; DI
+registers `AddSingleton<ISearxngInstaller, SearxngInstaller>` and a `DesignSearxngInstaller` stub. The
+two confirm/run commands live on `SettingsViewModel` (mirroring the Ollama install plumbing).
+
+**Document export** (`IDocumentService`/`DocumentService`: Word via OpenXML, PDF via QuestPDF). Renders
+light-markdown content — headings, bullets, fenced code, **GFM tables**, inline emphasis, and `[label](url)`
+/ bare-URL **hyperlinks** (clickable in the PDF, real `<w:tbl>` in Word). It **strips formatting symbols**
+(`**`, `` ` ``, `~~`, ATX `#`, numeric `[n]` citations) so output is clean prose. **Non-Latin / RTL:** a
+bundled broad-coverage font (`Resources/DejaVuSans.ttf`) is registered with QuestPDF as a glyph **fallback**
+so Hebrew/Cyrillic/… render instead of tofu; RTL blocks use `ContentFromRightToLeft` (PDF) / `w:bidi` +
+`bCs`/`szCs` complex-script run props (Word) so they right-align with mirrored table columns. Used by the
+**Project agent's** doc tools and by Deep Research's composer **"Save document ▾"** dropdown (Save to PDF /
+Save to DOCX → `~/Documents/research/…`, opened after save).
 
 **Attachments** (`AttachmentService`): images → base64 (vision models); documents → `ExtractTextAsync`
 (PDF via PdfPig, DOCX/ODT via their zip XML, everything else read as plain text), injected into the
@@ -740,7 +762,24 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   per-block 📋 copy (`OnCopyCode`). The code body is a wrapping `SelectableTextBlock` that **sizes to its
   content** — no inner `ScrollViewer` (one under-measured the text height and clipped the last lines); long
   code just makes a taller message and the transcript scrolls. The raw `Text` is still the source of truth
-  for copy/persist/speak.
+  for persist/speak.
+- **Markdown tables** (`SegmentKind.Table`). The segmenter detects a `| … |` header row followed by a
+  `|---|---|` separator and consumes the whole block; `MessageSegment.Table` parses it to a `TableData`
+  (header + padded rows, via `MarkdownSegmenter.ParseTable`/`SplitCells`/`IsTableSeparator`, unit-tested).
+  The `Behaviors/MarkdownTable` attached property builds an Avalonia `Grid` (bold header on a surface fill,
+  hairline borders) — brushes are bound to **resource observables** so dark mode is readable and tracks the
+  theme. A per-table **📋 Copy table** button (`OnCopyTable`) puts a real table on the clipboard via Avalonia
+  12's `DataTransfer` API: **HTML** (`text/html` + Windows `HTML Format` CF_HTML) for Word/Docs/LibreOffice
+  + **TSV** for Excel/Sheets (the pure `TableExport.ToHtml`/`ToTsv`/`WrapCfHtml`, unit-tested).
+- **Copy a message as clean text.** The message **📋 Copy** button (`OnCopyMessage`) copies `MarkdownPlainText.Render(Text)`
+  — markdown markers stripped (bold/italic/code/links → text, `#` dropped, bullets → "• ", code without
+  fences, tables → TSV) — reusing the tested `MarkdownSegmenter` + `InlineMarkdown`. (Per-table copy still
+  copies a real table; the message copy is for pasting prose.)
+- **RTL input/replies.** `ViewModels/RtlHelper.IsRtl` (first strong directional char) flips the composer and
+  each prose `SelectableTextBlock`/list `Grid` to `FlowDirection.RightToLeft` for Hebrew/Arabic/… — applied
+  in code (`Behaviors/MarkdownText.ApplyFlowDirection`, composer `TextChanged`), **not** XAML bindings, since
+  a `FlowDirection` binding's change notification interferes with Avalonia 12's `SelectableTextBlock` inline
+  rendering.
 - **Inline Markdown in prose.** Within each non-code block, inline formatting is rendered — `**bold**`,
   `*italic*`, `***both***`, `` `code` ``, `~~strikethrough~~`, clickable `[text](url)` links, and
   **auto-linked bare URLs** (`https://…`, trailing sentence punctuation excluded) — instead of showing the
@@ -791,5 +830,8 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
 - **Design-time stubs** in `ViewModels/DesignTimeServices.cs` back the parameterless VM constructors so
   the XAML previewer works. If you add a service dependency to a container-resolved VM, add a matching
   stub (and update the VM's design-time constructor).
-- The target framework is **net9.0** — the Avalonia template defaults to net10.0, which this SDK
-  can't build, so don't let it revert.
+- The target framework is **net10.0**. On Linux, plain `dotnet build`/`dotnet run` set
+  `UseAppHost=false` (the distro-specific RID host pack isn't on nuget.org) — but a **self-contained
+  single-file publish** (`-r linux-x64`) re-enables the apphost via the condition
+  `'$(OS)' != 'Windows_NT' AND '$(SelfContained)' != 'true'`, so the native `Carnelian` binary is still
+  produced. Don't drop that condition.

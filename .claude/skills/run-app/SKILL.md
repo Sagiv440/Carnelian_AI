@@ -41,8 +41,8 @@ Cloud models (ChatGPT / Gemini / Claude) also appear in the picker once you add 
 
 ## Notes
 
-- A clean build is expected (`dotnet build Carnelian.sln` → 0 warnings/errors). If the build fails
-  with a net10.0 targeting error, the csproj's `TargetFramework` was reverted — it must stay `net9.0`.
+- A clean build is expected (`dotnet build Carnelian.sln` → 0 warnings/errors). The target framework is
+  **net10.0**; needs the .NET 10 SDK.
 - On Windows a running instance locks `Carnelian.exe`, so a rebuild fails at the copy step while the
   app is open. Stop it first: `Stop-Process -Name Carnelian -Force`.
 - Web Search and Deep Research additionally require internet access (DuckDuckGo + page fetches).
