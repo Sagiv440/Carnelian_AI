@@ -286,3 +286,11 @@ internal sealed class DesignAgentService : IAgentService
     public void SaveCustom(Agent agent, string? projectDir) { }
     public void DeleteCustom(string id, string? projectDir) { }
 }
+
+internal sealed class DesignDocumentService : IDocumentService
+{
+    public int CreateWord(string fullPath, string content) => 0;
+    public int AppendWord(string fullPath, string content) => 0;
+    public int ReplaceInWord(string fullPath, string find, string replace) => 0;
+    public int CreatePdf(string fullPath, string content) => 0;
+}

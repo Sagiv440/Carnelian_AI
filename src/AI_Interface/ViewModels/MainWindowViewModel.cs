@@ -42,6 +42,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly IOllamaInstaller _ollamaInstaller;
     private readonly IPiperInstaller _piperInstaller;
     private readonly IUsageTracker _usage;
+    private readonly IDocumentService _docs;
 
     /// <summary>Fallback when no Ollama URL is configured (matches the AppSettings default).</summary>
     private const string DefaultOllamaUrl = "http://localhost:11434";
@@ -435,7 +436,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         IOllamaClient ollama,
         IOllamaInstaller ollamaInstaller,
         IPiperInstaller piperInstaller,
-        IUsageTracker usage)
+        IUsageTracker usage,
+        IDocumentService docs)
     {
         _router = router;
         _search = search;
@@ -455,6 +457,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _ollamaInstaller = ollamaInstaller;
         _piperInstaller = piperInstaller;
         _usage = usage;
+        _docs = docs;
         _autoSpeakEnabled = settings.Current.AutoSpeakReplies;
 
         Modes = new[]
@@ -494,7 +497,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                new DesignProjectSkillService(), new DesignProjectDocsService(),
                new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService(),
                new DesignMcpService(), new DesignOllamaClient(), new DesignOllamaInstaller(),
-               new DesignPiperInstaller(), new DesignUsageTracker())
+               new DesignPiperInstaller(), new DesignUsageTracker(), new DesignDocumentService())
     {
     }
 
@@ -2175,6 +2178,44 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         catch
         {
             // Opening a link should never crash the app.
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveResearchToPdf(MessageViewModel? msg)
+    {
+        if (msg is null) return;
+        try
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine(msg.Text);
+
+            if (msg.Sources.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Sources");
+                sb.AppendLine();
+                foreach (var s in msg.Sources)
+                {
+                    sb.AppendLine($"- **{s.Title}**");
+                    sb.AppendLine($"  {s.Url}");
+                }
+            }
+
+            var docsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var researchFolder = Path.Combine(docsFolder, "research");
+            Directory.CreateDirectory(researchFolder);
+
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss");
+            var filePath = Path.Combine(researchFolder, $"research-{timestamp}.pdf");
+
+            await Task.Run(() => _docs.CreatePdf(filePath, sb.ToString()));
+
+            StatusText = $"Saved → {filePath}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"PDF save failed: {ex.Message}";
         }
     }
 
