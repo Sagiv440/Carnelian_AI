@@ -97,6 +97,9 @@ public partial class App : Application
             client.DefaultRequestHeaders.UserAgent.ParseAdd("AI_Interface");
         });
 
+        // Local SearXNG via Docker (shells out to `docker` — no HttpClient needed).
+        services.AddSingleton<ISearxngInstaller, SearxngInstaller>();
+
         // Typed HttpClient for web search/page fetching with a desktop User-Agent.
         services.AddHttpClient<IWebSearchService, WebSearchService>(client =>
         {

@@ -821,11 +821,29 @@
                                            Text="DuckDuckGo needs no configuration — it works out of the box without an API key."/>
                             </StackPanel>
 
-                            <!-- SearXNG: instance URL -->
+                            <!-- SearXNG: instance URL + one-click local install (Docker) -->
                             <StackPanel IsVisible="{Binding IsSearxngSelected}">
                                 <TextBlock Classes="label" Text="Instance URL"/>
                                 <TextBox Text="{Binding SearxngUrl}" Width="320" HorizontalAlignment="Left"
                                          PlaceholderText="https://searx.example.org"/>
+
+                                <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
+                                           Margin="0,14,0,0"
+                                           Text="Or run SearXNG locally — installs and starts it via Docker (requires Docker), then fills in the URL above."/>
+                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0"
+                                            HorizontalAlignment="Left">
+                                    <Button Classes="cta" Content="⬇  Install SearXNG" MinWidth="150"
+                                            IsEnabled="{Binding !IsBusySearxng}"
+                                            Command="{Binding InstallSearxngCommand}"
+                                            ToolTip.Tip="Pull and start a local SearXNG container, then use it for search"/>
+                                    <Button Classes="ghost" Content="Remove" MinWidth="110"
+                                            IsEnabled="{Binding !IsBusySearxng}"
+                                            Command="{Binding RemoveSearxngCommand}"
+                                            ToolTip.Tip="Stop and remove the local SearXNG container and image"/>
+                                </StackPanel>
+                                <TextBlock Classes="label" TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
+                                           Margin="0,8,0,0" IsVisible="{Binding HasSearxngStatus}"
+                                           Text="{Binding SearxngStatus}"/>
                             </StackPanel>
 
                             <!-- Brave: API key -->

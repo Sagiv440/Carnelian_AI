@@ -23,6 +23,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly ISpeechService _speech;
     private readonly IPiperInstaller _piperInstaller;
     private readonly IOllamaInstaller _ollamaInstaller;
+    private readonly ISearxngInstaller _searxngInstaller;
     private readonly IMemoryService _memory;
     private readonly bool _loading;
 
@@ -101,6 +102,23 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Raised before installing Ollama so the view can confirm with the user.
     /// The view completes the supplied source with <c>true</c> to proceed, <c>false</c> to cancel.</summary>
     public event System.EventHandler<TaskCompletionSource<bool>>? InstallOllamaConfirmationRequested;
+
+    /// <summary>True while a SearXNG install/remove is running (disables both buttons).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallSearxngCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSearxngCommand))]
+    private bool _isBusySearxng;
+
+    /// <summary>Live status of the last SearXNG install/remove (shown under the buttons).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSearxngStatus))]
+    private string _searxngStatus = "";
+
+    public bool HasSearxngStatus => !string.IsNullOrEmpty(SearxngStatus);
+
+    /// <summary>Raised before installing/removing SearXNG so the view can confirm (Docker software).</summary>
+    public event System.EventHandler<TaskCompletionSource<bool>>? InstallSearxngConfirmationRequested;
+    public event System.EventHandler<TaskCompletionSource<bool>>? RemoveSearxngConfirmationRequested;
 
     /// <summary>Raised when the view should open the Model Config window.</summary>
     public event System.EventHandler? ModelConfigRequested;
@@ -410,7 +428,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public SettingsViewModel(
         ISettingsService settings, IThemeService theme, IModelRouter router, IOllamaClient ollama,
         ISpeechService speech, AgentsViewModel agentsPanel, McpViewModel mcpPanel, IMemoryService memory,
-        IPiperInstaller piperInstaller, IOllamaInstaller ollamaInstaller, WebModelsViewModel webModelsPanel)
+        IPiperInstaller piperInstaller, IOllamaInstaller ollamaInstaller, ISearxngInstaller searxngInstaller,
+        WebModelsViewModel webModelsPanel)
     {
         _settings = settings;
         _theme = theme;
@@ -420,6 +439,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _memory = memory;
         _piperInstaller = piperInstaller;
         _ollamaInstaller = ollamaInstaller;
+        _searxngInstaller = searxngInstaller;
         AgentsPanel = agentsPanel;
         McpPanel = mcpPanel;
         WebModelsPanel = webModelsPanel;
@@ -462,7 +482,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         new DesignSettingsService(), new ThemeService(), new DesignModelRouter(), new DesignOllamaClient(),
         new DesignSpeechService(), new AgentsViewModel(),
         new McpViewModel(), new DesignMemoryService(), new DesignPiperInstaller(), new DesignOllamaInstaller(),
-        new WebModelsViewModel())
+        new DesignSearxngInstaller(), new WebModelsViewModel())
     {
     }
 
@@ -829,6 +849,67 @@ public sealed partial class SettingsViewModel : ViewModelBase
         finally
         {
             IsInstallingOllama = false;
+        }
+    }
+
+    private bool CanRunSearxng => !IsBusySearxng;
+
+    /// <summary>Install + start a local SearXNG instance (Docker), then point the URL field at it.</summary>
+    [RelayCommand(CanExecute = nameof(CanRunSearxng))]
+    private async Task InstallSearxng()
+    {
+        if (InstallSearxngConfirmationRequested is not null)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            InstallSearxngConfirmationRequested.Invoke(this, tcs);
+            if (!await tcs.Task)
+                return;
+        }
+
+        IsBusySearxng = true;
+        var progress = new Progress<string>(s => SearxngStatus = s);
+        try
+        {
+            await _searxngInstaller.InstallAsync(progress, System.Threading.CancellationToken.None);
+            SearxngUrl = _searxngInstaller.LocalUrl; // persists via OnSearxngUrlChanged
+        }
+        catch (Exception ex)
+        {
+            SearxngStatus = $"Install failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusySearxng = false;
+        }
+    }
+
+    /// <summary>Stop and remove the local SearXNG container/image, and clear the URL field.</summary>
+    [RelayCommand(CanExecute = nameof(CanRunSearxng))]
+    private async Task RemoveSearxng()
+    {
+        if (RemoveSearxngConfirmationRequested is not null)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            RemoveSearxngConfirmationRequested.Invoke(this, tcs);
+            if (!await tcs.Task)
+                return;
+        }
+
+        IsBusySearxng = true;
+        var progress = new Progress<string>(s => SearxngStatus = s);
+        try
+        {
+            await _searxngInstaller.RemoveAsync(progress, System.Threading.CancellationToken.None);
+            if (string.Equals(SearxngUrl.Trim(), _searxngInstaller.LocalUrl, StringComparison.OrdinalIgnoreCase))
+                SearxngUrl = ""; // only clear it if it still points at our managed instance
+        }
+        catch (Exception ex)
+        {
+            SearxngStatus = $"Remove failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusySearxng = false;
         }
     }
 

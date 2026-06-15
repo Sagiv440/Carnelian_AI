@@ -275,8 +275,9 @@ public partial class MainWindow : Window
 
     private async void OnCopyMessage(object? sender, RoutedEventArgs e)
     {
+        // Copy clean plain text (markdown markers stripped), like the document export — not raw symbols.
         if (sender is Button { DataContext: MessageViewModel message } && Clipboard is not null)
-            await Clipboard.SetTextAsync(message.Text);
+            await Clipboard.SetTextAsync(MarkdownPlainText.Render(message.Text));
     }
 
     // --- Project file tree: double-click opens a file; right-click context menu (see MainWindow.axaml) ---
