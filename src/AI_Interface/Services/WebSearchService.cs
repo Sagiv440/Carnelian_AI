@@ -64,7 +64,10 @@ public sealed class WebSearchService : IWebSearchService
         {
             html = await _http.GetStringAsync(url, ct).ConfigureAwait(false);
         }
-        catch (HttpRequestException)
+        // A timeout surfaces as TaskCanceledException (ct NOT requested); treat it like any transport error.
+        // A genuine user cancel (ct requested) is allowed to propagate so the run stops.
+        catch (Exception ex) when (ex is HttpRequestException ||
+                                   (ex is TaskCanceledException && !ct.IsCancellationRequested))
         {
             return Array.Empty<SearchResult>();
         }

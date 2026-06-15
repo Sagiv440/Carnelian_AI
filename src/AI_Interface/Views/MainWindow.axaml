@@ -617,7 +617,9 @@
                 </Grid>
 
                 <!-- Chat Log: all saved conversations -->
+                <!-- Right padding reserves room for the overlay scrollbar so it doesn't cover the ✕ delete button. -->
                 <ScrollViewer Grid.Row="5" HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,15,0"
                               IsVisible="{Binding !ShowProjectFiles}">
                     <ItemsControl ItemsSource="{Binding ChatLog}">
                         <ItemsControl.ItemTemplate>
@@ -1046,10 +1048,18 @@
                                                                 Background="{DynamicResource AppSurfaceBorderBrush}"/>
 
                                                         <!-- Markdown table: rendered as a bordered grid via the
-                                                             MarkdownTable attached property (not raw | pipes). -->
-                                                        <Border IsVisible="{Binding IsTable}" Margin="0,6"
-                                                                HorizontalAlignment="Left"
-                                                                beh:MarkdownTable.Source="{Binding Table}"/>
+                                                             MarkdownTable attached property (not raw | pipes),
+                                                             with a copy button that puts a real table on the
+                                                             clipboard (HTML for Word/Docs, TSV for Sheets). -->
+                                                        <StackPanel IsVisible="{Binding IsTable}" Margin="0,6"
+                                                                    HorizontalAlignment="Left">
+                                                            <Button Classes="ghost" Content="📋 Copy table"
+                                                                    FontSize="11" Padding="6,2" Margin="0,0,0,4"
+                                                                    HorizontalAlignment="Left"
+                                                                    ToolTip.Tip="Copy as a table (paste into Word, Google Docs, Excel/Sheets)"
+                                                                    Click="OnCopyTable"/>
+                                                            <Border beh:MarkdownTable.Source="{Binding Table}"/>
+                                                        </StackPanel>
 
                                                         <!-- Code / command bubble -->
                                                         <Border IsVisible="{Binding IsCode}" Classes="codeBubble">

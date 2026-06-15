@@ -53,15 +53,27 @@ public sealed class DeepResearchService : IDeepResearchService
             planClient, planModel, client, model, question, cfg.ResearchQueryCount, ct).ConfigureAwait(false);
         status.Report($"Planned {queries.Count} queries: {string.Join(" | ", queries)}");
 
-        // 2. Search each query, collecting unique results across all of them.
+        // 2. Search each query, collecting unique results across all of them. Each query is best-effort:
+        // a single failing/timed-out search must not abort the whole run — only a genuine user cancel does.
         var byUrl = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
         foreach (var query in queries)
         {
             ct.ThrowIfCancellationRequested();
             status.Report($"Searching: {query}");
-            var hits = await _search.SearchAsync(query, cfg.SearchResultsPerQuery, ct).ConfigureAwait(false);
-            foreach (var hit in hits)
-                byUrl.TryAdd(hit.Url, hit);
+            try
+            {
+                var hits = await _search.SearchAsync(query, cfg.SearchResultsPerQuery, ct).ConfigureAwait(false);
+                foreach (var hit in hits)
+                    byUrl.TryAdd(hit.Url, hit);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                status.Report($"Search failed for \"{Trim(query, 60)}\" — skipping.");
+            }
         }
 
         if (byUrl.Count == 0)
@@ -71,15 +83,27 @@ public sealed class DeepResearchService : IDeepResearchService
             return Array.Empty<SearchResult>();
         }
 
-        // 3. Read the top unique pages so the model works from full text, not just snippets.
+        // 3. Read the top unique pages so the model works from full text, not just snippets. Per-page
+        // best-effort too: an unreadable page leaves Content empty (synthesis falls back to its snippet).
         var toRead = byUrl.Values.Take(cfg.MaxPagesToRead).ToList();
         foreach (var source in toRead)
         {
             ct.ThrowIfCancellationRequested();
             status.Report($"Reading: {Trim(source.Title, 80)}");
-            source.Content = await _search
-                .FetchReadableTextAsync(source.Url, cfg.MaxCharsPerPage, ct)
-                .ConfigureAwait(false);
+            try
+            {
+                source.Content = await _search
+                    .FetchReadableTextAsync(source.Url, cfg.MaxCharsPerPage, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // Leave Content empty — the snippet is used instead.
+            }
         }
 
         // 4. Synthesize a cited answer, streamed back to the caller (in the active agent's voice).
