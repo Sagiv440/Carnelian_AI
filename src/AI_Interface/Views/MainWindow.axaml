@@ -1017,7 +1017,6 @@
                                                         <SelectableTextBlock IsVisible="{Binding IsParagraph}"
                                                                              beh:MarkdownText.Text="{Binding Text}"
                                                                              TextWrapping="Wrap"
-                                                                             FlowDirection="{Binding IsRtl, Converter={StaticResource BoolToFlowDirection}}"
                                                                              Foreground="{DynamicResource AppTextPrimary}"/>
 
                                                         <!-- Heading: larger + bold, inline Markdown still applies -->
@@ -1026,13 +1025,11 @@
                                                                              TextWrapping="Wrap" Margin="0,8,0,2"
                                                                              FontWeight="Bold"
                                                                              FontSize="{Binding HeadingFontSize}"
-                                                                             FlowDirection="{Binding IsRtl, Converter={StaticResource BoolToFlowDirection}}"
                                                                              Foreground="{DynamicResource AppTextPrimary}"/>
 
                                                         <!-- List item: a gutter marker (• / 1.) + wrapping content -->
                                                         <Grid IsVisible="{Binding IsListItem}" Margin="6,1,0,1"
-                                                              ColumnDefinitions="Auto,*"
-                                                              FlowDirection="{Binding IsRtl, Converter={StaticResource BoolToFlowDirection}}">
+                                                              ColumnDefinitions="Auto,*">
                                                             <TextBlock Grid.Column="0" Text="{Binding Marker}"
                                                                        Margin="0,0,8,0" MinWidth="16"
                                                                        TextAlignment="Right"
@@ -1104,35 +1101,35 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
-                                        <Expander Margin="0,10,0,0" IsVisible="{Binding HasSources}">
-                                            <Expander.Header>
-                                                <StackPanel Orientation="Horizontal" Spacing="10"
-                                                            x:CompileBindings="False">
-                                                    <TextBlock Text="Sources" VerticalAlignment="Center"/>
-                                                    <Button Classes="ghost" Content="Save PDF"
-                                                            FontSize="11" Padding="6,2"
-                                                            VerticalAlignment="Center"
-                                                            Command="{Binding DataContext.SaveResearchToPdfCommand,
-                                                                      RelativeSource={RelativeSource AncestorType=Window}}"
-                                                            CommandParameter="{Binding}"/>
-                                                </StackPanel>
-                                            </Expander.Header>
-                                            <ItemsControl ItemsSource="{Binding Sources}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:CompileBindings="False">
-                                                        <StackPanel Margin="0,5">
-                                                            <Button Classes="link"
-                                                                    Content="{Binding Title}"
-                                                                    CommandParameter="{Binding Url}"
-                                                                    Command="{Binding DataContext.OpenUrlCommand,
-                                                                               RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                                            <TextBlock Text="{Binding Url}" Classes="muted"
-                                                                       TextTrimming="CharacterEllipsis"/>
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </Expander>
+                                        <!-- Sources: collapsible expander + PDF export side-by-side.
+                                             The button is a sibling of the Expander (not in its Header)
+                                             so clicking "Save PDF" does not also toggle the expander. -->
+                                        <DockPanel Margin="0,10,0,0" IsVisible="{Binding HasSources}"
+                                                   x:CompileBindings="False">
+                                            <Button DockPanel.Dock="Right" Classes="ghost"
+                                                    Content="Save PDF" FontSize="11" Padding="6,2"
+                                                    VerticalAlignment="Top"
+                                                    Command="{Binding DataContext.SaveResearchToPdfCommand,
+                                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Expander Header="Sources">
+                                                <ItemsControl ItemsSource="{Binding Sources}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:CompileBindings="False">
+                                                            <StackPanel Margin="0,5">
+                                                                <Button Classes="link"
+                                                                        Content="{Binding Title}"
+                                                                        CommandParameter="{Binding Url}"
+                                                                        Command="{Binding DataContext.OpenUrlCommand,
+                                                                                   RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                <TextBlock Text="{Binding Url}" Classes="muted"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Expander>
+                                        </DockPanel>
 
                                         <!-- Proactive next-step suggestions: click a chip to drop it into the composer -->
                                         <ItemsControl ItemsSource="{Binding Suggestions}"

@@ -36,7 +36,6 @@ public sealed partial class MessageSegment : ObservableObject
     public string Marker { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsRtl))]
     private string _text;
 
     public MessageSegment(SegmentKind kind, string text, string language = "", string marker = "")
@@ -46,9 +45,6 @@ public sealed partial class MessageSegment : ObservableObject
         Language = language;
         Marker = marker;
     }
-
-    /// <summary>True when this segment's text starts with a right-to-left script (Hebrew, Arabic, etc.).</summary>
-    public bool IsRtl => RtlHelper.IsRtl(Text);
 
     public bool IsCode => Kind == SegmentKind.Code;
     public bool IsParagraph => Kind == SegmentKind.Paragraph;
