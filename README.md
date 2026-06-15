@@ -3,117 +3,50 @@
   <img src="src/AI_Interface/Assets/app-logo.png" alt="AI Interface logo" width="40" height="40" align="center" />
   Carnelian
 </h1>
-A cross-platform desktop app for running AI. It runs models <strong>locally</strong> through a local
-[Ollama](https://ollama.com) server, and can **optionally** talk to cloud providers — OpenAI (ChatGPT),
-Google Gemini, and Anthropic (Claude) — when you add an API key. Every provider's models share one
-picker, and all modes work the same regardless of which model you choose.
 
-There are four ways to work, chosen from the sidebar and the composer:
+<img src="https://github.com/Sagiv440/Carnelian_AI/blob/main/src/AI_Interface/Assets/Screenshot%202026-06-13%20225409.png?raw=true" alt="AI Interface logo" width="800" height="600" align="center" />
 
-- **Chat** — a normal conversation with the model, streamed token-by-token.
-- **Web Search** — a search-scope dropdown in the composer: runs one web search for your question and
-  answers with inline citations.
-- **Deep Research** — the model plans several search queries, the app searches the web and reads the
-  top pages, then the model synthesizes a cited report. With **Use Multiple LLMs** (Settings → Research &
-  Thinking) you can assign a separate model to each of its two AI steps — query planning and report
-  synthesis — leaving either blank to use your chat model. The synthesis model receives the fetched page
-  text, so keep it local (Ollama) if your sources are sensitive.
-- **Project** — a tool-using **agent** scoped to a project folder. It can list, read, write and delete
-  files, create folders, run terminal commands, and (when permitted) install software — all confined to
-  the project directory — to build or fix a project for you.
+A cross-platform AI harness with local and cloud providers, allowing AI to work directly
+within the confines of your projects — editing files, configuring projects, and setting up
+environments for your development and planning.
+<br/>
+<br/>
+This app started as a [Claude Code](https://claude.ai/) project for learning AI, but I find myself using it in my day-to-day life.
+And I think you might like it too.
 
-Cross-cutting extras:
+## About
 
-- **🤝 Agents** — a selectable **persona** (top-bar picker) whose voice is layered into *every* mode.
-  Each agent bundles a personality, a set of **skills**, and a **tool allow-list** (approval behaviour is
-  a single global setting, not per-agent). Five are built in (Assistant, Researcher, Code Buddy, Autopilot, and **Lead** — which
-  coordinates a team by delegating subtasks to the others), and you can create your own, globally or
-  per-project. See [Agents](#agents) below.
-- **🧩 Memory** — persistent facts the assistant recalls across sessions, in two scopes: **global**
-  (about you) and **per-project**. Stored as editable Markdown (`memory.md`) so it's portable. Say
-  *"remember …"* in chat, let the Project agent's `remember` tool save a note, and manage/forget facts in
-  Settings → AI Features → Autonomy & Memory.
-- **🧠 Thinking** — a per-prompt toggle that turns on the model's native reasoning (Ollama models). The
-  chain-of-thought is shown in a collapsible **"Thinking"** block above each answer (works with reasoning
-  models such as `qwen3` / `deepseek-r1`); its depth is set by an *Effort* slider in Settings.
-- **🔊 Voice** — read replies aloud with a free, **offline** local TTS engine ([Piper](https://github.com/rhasspy/piper)).
-  Install it in one click from **Settings → AI Features → Voice**, then **Browse voices** to download
-  voices for the languages you use. Each reply plays in a voice that matches **its language** automatically.
-  Use the per-message 🔈 button, or the composer's **🔊 Auto-read** toggle to speak every reply. No key,
-  no cloud — the text never leaves your machine.
-- **Attachments** — the composer's 📎 menu attaches images (for vision models) or documents; text is
-  extracted from PDF, DOCX, ODT and plain-text/code files and folded into the prompt.
-- **Model Config** — a hardware-aware recommender (Settings → AI Features → Models) that scans your
-  CPU/RAM and GPU/VRAM and ranks Ollama models by fit, with inline download/remove.
-- **🔌 MCP servers** — connect [Model Context Protocol](https://modelcontextprotocol.io) servers
-  (Settings → AI Features → MCP Servers) to give the **Project** agent extra tools for external services
-  (filesystem, GitHub, databases, …). Add a **local** server by the command the app should launch
-  (e.g. `npx -y @modelcontextprotocol/server-filesystem <dir>`) or a **remote** one by URL, **Test** it, and
-  its tools join the agent's toolset — each call approval-gated unless you mark the server trusted. Each
-  server has a **scope**: *Global* (all projects) or *Local* — a Local server is saved in the project's
-  `<project>/.AI/mcp.json` (the same format Claude Code uses), so it travels with the repo and loads whenever
-  the project is opened. Beyond tools,
-  a server's **resources** can be browsed and attached as context (composer 📎 → *From MCP server…*) and its
-  **prompts** appear in the composer's `/` palette.
+Carnelian is a privacy-first AI workspace. Point it at a local Ollama server and chat
+entirely offline, or add a cloud API key to mix in hosted models. It runs four modes
+from one window — direct chat, web-augmented answers, deep research, and a tool-using
+agent scoped to a project directory.
 
-Local Ollama models run entirely on your machine; cloud providers are off unless you supply a key. The
-only other network traffic is the web searches and page fetches used by Web Search and Deep Research.
+## Features
 
-Built with [Avalonia UI](https://avaloniaui.net) on .NET 9, so the same code builds and runs on both
-**Windows** and **Linux**. The UI is a flat "IDE" theme (light/dark, configurable accent and font).
+- **Four modes** — **Chat**, **Web Search** (one search injected as context),
+  **Deep Research** (plan → read → cited report), and **Project** (a sandboxed,
+  tool-using agent that reads/writes files, runs commands, and edits docs).
+- **Local or cloud** — Ollama out of the box; OpenAI, Gemini, Claude, DeepSeek,
+  Nvidia and Mistral via API key, with per-provider budget tracking.
+- **Project agents & a Lead orchestrator** — selectable personas that can delegate
+  subtasks to specialist agents, ask clarifying questions, and plan work in phases.
+- **MCP support** — connect external Model Context Protocol servers (stdio or HTTP)
+  for extra tools, resources, and prompts.
+- **Persistent memory** — global + per-project facts injected into every mode.
+- **Voice** — read replies aloud with a one-click local Piper TTS engine.
+- **Extras** — per-prompt Thinking toggle, hardware-aware model recommender,
+  full Markdown rendering, image/document attachments, and Office-doc generation.
 
-## Prerequisites
+## Quick Start
+### Setup
+1. Download the latest build [here](https://github.com/Sagiv440/Carnelian_AI/releases)
+2. Install [Ollama](https://ollama.com) and start it: `ollama serve`
+3. Pull a model: `ollama pull llama3` (the Project agent needs a tool-calling model,
+   e.g. `ollama pull llama3.1`).
+4. Run the app (see below). Cloud providers are optional — add keys in
+   **Settings → AI Model → Web Models**.
 
-1. **.NET 9 SDK** — https://dotnet.microsoft.com/download
-2. **Ollama**, running locally — https://ollama.com
-   ```bash
-   ollama serve            # starts the local server on http://localhost:11434
-   ollama pull llama3      # pull at least one model
-   ```
-   Don't have it yet? You can install it from inside the app with one click — open **Settings → AI
-   Features → Models → Local AI** and press **⬇ Download & install Ollama** (it downloads the official
-   installer, runs it, then connects). On Windows the installer may show a permission (UAC) prompt; on
-   Linux it uses the official `curl … | sh` script (needs `curl`, may ask for your password). On macOS,
-   install manually from https://ollama.com/download.
-
-   For **Project** mode, pull a tool-calling-capable model (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`).
-   For the **Thinking** block to populate, use a reasoning model (e.g. `qwen3`, `deepseek-r1`).
-3. **(Optional) Cloud API keys** — to use OpenAI, Gemini or Anthropic models instead of (or alongside)
-   Ollama, add the provider's key under **Settings → AI Features → Models → Web Models**. Without a key
-   a provider simply contributes nothing to the model picker; the app stays fully usable on local
-   models alone.
-
-## Run from source
-
-```bash
-dotnet run --project src/AI_Interface
-```
-
-The app connects to `http://localhost:11434` by default and loads your installed models into the
-**model picker at the top-right** (each entry is tagged with its provider). To point it at a different
-Ollama instance, open **Settings → AI Features → Models → Local AI**, set the server URL (or use *Quick
-setup*), and click **Connect** (or *Test connection* to just probe it). If Ollama isn't installed yet,
-**⬇ Download & install Ollama** on the same tab fetches and sets it up for you, then connects. Cloud
-models appear in the same picker once you add a key under **Web Models**.
-
-## Build a distributable app
-
-Self-contained, single-file builds (no .NET install needed on the target machine):
-
-```bash
-# Windows  ->  publish/win-x64/Carnelian.exe
-pwsh ./build/publish-windows.ps1
-
-# Linux    ->  publish/linux-x64/AI_Interface
-./build/publish-linux.sh
-```
-
-Either script also cross-publishes from the other OS — the .NET SDK can target both RIDs.
-
-> On Windows a running instance locks `Carnelian.exe`, so a rebuild's copy step fails while the app
-> is open. Stop it first: `Stop-Process -Name Carnelian -Force`.
-
-## Using it
+### Start Using
 
 - **Pick a model** from the dropdown at the top-right; the dot beside it shows connection status. **Pick
   an agent** from the picker next to it — agent and model are independent.
@@ -131,6 +64,30 @@ Either script also cross-publishes from the other OS — the .NET SDK can target
     *Autonomy & Memory*, *Web Search*, *Voice*, *Research & Thinking* (research depth, the **Use Multiple
     LLMs** planning/synthesis model pickers, and Thinking effort).
 
+## Build and run
+
+Requires the [.NET 9 SDK](https://dotnet.microsoft.com/download).
+
+```bash
+dotnet build Carnelian.sln
+dotnet run --project src/AI_Interface
+```
+
+Self-contained, single-file binaries (no .NET install needed on the target):
+
+### Linux
+
+```bash
+./build/publish-linux.sh        # -> publish/linux-x64/AI_Interface
+```
+
+Optional packaging: `build/packaging/deb/build-deb.sh` (.deb) and `build/flatpak/` (Flatpak).
+
+### Windows
+
+```powershell
+pwsh ./build/publish-windows.ps1   # -> publish/win-x64/Carnelian.exe
+```
 ## Agents
 
 An **agent** is a reusable profile that shapes how the assistant behaves in every mode — it bundles a
@@ -239,4 +196,16 @@ src/AI_Interface/
 build/           Publish scripts for Windows and Linux
 ```
 
-See [CLAUDE.md](CLAUDE.md) for architecture details.
+
+## Acknowledgements
+
+Carnelian builds on these excellent projects:
+
+- [Ollama](https://ollama.com) — local model runtime
+- [Avalonia](https://avaloniaui.net) — cross-platform .NET UI framework
+- [Piper](https://github.com/rhasspy/piper) — local neural text-to-speech
+- [Model Context Protocol](https://modelcontextprotocol.io) — external tool/resource standard
+
+## License
+
+Licensed under the [GNU General Public License v3.0](LICENSE).

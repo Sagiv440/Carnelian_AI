@@ -47,6 +47,7 @@ public static class MarkdownText
         {
             if (!string.IsNullOrEmpty(text))
                 inlines.Add(new Run(text));
+            ApplyFlowDirection(tb, text);
             return;
         }
 
@@ -82,6 +83,26 @@ public static class MarkdownText
             }
             inlines.Add(run);
         }
+
+        ApplyFlowDirection(tb, text);
+    }
+
+    /// <summary>
+    /// Sets <see cref="TextBlock.FlowDirection"/> (and the parent <see cref="Grid"/>'s direction for
+    /// list items) based on the first strong directional character in the text. Keeping this inside the
+    /// behavior avoids a separate XAML binding that would fire <see cref="Avalonia.AvaloniaProperty"/>
+    /// change notifications and interfere with Inline rendering on Avalonia 12's SelectableTextBlock.
+    /// </summary>
+    private static void ApplyFlowDirection(TextBlock tb, string? text)
+    {
+        var dir = ViewModels.RtlHelper.IsRtl(text)
+            ? FlowDirection.RightToLeft
+            : FlowDirection.LeftToRight;
+        tb.FlowDirection = dir;
+        // List-item SelectableTextBlock lives inside a two-column Grid (bullet + text).
+        // Setting the Grid's direction flips the bullet marker to the correct side for RTL.
+        if (tb.Parent is Grid g)
+            g.FlowDirection = dir;
     }
 
     /// <summary>A clickable, accent-coloured, underlined link hosted in the text flow.</summary>

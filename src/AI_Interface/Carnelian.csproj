@@ -1,11 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(OS)' == 'Windows_NT'">app.manifest</ApplicationManifest>
+    <!-- .NET 10 on Linux uses OS-specific RID host packages that aren't on nuget.org yet; dotnet run works
+         fine without the native host. Only suppress it for plain build/run — a self-contained single-file
+         publish (-r linux-x64) needs the apphost to produce the native Carnelian binary, and that RID's
+         host pack IS available. -->
+    <UseAppHost Condition="'$(OS)' != 'Windows_NT' AND '$(SelfContained)' != 'true'">false</UseAppHost>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/app-logo.ico</ApplicationIcon>
     <!-- Output is Carnelian.exe. The C# namespace (RootNamespace) and the %APPDATA%/AI_Interface data folder
@@ -13,7 +18,7 @@
     <AssemblyName>Carnelian</AssemblyName>
     <RootNamespace>AI_Interface</RootNamespace>
     <!-- App version: stamps the assembly + published binary and is shown in the UI (sidebar + launcher). -->
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Product>Carnelian</Product>
     <AssemblyTitle>Carnelian</AssemblyTitle>
     <!-- Trimming is disabled: it breaks reflection-based XAML/JSON. Enable selectively if needed. -->
@@ -35,8 +40,8 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.72" />
     <PackageReference Include="PdfPig" Version="0.1.14" />
     <PackageReference Include="ModelContextProtocol.Core" Version="1.4.0" />

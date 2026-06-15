@@ -21,6 +21,7 @@
     <Window.Resources>
         <conv:PathToBitmapConverter x:Key="PathToBitmap"/>
         <conv:ProviderTagConverter x:Key="ProviderTag"/>
+        <conv:BoolToFlowDirectionConverter x:Key="BoolToFlowDirection"/>
 
         <!-- One row of a structured activity feed: a tool call (caret · icon · title · target · status,
              expandable to its result) or the model's interim narration (a muted note). Shared by the
@@ -616,7 +617,9 @@
                 </Grid>
 
                 <!-- Chat Log: all saved conversations -->
+                <!-- Right padding reserves room for the overlay scrollbar so it doesn't cover the ✕ delete button. -->
                 <ScrollViewer Grid.Row="5" HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,15,0"
                               IsVisible="{Binding !ShowProjectFiles}">
                     <!-- Right margin reserves a gutter for the Fluent overlay scrollbar, which otherwise
                          floats over the per-row ✕ delete button (Grid.Column=1) and eats the click. -->
@@ -1046,6 +1049,20 @@
                                                                 HorizontalAlignment="Stretch"
                                                                 Background="{DynamicResource AppSurfaceBorderBrush}"/>
 
+                                                        <!-- Markdown table: rendered as a bordered grid via the
+                                                             MarkdownTable attached property (not raw | pipes),
+                                                             with a copy button that puts a real table on the
+                                                             clipboard (HTML for Word/Docs, TSV for Sheets). -->
+                                                        <StackPanel IsVisible="{Binding IsTable}" Margin="0,6"
+                                                                    HorizontalAlignment="Left">
+                                                            <Button Classes="ghost" Content="📋 Copy table"
+                                                                    FontSize="11" Padding="6,2" Margin="0,0,0,4"
+                                                                    HorizontalAlignment="Left"
+                                                                    ToolTip.Tip="Copy as a table (paste into Word, Google Docs, Excel/Sheets)"
+                                                                    Click="OnCopyTable"/>
+                                                            <Border beh:MarkdownTable.Source="{Binding Table}"/>
+                                                        </StackPanel>
+
                                                         <!-- Code / command bubble -->
                                                         <Border IsVisible="{Binding IsCode}" Classes="codeBubble">
                                                             <Grid RowDefinitions="Auto,Auto">
@@ -1102,23 +1119,42 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
-                                        <Expander Margin="0,10,0,0" IsVisible="{Binding HasSources}" Header="Sources">
-                                            <ItemsControl ItemsSource="{Binding Sources}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:CompileBindings="False">
-                                                        <StackPanel Margin="0,5">
-                                                            <Button Classes="link"
-                                                                    Content="{Binding Title}"
-                                                                    CommandParameter="{Binding Url}"
-                                                                    Command="{Binding DataContext.OpenUrlCommand,
-                                                                               RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                                            <TextBlock Text="{Binding Url}" Classes="muted"
-                                                                       TextTrimming="CharacterEllipsis"/>
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </Expander>
+                                        <!-- Sources: collapsible expander + Save document dropdown side-by-side.
+                                             The button is a sibling of the Expander (not in its Header)
+                                             so clicking it does not also toggle the expander. -->
+                                        <DockPanel Margin="0,10,0,0" IsVisible="{Binding HasSources}"
+                                                   x:CompileBindings="False">
+                                            <Button DockPanel.Dock="Right" Classes="ghost"
+                                                    Content="Save document ▾" FontSize="11" Padding="6,2"
+                                                    VerticalAlignment="Top">
+                                                <!-- Click handlers (not Command bindings): a flyout is a popup,
+                                                     so RelativeSource can't reach the window VM — the code-behind
+                                                     reads the row's MessageViewModel from the item's DataContext. -->
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="Save to PDF" Click="OnSaveResearchPdf"/>
+                                                        <MenuItem Header="Save to DOCX" Click="OnSaveResearchDocx"/>
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                            <Expander Header="Sources">
+                                                <ItemsControl ItemsSource="{Binding Sources}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:CompileBindings="False">
+                                                            <StackPanel Margin="0,5">
+                                                                <Button Classes="link"
+                                                                        Content="{Binding Title}"
+                                                                        CommandParameter="{Binding Url}"
+                                                                        Command="{Binding DataContext.OpenUrlCommand,
+                                                                                   RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                <TextBlock Text="{Binding Url}" Classes="muted"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Expander>
+                                        </DockPanel>
 
                                         <!-- Proactive next-step suggestions: click a chip to drop it into the composer -->
                                         <ItemsControl ItemsSource="{Binding Suggestions}"

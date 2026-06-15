@@ -42,6 +42,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly IOllamaInstaller _ollamaInstaller;
     private readonly IPiperInstaller _piperInstaller;
     private readonly IUsageTracker _usage;
+    private readonly IDocumentService _docs;
 
     /// <summary>Fallback when no Ollama URL is configured (matches the AppSettings default).</summary>
     private const string DefaultOllamaUrl = "http://localhost:11434";
@@ -435,7 +436,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         IOllamaClient ollama,
         IOllamaInstaller ollamaInstaller,
         IPiperInstaller piperInstaller,
-        IUsageTracker usage)
+        IUsageTracker usage,
+        IDocumentService docs)
     {
         _router = router;
         _search = search;
@@ -455,6 +457,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _ollamaInstaller = ollamaInstaller;
         _piperInstaller = piperInstaller;
         _usage = usage;
+        _docs = docs;
         _autoSpeakEnabled = settings.Current.AutoSpeakReplies;
 
         Modes = new[]
@@ -494,7 +497,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                new DesignProjectSkillService(), new DesignProjectDocsService(),
                new DesignSpeechService(), new DesignAgentService(), new DesignMemoryService(),
                new DesignMcpService(), new DesignOllamaClient(), new DesignOllamaInstaller(),
-               new DesignPiperInstaller(), new DesignUsageTracker())
+               new DesignPiperInstaller(), new DesignUsageTracker(), new DesignDocumentService())
     {
     }
 
@@ -2175,6 +2178,56 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         catch
         {
             // Opening a link should never crash the app.
+        }
+    }
+
+    [RelayCommand]
+    private Task SaveResearchToPdf(MessageViewModel? msg) => SaveResearchDocument(msg, "pdf");
+
+    [RelayCommand]
+    private Task SaveResearchToDocx(MessageViewModel? msg) => SaveResearchDocument(msg, "docx");
+
+    /// <summary>Renders a (research) reply + its Sources to <c>~/Documents/research/</c> as a PDF or Word
+    /// document, then opens it in the OS default app.</summary>
+    private async Task SaveResearchDocument(MessageViewModel? msg, string format)
+    {
+        if (msg is null) return;
+        try
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine(msg.Text);
+
+            if (msg.Sources.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Sources");
+                sb.AppendLine();
+                foreach (var s in msg.Sources)
+                    sb.AppendLine($"- [{s.Title}]({s.Url})");
+            }
+
+            var docsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var researchFolder = Path.Combine(docsFolder, "research");
+            Directory.CreateDirectory(researchFolder);
+
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss");
+            var filePath = Path.Combine(researchFolder, $"research-{timestamp}.{format}");
+            var content = sb.ToString();
+
+            await Task.Run(() =>
+            {
+                if (format == "docx")
+                    _docs.CreateWord(filePath, content);
+                else
+                    _docs.CreatePdf(filePath, content);
+            });
+
+            StatusText = $"Saved → {filePath}";
+            ShellOpenFile(filePath); // open in the OS default app
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Document save failed: {ex.Message}";
         }
     }
 

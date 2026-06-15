@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using AI_Interface.Models;
 using AI_Interface.Services;
@@ -29,6 +30,15 @@ public partial class MainWindow : Window
         // Tunnel route: we must see Enter before TextBox's own bubble-phase handler inserts a
         // newline (AcceptsReturn="True") and marks the event handled, which would skip us.
         InputBox.AddHandler(InputElement.KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
+        // Auto-detect RTL: flip the composer's flow direction when the user starts typing in Hebrew/Arabic/etc.
+        InputBox.TextChanged += OnInputBoxTextChanged;
+    }
+
+    private void OnInputBoxTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        InputBox.FlowDirection = RtlHelper.IsRtl(InputBox.Text)
+            ? FlowDirection.RightToLeft
+            : FlowDirection.LeftToRight;
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
@@ -309,10 +319,42 @@ public partial class MainWindow : Window
             await Clipboard.SetTextAsync(segment.Text);
     }
 
+    // Copy a table so it pastes as a real table: HTML (Word/Docs/LibreOffice) + TSV plain-text (Excel/Sheets,
+    // and the fallback for plain editors). Both Windows ("HTML Format" CF_HTML) and X11 ("text/html") system
+    // formats are set so the receiving app can pick whichever it understands.
+    private async void OnCopyTable(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not MessageSegment { Table: { } table } || Clipboard is null)
+            return;
+
+        var html = TableExport.ToHtml(table);
+        var item = new DataTransferItem();
+        item.SetText(TableExport.ToTsv(table));
+        item.Set(DataFormat.CreateStringPlatformFormat("text/html"), html);
+        item.Set(DataFormat.CreateStringPlatformFormat("HTML Format"), TableExport.WrapCfHtml(html));
+
+        var transfer = new DataTransfer();
+        transfer.Add(item);
+        await Clipboard.SetDataAsync(transfer);
+    }
+
     private void OnRerunMessage(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: MessageViewModel message } && _vm is not null)
             _vm.RerunPromptCommand.Execute(message);
+    }
+
+    // "Save document" dropdown — the flyout MenuItem inherits the row's MessageViewModel as DataContext.
+    private void OnSaveResearchPdf(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is MessageViewModel message)
+            _vm?.SaveResearchToPdfCommand.Execute(message);
+    }
+
+    private void OnSaveResearchDocx(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is MessageViewModel message)
+            _vm?.SaveResearchToDocxCommand.Execute(message);
     }
 
     private void OnSpeakMessage(object? sender, RoutedEventArgs e)

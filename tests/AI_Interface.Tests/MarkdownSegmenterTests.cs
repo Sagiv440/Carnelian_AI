@@ -103,4 +103,57 @@ public sealed class MarkdownSegmenterTests
         Assert.Empty(MarkdownSegmenter.Parse(null));
         Assert.Empty(MarkdownSegmenter.Parse(""));
     }
+
+    [Fact]
+    public void Table_HeaderPlusSeparator_BecomesOneTableBlock()
+    {
+        var md = "| Source | Hydration |\n|--------|-----------|\n| Mary Berry | 65% |\n| Ooni | 60% |";
+        var part = Single(md);
+        Assert.Equal(SegmentKind.Table, part.Kind);
+
+        var table = MarkdownSegmenter.ParseTable(part.Text);
+        Assert.Equal(new[] { "Source", "Hydration" }, table.Header);
+        Assert.Equal(2, table.Rows.Count);
+        Assert.Equal(new[] { "Mary Berry", "65%" }, table.Rows[0]);
+        Assert.Equal(new[] { "Ooni", "60%" }, table.Rows[1]);
+    }
+
+    [Fact]
+    public void Table_AlignmentColons_AreAccepted_AndShortRowsPad()
+    {
+        var md = "| A | B | C |\n| :--- | :---: | ---: |\n| 1 | 2 |";
+        var part = Single(md);
+        Assert.Equal(SegmentKind.Table, part.Kind);
+
+        var table = MarkdownSegmenter.ParseTable(part.Text);
+        Assert.Equal(3, table.ColumnCount);
+        Assert.Equal(new[] { "1", "2", "" }, table.Rows[0]); // padded to 3 columns
+    }
+
+    [Fact]
+    public void PipeLine_WithoutSeparator_IsJustAParagraph()
+    {
+        var part = Single("| not | a table |\nsome prose");
+        Assert.Equal(SegmentKind.Paragraph, part.Kind);
+    }
+
+    [Fact]
+    public void Table_SurroundedByProse_SplitsCleanly()
+    {
+        var md = "Before.\n\n| H1 | H2 |\n|----|----|\n| a | b |\n\nAfter.";
+        var parts = MarkdownSegmenter.Parse(md);
+        Assert.Collection(parts,
+            p => { Assert.Equal(SegmentKind.Paragraph, p.Kind); Assert.Equal("Before.", p.Text); },
+            p => Assert.Equal(SegmentKind.Table, p.Kind),
+            p => { Assert.Equal(SegmentKind.Paragraph, p.Kind); Assert.Equal("After.", p.Text); });
+    }
+
+    [Fact]
+    public void IsTableSeparator_DistinguishesRules()
+    {
+        Assert.True(MarkdownSegmenter.IsTableSeparator("|---|---|"));
+        Assert.True(MarkdownSegmenter.IsTableSeparator("| :-- | --: |"));
+        Assert.False(MarkdownSegmenter.IsTableSeparator("---"));          // no pipes → horizontal rule
+        Assert.False(MarkdownSegmenter.IsTableSeparator("| a | b |"));    // text cells, not dashes
+    }
 }

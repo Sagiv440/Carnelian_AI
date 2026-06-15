@@ -11,7 +11,7 @@ set -euo pipefail
 
 APP_ID="io.github.Sagiv440.Carnelian"
 PKG="carnelian"
-VERSION="1.0.2"
+VERSION="1.0.3"
 ARCH="amd64"
 MAINT="Sagiv Reuben <moshe@kiro-inc.com>"
 
