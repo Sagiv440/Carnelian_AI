@@ -146,6 +146,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private bool _autoSpeakEnabled;
 
+    /// <summary>When on (composer 🌐 toggle, Chat mode only), the model may autonomously search the web while
+    /// answering a local-chat prompt. Persisted to <see cref="AppSettings.ChatWebSearchEnabled"/>.</summary>
+    [ObservableProperty]
+    private bool _chatWebSearchEnabled;
+
+    /// <summary>The composer 🌐 toggle shows only in local Chat (not Web/Deep/Project — those have their own
+    /// web behaviour).</summary>
+    public bool ShowChatWebToggle => !HasActiveProject && SelectedMode.Mode == AppMode.Chat;
+
     /// <summary>True when a voice is set up — gates the composer's Auto-read toggle's visibility.</summary>
     public bool IsVoiceConfigured => _speech.IsConfigured;
 
@@ -346,6 +355,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(HasActiveProject))]
     [NotifyPropertyChangedFor(nameof(ActiveProjectName))]
     [NotifyPropertyChangedFor(nameof(ActiveProjectDirectory))]
+    [NotifyPropertyChangedFor(nameof(ShowChatWebToggle))]
     private Project? _activeProject;
 
     public bool HasActiveProject => ActiveProject is not null;
@@ -459,6 +469,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _usage = usage;
         _docs = docs;
         _autoSpeakEnabled = settings.Current.AutoSpeakReplies;
+        _chatWebSearchEnabled = settings.Current.ChatWebSearchEnabled;
 
         Modes = new[]
         {
@@ -710,12 +721,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         set { if (value is not null) SetMode(value.Mode); }
     }
 
-    partial void OnSelectedModeChanged(ModeOption value) =>
+    partial void OnSelectedModeChanged(ModeOption value)
+    {
         OnPropertyChanged(nameof(SelectedSearchMode));
+        OnPropertyChanged(nameof(ShowChatWebToggle));
+    }
 
     partial void OnAutoSpeakEnabledChanged(bool value)
     {
         _settings.Current.AutoSpeakReplies = value;
+        _settings.Save();
+    }
+
+    partial void OnChatWebSearchEnabledChanged(bool value)
+    {
+        _settings.Current.ChatWebSearchEnabled = value;
         _settings.Save();
     }
 
@@ -948,6 +968,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     private async Task RunChatAsync(IChatClient client, string model, MessageViewModel assistant, CancellationToken ct)
     {
         var history = BuildChatHistory(assistant);
+
+        // Web toggle on (local Chat only): let the model autonomously search the web before answering.
+        // First resolve any searches it requests via a tool-calling loop (results appended to the
+        // conversation), then stream the final answer over that augmented history.
+        List<SearchResult>? sources = null;
+        if (ChatWebSearchEnabled)
+            sources = await ResolveChatWebSearchesAsync(client, model, history, ct);
+
         var raw = new StringBuilder();
         // No ConfigureAwait(false): stream deltas must apply on the UI thread.
         await foreach (var delta in client.ChatStreamAsync(model, history, ThinkingEnabled, ct))
@@ -955,7 +983,92 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             ApplyStreamDelta(assistant, raw, delta);
             RequestScroll();
         }
+
+        if (sources is { Count: > 0 })
+            assistant.SetSources(sources);
     }
+
+    /// <summary>
+    /// Lets the model decide whether to web-search before answering a local-chat prompt: a tool-calling loop
+    /// that runs each requested <c>web_search</c>, appends the results to <paramref name="history"/>, and
+    /// repeats (capped). Returns the unique sources gathered (for the message's Sources list). A model that
+    /// can't call tools just returns no tool calls — the loop ends and the normal answer streams.
+    /// </summary>
+    private async Task<List<SearchResult>> ResolveChatWebSearchesAsync(
+        IChatClient client, string model, List<ChatMessage> history, CancellationToken ct)
+    {
+        const int maxRounds = 3;
+        var tools = new[] { ProjectAgentService.WebSearchTool() };
+        var byUrl = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
+
+        for (var round = 0; round < maxRounds; round++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            AgentTurn turn;
+            try { turn = await client.ChatWithToolsAsync(model, history, tools, ct); }
+            catch (OperationCanceledException) { throw; }
+            catch { break; } // tool-calling unsupported/failed → fall through and just answer normally
+
+            if (turn.ToolCalls.Count == 0)
+                break; // nothing to search (or done searching) — ready to answer
+
+            history.Add(new ChatMessage(ChatRole.Assistant, turn.Content) { ToolCalls = turn.ToolCalls });
+
+            foreach (var call in turn.ToolCalls)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!string.Equals(call.Name, "web_search", StringComparison.Ordinal))
+                {
+                    history.Add(new ChatMessage(ChatRole.Tool, $"Unknown tool '{call.Name}'.") { ToolName = call.Name });
+                    continue;
+                }
+
+                var query = ReadStringArg(call.Arguments, "query");
+                StatusText = string.IsNullOrWhiteSpace(query) ? "Searching the web…" : $"Searching the web: {query}";
+                var (text, results) = await ChatWebSearchAsync(query, ct);
+                foreach (var r in results)
+                    byUrl[r.Url] = r;
+                history.Add(new ChatMessage(ChatRole.Tool, text) { ToolName = "web_search" });
+            }
+        }
+
+        return byUrl.Values.ToList();
+    }
+
+    /// <summary>One web search for the chat tool loop: returns (model-facing text, raw results for Sources).</summary>
+    private async Task<(string Text, IReadOnlyList<SearchResult> Results)> ChatWebSearchAsync(string query, CancellationToken ct)
+    {
+        query = (query ?? "").Trim();
+        if (query.Length == 0)
+            return ("Provide a non-empty 'query'.", Array.Empty<SearchResult>());
+
+        IReadOnlyList<SearchResult> results;
+        try { results = await _search.SearchAsync(query, _settings.Current.SearchResultsPerQuery, ct); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { return ($"Error: web search failed — {ex.Message}", Array.Empty<SearchResult>()); }
+
+        if (results.Count == 0)
+            return ($"No web results for '{query}'.", results);
+
+        var sb = new StringBuilder();
+        var i = 1;
+        foreach (var r in results)
+        {
+            sb.Append(i++).Append(". ").AppendLine(r.Title);
+            sb.Append("   ").AppendLine(r.Url);
+            if (!string.IsNullOrWhiteSpace(r.Snippet))
+                sb.Append("   ").AppendLine(r.Snippet.Trim());
+        }
+        return (sb.ToString().TrimEnd(), results);
+    }
+
+    private static string ReadStringArg(System.Text.Json.JsonElement args, string name) =>
+        args.ValueKind == System.Text.Json.JsonValueKind.Object
+        && args.TryGetProperty(name, out var v)
+        && v.ValueKind == System.Text.Json.JsonValueKind.String
+            ? (v.GetString() ?? "")
+            : "";
 
     /// <summary>
     /// Accumulates a streamed reply and re-splits it into the visible answer and the model's hidden

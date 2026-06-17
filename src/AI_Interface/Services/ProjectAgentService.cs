@@ -1401,6 +1401,23 @@ public sealed class ProjectAgentService : IProjectAgentService
         return $"Copied {Rel(project, src)} → {Rel(project, dst)}.";
     }
 
+    /// <summary>The shared <c>web_search</c> tool definition — offered to the Project agent and, when the
+    /// composer's web toggle is on, to local Chat. Kept here so both paths advertise an identical tool.</summary>
+    internal static AgentTool WebSearchTool() => new(
+        "web_search",
+        "Search the web for current information (docs, news, error messages, API/syntax) when you don't " +
+        "already know the answer or it may be out of date. Returns the top results as title + url + snippet.",
+        JsonSerializer.SerializeToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                query = new { type = "string", description = "The web search query." },
+                max = new { type = "integer", description = "How many results to return (1–10, default 5)." }
+            },
+            required = new[] { "query" }
+        }));
+
     /// <summary>Searches the web via the shared <see cref="IWebSearchService"/>; formats the top results.</summary>
     private async Task<string> WebSearchAsync(string? query, string? maxRaw, CancellationToken ct)
     {
@@ -1816,19 +1833,7 @@ public sealed class ProjectAgentService : IProjectAgentService
 
         // web_search: a read-only network tool (reuses the app's web-search service). Not a file/command
         // tool, so it isn't gated by the allow-list — any agent may look things up while it works.
-        tools.Add(new AgentTool("web_search",
-            "Search the web for current information while working (docs, error messages, API/syntax). Returns " +
-            "the top results as title + url + snippet. Use it when project files don't have the answer.",
-            Schema(new
-            {
-                type = "object",
-                properties = new
-                {
-                    query = new { type = "string", description = "The web search query." },
-                    max = new { type = "integer", description = "How many results to return (1–10, default 5)." }
-                },
-                required = new[] { "query" }
-            })));
+        tools.Add(WebSearchTool());
 
         // update_plan: a UI-only plan/checklist the agent maintains (no file/command side effects), so it's
         // ungated like web_search. The agent resends the full list each call (flat steps or named phases).
