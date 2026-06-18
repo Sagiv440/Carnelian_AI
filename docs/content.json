@@ -1,0 +1,115 @@
+{
+  "site": {
+    "title": "Carnelian Docs",
+    "version": "v1.0.4",
+    "tagline": "Documentation for the local-first AI workspace."
+  },
+  "pages": [
+    {
+      "id": "getting-started",
+      "group": "Overview",
+      "title": "Getting Started",
+      "summary": "Install Carnelian and run your first local chat.",
+      "sections": [
+        { "type": "p", "text": "Carnelian is a cross-platform desktop app that runs AI **locally** through [Ollama](https://ollama.com), and optionally through cloud providers you configure. This page gets you from zero to your first reply." },
+        { "type": "h2", "text": "1. Install Ollama" },
+        { "type": "p", "text": "Carnelian needs a local Ollama server with at least one model pulled. You can install Ollama in one click from inside the app (Settings → Models → Local AI), or set it up yourself:" },
+        { "type": "code", "lang": "bash", "text": "ollama serve\nollama pull llama3.1" },
+        { "type": "note", "text": "The Project agent needs a tool-calling-capable model, e.g. `llama3.1`, `qwen2.5`, or `mistral-nemo`." },
+        { "type": "h2", "text": "2. Get Carnelian" },
+        { "type": "p", "text": "Download a self-contained build for Windows or Linux from the [releases page](https://github.com/Sagiv440/Carnelian_AI/releases), or build from source:" },
+        { "type": "code", "lang": "bash", "text": "git clone https://github.com/Sagiv440/Carnelian_AI\ndotnet run --project src/AI_Interface" },
+        { "type": "h2", "text": "3. Pick a model and chat" },
+        { "type": "p", "text": "TODO: walk through the model picker, the connection indicator, and sending a first message." }
+      ]
+    },
+    {
+      "id": "modes",
+      "group": "Overview",
+      "title": "The Four Modes",
+      "summary": "Chat, Web Search, Deep Research, and Project.",
+      "sections": [
+        { "type": "p", "text": "Carnelian has four operating modes, chosen from the sidebar and composer rather than a single picker. Every mode is provider-agnostic — pick any model and it just works." },
+        { "type": "h2", "text": "Chat" },
+        { "type": "p", "text": "TODO: a normal streamed conversation with the model, fully local with Ollama." },
+        { "type": "h2", "text": "Web Search" },
+        { "type": "p", "text": "TODO: the per-prompt 🌐 toggle injects one live search as context, then answers with citations." },
+        { "type": "h2", "text": "Deep Research" },
+        { "type": "p", "text": "TODO: plan queries → read pages → synthesize a cited report. Optionally split planning and synthesis across models." },
+        { "type": "h2", "text": "Project" },
+        { "type": "p", "text": "TODO: a sandboxed, tool-using agent scoped to a project directory. See the [Project Agent](#project-agent) page." }
+      ]
+    },
+    {
+      "id": "agents",
+      "group": "Features",
+      "title": "Agents & Personas",
+      "summary": "Selectable personas with skills and tool allow-lists.",
+      "sections": [
+        { "type": "p", "text": "An agent is a selectable persona whose voice is layered into every mode's system prompt. Carnelian ships five built-ins and lets you author your own, globally or per-project." },
+        { "type": "ul", "items": [
+          "**Assistant** — TODO",
+          "**Researcher** — TODO",
+          "**Code Buddy** — TODO",
+          "**Autopilot** — TODO",
+          "**Lead** — the orchestrator that delegates subtasks to specialists in Project mode."
+        ] },
+        { "type": "h2", "text": "Creating an agent" },
+        { "type": "p", "text": "TODO: Settings → AI Features → Agents. Name, glyph, persona, default model, tool permissions, skills." }
+      ]
+    },
+    {
+      "id": "project-agent",
+      "group": "Features",
+      "title": "Project Agent",
+      "summary": "A tool-using agent that builds inside your projects.",
+      "sections": [
+        { "type": "p", "text": "Point the Project agent at a folder and give it a goal. It plans, reads, edits files, runs commands, and (when allowed) installs — all confined to the project directory, under approval rules you set." },
+        { "type": "h2", "text": "Approval modes" },
+        { "type": "ul", "items": [
+          "**Confirm everything** — TODO",
+          "**Confirm destructive** — TODO",
+          "**Auto-run** — TODO"
+        ] },
+        { "type": "h2", "text": "The Lead orchestrator" },
+        { "type": "p", "text": "TODO: how the Lead breaks a goal into subtasks and delegates each to a specialist agent." }
+      ]
+    },
+    {
+      "id": "memory",
+      "group": "Features",
+      "title": "Memory",
+      "summary": "Persistent facts recalled across sessions.",
+      "sections": [
+        { "type": "p", "text": "TODO: global and per-project memory, stored as portable Markdown and injected into every mode." }
+      ]
+    },
+    {
+      "id": "mcp",
+      "group": "Features",
+      "title": "MCP Servers",
+      "summary": "Extend the agent with Model Context Protocol tools.",
+      "sections": [
+        { "type": "p", "text": "TODO: connect MCP servers (stdio or HTTP) to give the Project agent external tools, resources, and prompts. Global or saved with the project in `.AI/mcp.json`." }
+      ]
+    },
+    {
+      "id": "voice",
+      "group": "Features",
+      "title": "Voice",
+      "summary": "Read replies aloud with offline Piper TTS.",
+      "sections": [
+        { "type": "p", "text": "TODO: one-click Piper install, the voice-catalog browser, language-matched voices, and the composer 🔊 Auto-read toggle." }
+      ]
+    },
+    {
+      "id": "privacy",
+      "group": "Reference",
+      "title": "Privacy",
+      "summary": "What stays on your machine, and what doesn't.",
+      "sections": [
+        { "type": "p", "text": "TODO: local models never leave your machine; cloud is off until you provide a key; no telemetry." }
+      ]
+    }
+  ]
+}
