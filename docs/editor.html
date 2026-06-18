@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Carnelian Docs — Content Editor</title>
+<link rel="icon" href="../app-logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#1c1d20; --bg2:#161719; --titlebar:#21272d;
+  --surface:#25262b; --surface2:#2c2d33; --input:#2a2b30;
+  --line:rgba(255,255,255,.085); --line2:rgba(255,255,255,.16);
+  --text:#e9e9ec; --dim:#abaeb4; --mute:#7c7f86;
+  --accent:#f2542d; --accent2:#ff6a44; --green:#3fb950; --danger:#f1664a;
+  --ui:'Poppins',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
+  --r:4px;
+}
+body.light{
+  --bg:#f3f3f5; --bg2:#e9e9ec; --titlebar:#e4e4e7;
+  --surface:#ffffff; --surface2:#f0f0f2; --input:#ffffff;
+  --line:rgba(0,0,0,.1); --line2:rgba(0,0,0,.18);
+  --text:#1c1d20; --dim:#52555c; --mute:#80838a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--ui);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+::selection{background:var(--accent);color:#fff}
+
+/* ---- Header ---- */
+header{display:flex;align-items:center;gap:8px;padding:0 16px;height:56px;background:var(--titlebar);border-bottom:1px solid var(--line);flex-shrink:0}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:16px;user-select:none}
+.brand img{width:22px;height:22px}
+.brand b{color:var(--accent);font-weight:600}
+header h1{font-size:13.5px;font-weight:400;color:var(--dim);padding-left:12px;margin-left:4px;border-left:1px solid var(--line2)}
+header .count{color:var(--mute);font-size:12.5px;margin-right:auto;font-family:var(--mono)}
+
+/* ---- Buttons ---- */
+button{font-family:inherit;font-size:13px;border:1px solid var(--line2);background:var(--surface);color:var(--text);padding:7px 12px;border-radius:var(--r);cursor:pointer;transition:background .12s,border-color .12s}
+button:hover{background:var(--surface2);border-color:var(--mute)}
+button:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(242,84,45,.5)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+button.primary:hover{background:var(--accent2);border-color:var(--accent2)}
+button.ghost{background:transparent}
+button.danger{color:var(--danger);border-color:transparent;background:transparent}
+button.danger:hover{background:rgba(241,102,74,.12);border-color:var(--danger)}
+button.small{padding:4px 8px;font-size:12px}
+header .theme{display:flex;align-items:center;gap:6px}
+
+.main{display:flex;flex:1;min-height:0}
+
+/* ---- Sidebar ---- */
+.sidebar{width:282px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--line);overflow-y:auto;padding:10px}
+.sb-label{font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mute);margin:10px 6px 6px}
+.item{padding:9px 10px;border-radius:var(--r);cursor:pointer;border:1px solid transparent;border-left:2px solid transparent;margin-bottom:3px;display:flex;align-items:center;gap:9px}
+.item:hover{background:var(--surface)}
+.item.active{background:var(--surface2);border-color:var(--line);border-left-color:var(--accent)}
+.item .ico{font-size:13px;width:16px;flex-shrink:0;text-align:center;color:var(--mute)}
+.item .info{min-width:0;flex:1}
+.item .nm{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .sub{font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .reorder{display:flex;flex-direction:column;gap:2px;opacity:0}
+.item:hover .reorder{opacity:1}
+.item .reorder button{padding:0 5px;line-height:1.2;font-size:9px}
+
+/* ---- Editor / sheet ---- */
+.editor{flex:1;overflow-y:auto;padding:26px 26px 70px}
+.sheet{width:820px;max-width:100%;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:34px 38px}
+.sheet-title{font-size:20px;font-weight:600;margin-bottom:6px}
+.sheet-sub{font-size:13.5px;color:var(--mute);margin-bottom:24px}
+.field{margin-bottom:16px}
+.field>label{display:block;font-size:12.5px;color:var(--text);margin-bottom:5px;font-weight:600}
+.field input[type=text],.field textarea,.field select,.section-body input[type=text],.section-body textarea,.section-body select{
+  width:100%;background:var(--input);border:1px solid var(--line2);border-radius:var(--r);color:var(--text);padding:8px 10px;font-family:inherit;font-size:13.5px}
+.field textarea,.section-body textarea{resize:vertical;min-height:58px;line-height:1.55}
+textarea.mono{font-family:var(--mono);font-size:12.5px}
+.field input:focus,.field textarea:focus,.field select:focus,.section-body input:focus,.section-body textarea:focus,.section-body select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(242,84,45,.25)}
+.row{display:flex;gap:16px}.row>.field{flex:1}
+.inline{display:flex;align-items:center;gap:8px}
+.hint{font-size:11.5px;color:var(--mute);margin-top:5px}
+.hint.warn{color:var(--danger);font-weight:600}
+fieldset{border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:18px;background:var(--bg2)}
+fieldset legend{padding:0 8px;font-size:13px;color:var(--text);font-weight:600}
+.list-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}.list-row input{flex:1}
+
+/* ---- Section cards ---- */
+.section-card{border:1px solid var(--line2);border-radius:var(--r);margin-bottom:10px;background:var(--surface)}
+.section-head{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-bottom:1px solid var(--line);border-radius:var(--r) var(--r) 0 0}
+.section-head .sec-idx{font-family:var(--mono);font-size:11px;color:var(--mute)}
+.section-head select{max-width:160px;background:var(--input);border:1px solid var(--line2);border-radius:var(--r);color:var(--text);padding:4px 8px;font-family:inherit;font-size:12.5px}
+.section-body{padding:12px}
+.section-body>.field:last-child{margin-bottom:0}
+.add-section{display:flex;align-items:center;gap:8px;margin-top:4px}
+.add-section select{max-width:200px}
+
+/* ---- Modal / toast ---- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-backdrop.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--line2);border-radius:6px;padding:22px;width:720px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.modal h3{margin:0 0 14px;font-size:16px;font-weight:600}
+.modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.raw-area{width:100%;min-height:440px;background:var(--bg);color:var(--text);border:1px solid var(--line2);border-radius:var(--r);font-family:var(--mono);font-size:12.5px;padding:12px;line-height:1.55;resize:vertical}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--line2);color:var(--text);padding:11px 20px;border-radius:6px;font-size:13px;font-weight:500;opacity:0;transition:opacity .25s;pointer-events:none;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.toast.show{opacity:1}
+.toast.err{border-color:var(--danger);color:var(--danger)}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--mute);text-align:center}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><img src="../app-logo.png" alt="" /> Carnelian <b>Docs</b></span>
+  <h1>Content Editor</h1>
+  <span class="count" id="count"></span>
+  <button id="btnTheme" class="theme" title="Toggle theme"><span id="themeLabel">Light</span></button>
+  <a href="index.html" target="_blank"><button class="ghost" title="Open the docs site in a new tab">Preview ↗</button></a>
+  <button id="btnImport">Load JSON</button>
+  <button id="btnView" class="ghost">View JSON</button>
+  <button id="btnExport">Export JSON</button>
+  <button id="btnAdd" class="primary">+ Add Page</button>
+  <input type="file" id="fileInput" accept=".json,application/json" />
+</header>
+
+<div class="main">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="editor" id="editor"></div>
+</div>
+
+<div class="modal-backdrop" id="jsonModal">
+  <div class="modal">
+    <h3>content.json</h3>
+    <textarea id="jsonView" class="raw-area" readonly></textarea>
+    <div class="actions">
+      <button onclick="copyJson()">Copy</button>
+      <button class="primary" onclick="closeModal('jsonModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ----------------------------- Schema ----------------------------- */
+const SECTION_TYPES = [
+  { value:"p",    label:"Paragraph" },
+  { value:"h2",   label:"Heading 2" },
+  { value:"h3",   label:"Heading 3" },
+  { value:"ul",   label:"Bullet list" },
+  { value:"ol",   label:"Numbered list" },
+  { value:"code", label:"Code block" },
+  { value:"note", label:"Note / callout" },
+];
+const LIST_TYPES = ["ul","ol"];
+
+let data = { site:{ title:"", version:"", tagline:"" }, pages:[] };
+let selected = "site";   // "site" | page index | -1
+
+/* ----------------------------- Normalize / serialize ----------------------------- */
+function normSection(s){
+  s = s || {};
+  const type = SECTION_TYPES.some(t => t.value === s.type) ? s.type : "p";
+  const out = { type };
+  if (LIST_TYPES.includes(type)) out.items = Array.isArray(s.items) ? s.items.map(x => String(x)) : [];
+  else out.text = typeof s.text === "string" ? s.text : "";
+  if (type === "code") out.lang = typeof s.lang === "string" ? s.lang : "";
+  return out;
+}
+function normPage(p){
+  p = p || {};
+  return {
+    id: p.id || "",
+    group: p.group || "",
+    title: p.title || "",
+    summary: p.summary || "",
+    sections: Array.isArray(p.sections) ? p.sections.map(normSection) : [],
+  };
+}
+function normData(d){
+  d = d || {}; const s = d.site || {};
+  return {
+    site: { title: s.title || "", version: s.version || "", tagline: s.tagline || "" },
+    pages: Array.isArray(d.pages) ? d.pages.map(normPage) : [],
+  };
+}
+function serSection(s){
+  if (LIST_TYPES.includes(s.type)) return { type:s.type, items:(s.items||[]).slice() };
+  if (s.type === "code") return { type:"code", lang:s.lang||"", text:s.text||"" };
+  return { type:s.type, text:s.text||"" };
+}
+function serialize(){
+  return {
+    site: { title:data.site.title, version:data.site.version, tagline:data.site.tagline },
+    pages: data.pages.map(p => ({ id:p.id, group:p.group, title:p.title, summary:p.summary, sections:p.sections.map(serSection) })),
+  };
+}
+function buildJson(){ return JSON.stringify(serialize(), null, 2); }
+
+function newSection(type){
+  const s = { type };
+  if (LIST_TYPES.includes(type)) s.items = [""];
+  else s.text = "";
+  if (type === "code") s.lang = "";
+  return s;
+}
+function changeType(sec, type){
+  sec.type = type;
+  if (LIST_TYPES.includes(type)){ if(!Array.isArray(sec.items)) sec.items=[]; if(sec.items.length===0) sec.items=[""]; }
+  else if (typeof sec.text !== "string") sec.text = "";
+  if (type === "code" && typeof sec.lang !== "string") sec.lang = "";
+}
+function blankPage(){
+  const lastGroup = data.pages.length ? data.pages[data.pages.length-1].group : "";
+  return { id:"", group:lastGroup, title:"", summary:"", sections:[ newSection("p") ] };
+}
+
+/* ----------------------------- Helpers ----------------------------- */
+function slugify(s){
+  return (s||"").toLowerCase().trim().replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"");
+}
+function el(tag, props = {}, ...children){
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(props)){
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined) e.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) e.append(c.nodeType ? c : document.createTextNode(c));
+  return e;
+}
+function toast(msg, isErr){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show" + (isErr ? " err" : "");
+  setTimeout(() => (t.className = "toast"), 2000);
+}
+function fieldWrap(labelText, control){
+  const f = el("div", { class:"field" });
+  if (labelText) f.appendChild(el("label", {}, labelText));
+  f.appendChild(control);
+  return f;
+}
+function field(labelText, makeControl){ return fieldWrap(labelText, makeControl()); }
+
+/* ----------------------------- Sidebar ----------------------------- */
+function renderSidebar(){
+  const sb = document.getElementById("sidebar");
+  sb.innerHTML = "";
+  document.getElementById("count").textContent = data.pages.length + (data.pages.length === 1 ? " page" : " pages");
+
+  sb.appendChild(el("div", { class:"item" + (selected === "site" ? " active" : ""), onclick:() => selectSite() },
+    el("span", { class:"ico" }, "⚙"),
+    el("div", { class:"info" },
+      el("div", { class:"nm" }, "Site settings"),
+      el("div", { class:"sub" }, data.site.version || "—"),
+    ),
+  ));
+
+  sb.appendChild(el("div", { class:"sb-label" }, "Pages"));
+  data.pages.forEach((p, i) => {
+    sb.appendChild(el("div", { class:"item" + (i === selected ? " active" : ""), onclick:() => select(i) },
+      el("span", { class:"ico" }, "📄"),
+      el("div", { class:"info" },
+        el("div", { class:"nm" }, p.title || "(untitled)"),
+        el("div", { class:"sub" }, (p.group || "—") + " · #" + (p.id || "no-id")),
+      ),
+      el("div", { class:"reorder" },
+        el("button", { class:"small", title:"Move up",   onclick:(e) => { e.stopPropagation(); move(i,-1); } }, "▲"),
+        el("button", { class:"small", title:"Move down", onclick:(e) => { e.stopPropagation(); move(i, 1); } }, "▼"),
+      ),
+    ));
+  });
+}
+function move(i, dir){
+  const j = i + dir;
+  if (j < 0 || j >= data.pages.length) return;
+  [data.pages[i], data.pages[j]] = [data.pages[j], data.pages[i]];
+  if (selected === i) selected = j; else if (selected === j) selected = i;
+  renderSidebar();
+}
+function selectSite(){ selected = "site"; renderSidebar(); renderEditor(); }
+function select(i){ selected = i; renderSidebar(); renderEditor(); }
+function addPage(){ data.pages.push(blankPage()); selected = data.pages.length - 1; renderSidebar(); renderEditor(); }
+function duplicatePage(i){
+  const copy = normPage(serialize().pages[i]);
+  copy.title = (data.pages[i].title || "Untitled") + " (copy)";
+  copy.id = data.pages[i].id ? data.pages[i].id + "-copy" : "";
+  data.pages.splice(i+1, 0, copy);
+  selected = i+1; renderSidebar(); renderEditor();
+}
+function deletePage(i){
+  if (!confirm('Delete "' + (data.pages[i].title || "untitled") + '"?')) return;
+  data.pages.splice(i, 1);
+  selected = data.pages.length ? Math.min(i, data.pages.length-1) : "site";
+  renderSidebar(); renderEditor();
+}
+
+/* ----------------------------- Editor ----------------------------- */
+function renderEditor(){
+  const ed = document.getElementById("editor");
+  ed.innerHTML = "";
+  if (selected === "site") { ed.appendChild(siteSheet()); return; }
+  if (typeof selected !== "number" || !data.pages[selected]) {
+    ed.innerHTML = '<div class="empty"><div>No page selected.<br><br><button class="primary" onclick="addPage()">+ Add a page</button></div></div>';
+    return;
+  }
+  ed.appendChild(pageSheet(data.pages[selected]));
+}
+
+function siteSheet(){
+  const sheet = el("div", { class:"sheet" });
+  sheet.appendChild(el("div", { class:"sheet-title" }, "Site settings"));
+  sheet.appendChild(el("div", { class:"sheet-sub" }, "Shown in the docs nav and header. The version appears beside the brand."));
+  sheet.appendChild(field("Title", () => bound(el("input",{type:"text",value:data.site.title,placeholder:"Carnelian Docs"}), v => data.site.title=v)));
+  sheet.appendChild(field("Version", () => bound(el("input",{type:"text",value:data.site.version,placeholder:"v1.0.4"}), v => { data.site.version=v; renderSidebar(); })));
+  sheet.appendChild(field("Tagline", () => { const ta=el("textarea",{placeholder:"Short one-line description."}, data.site.tagline); ta.addEventListener("input",()=>data.site.tagline=ta.value); return ta; }));
+  return sheet;
+}
+function bound(inp, set){ inp.addEventListener("input", () => set(inp.value)); return inp; }
+
+function pageSheet(p){
+  const sheet = el("div", { class:"sheet" });
+
+  /* datalist of existing groups */
+  const groups = [...new Set(data.pages.map(x => x.group).filter(Boolean))];
+  const dl = el("datalist", { id:"groupList" });
+  groups.forEach(g => dl.appendChild(el("option", { value:g })));
+  sheet.appendChild(dl);
+
+  /* action bar */
+  sheet.appendChild(el("div", { class:"inline", style:"justify-content:flex-end;margin-bottom:18px" },
+    el("button", { class:"small", onclick:() => duplicatePage(selected) }, "Duplicate"),
+    el("button", { class:"small danger", onclick:() => deletePage(selected) }, "Delete"),
+  ));
+
+  /* id (with hint) */
+  const idInput = el("input", { type:"text", value:p.id, placeholder:"kebab-case-id" });
+  const idHint = el("div", { class:"hint" });
+  const refreshIdHint = () => {
+    const dup = data.pages.some((q,qi) => qi !== selected && q.id && q.id === p.id);
+    idHint.className = "hint" + (dup ? " warn" : "");
+    idHint.textContent = dup ? "⚠ Duplicate id — must be unique." : "URL slug & anchor (docs/#" + (p.id || "id") + ").";
+  };
+  idInput.addEventListener("input", () => { p.id = idInput.value; refreshIdHint(); });
+
+  /* title (auto-fills id) */
+  const titleInput = el("input", { type:"text", value:p.title, placeholder:"Page title" });
+  titleInput.addEventListener("input", () => {
+    p.title = titleInput.value; renderSidebar();
+    if (!p.id) { p.id = slugify(p.title); idInput.value = p.id; refreshIdHint(); }
+  });
+
+  /* group */
+  const groupInput = el("input", { type:"text", value:p.group, list:"groupList", placeholder:"e.g. Overview" });
+  groupInput.addEventListener("input", () => { p.group = groupInput.value; renderSidebar(); });
+
+  sheet.appendChild(el("div", { class:"row" },
+    fieldWrap("Title", titleInput),
+    fieldWrap("Group", groupInput),
+  ));
+  const idField = fieldWrap("ID", el("div", { class:"inline" },
+    idInput,
+    el("button", { class:"small", title:"Generate from title", onclick:() => { p.id = slugify(p.title); idInput.value = p.id; refreshIdHint(); } }, "↻"),
+  ));
+  idField.appendChild(idHint); refreshIdHint();
+  sheet.appendChild(idField);
+
+  /* summary */
+  sheet.appendChild(field("Summary (shown under the title & in the sidebar order)", () => {
+    const ta = el("textarea", { placeholder:"One-line summary of the page." }, p.summary);
+    ta.addEventListener("input", () => p.summary = ta.value);
+    return ta;
+  }));
+
+  /* sections */
+  sheet.appendChild(sectionsFieldset(p));
+  return sheet;
+}
+
+function sectionsFieldset(page){
+  const fs = el("fieldset", {}, el("legend", {}, "Sections"));
+  const list = el("div", {});
+  fs.appendChild(list);
+  function draw(){
+    list.innerHTML = "";
+    if (!page.sections.length) list.appendChild(el("div", { class:"hint" }, "No sections yet — add one below."));
+    page.sections.forEach((sec, i) => list.appendChild(sectionCard(page, sec, i, draw)));
+  }
+  draw();
+
+  const addSel = el("select", {});
+  SECTION_TYPES.forEach(t => addSel.appendChild(el("option", { value:t.value }, t.label)));
+  fs.appendChild(el("div", { class:"add-section" },
+    addSel,
+    el("button", { class:"small", onclick:() => { page.sections.push(newSection(addSel.value)); draw(); } }, "+ Add section"),
+  ));
+  return fs;
+}
+
+function sectionCard(page, sec, i, redraw){
+  const card = el("div", { class:"section-card" });
+  const typeSel = el("select", {});
+  SECTION_TYPES.forEach(t => { const o = el("option", { value:t.value }, t.label); if (t.value === sec.type) o.selected = true; typeSel.appendChild(o); });
+  typeSel.addEventListener("change", () => { changeType(sec, typeSel.value); redraw(); });
+
+  card.appendChild(el("div", { class:"section-head" },
+    el("span", { class:"sec-idx" }, "#" + (i+1)),
+    typeSel,
+    el("span", { style:"flex:1" }),
+    el("button", { class:"small", title:"Move up",   onclick:() => { if (i>0){ [page.sections[i-1],page.sections[i]]=[page.sections[i],page.sections[i-1]]; redraw(); } } }, "↑"),
+    el("button", { class:"small", title:"Move down", onclick:() => { if (i<page.sections.length-1){ [page.sections[i+1],page.sections[i]]=[page.sections[i],page.sections[i+1]]; redraw(); } } }, "↓"),
+    el("button", { class:"small danger", title:"Delete section", onclick:() => { page.sections.splice(i,1); redraw(); } }, "✕"),
+  ));
+  card.appendChild(sectionBody(sec));
+  return card;
+}
+
+function sectionBody(sec){
+  const wrap = el("div", { class:"section-body" });
+  if (LIST_TYPES.includes(sec.type)){
+    wrap.appendChild(itemsEditor(sec));
+  } else if (sec.type === "code"){
+    const langInp = el("input", { type:"text", value:sec.lang||"", placeholder:"language (e.g. bash, json)" });
+    langInp.addEventListener("input", () => sec.lang = langInp.value);
+    const ta = el("textarea", { class:"mono", placeholder:"code…" }, sec.text||"");
+    ta.addEventListener("input", () => sec.text = ta.value);
+    wrap.appendChild(fieldWrap("Language", langInp));
+    wrap.appendChild(fieldWrap("Code", ta));
+  } else if (sec.type === "h2" || sec.type === "h3"){
+    const inp = el("input", { type:"text", value:sec.text||"", placeholder:"Heading text" });
+    inp.addEventListener("input", () => sec.text = inp.value);
+    wrap.appendChild(inp);
+  } else { /* p, note */
+    const ta = el("textarea", { placeholder:(sec.type==="note"?"Callout text":"Paragraph text") + " — supports **bold**, `code`, [links](url)" }, sec.text||"");
+    ta.addEventListener("input", () => sec.text = ta.value);
+    wrap.appendChild(ta);
+  }
+  return wrap;
+}
+
+function itemsEditor(sec){
+  const host = el("div", {});
+  const list = el("div", {});
+  host.appendChild(list);
+  function draw(){
+    list.innerHTML = "";
+    sec.items.forEach((val, i) => {
+      const inp = el("input", { type:"text", value:val, placeholder:"List item — supports **bold**, `code`, links" });
+      inp.addEventListener("input", () => sec.items[i] = inp.value);
+      list.appendChild(el("div", { class:"list-row" },
+        inp,
+        el("button", { class:"small", title:"Move up", onclick:() => { if (i>0){ [sec.items[i-1],sec.items[i]]=[sec.items[i],sec.items[i-1]]; draw(); } } }, "↑"),
+        el("button", { class:"small danger", onclick:() => { sec.items.splice(i,1); draw(); } }, "✕"),
+      ));
+    });
+  }
+  draw();
+  host.appendChild(el("button", { class:"small", onclick:() => { sec.items.push(""); draw(); } }, "+ Add item"));
+  return host;
+}
+
+/* ----------------------------- Import / Export / View ----------------------------- */
+function loadData(obj){
+  data = normData(obj);
+  selected = data.pages.length ? 0 : "site";
+  renderSidebar(); renderEditor();
+}
+document.getElementById("btnImport").onclick = () => document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const obj = JSON.parse(reader.result);
+      if (typeof obj !== "object" || obj === null || !Array.isArray(obj.pages))
+        throw new Error('expected { site, pages: [...] }');
+      loadData(obj);
+      toast("Loaded " + data.pages.length + " pages");
+    } catch (err){ toast("Invalid JSON: " + err.message, true); }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+};
+function validate(){
+  const ids = {};
+  for (const p of data.pages){
+    if (!p.id) return 'Every page needs an id ("' + (p.title || "untitled") + '" is missing one).';
+    if (ids[p.id]) return 'Duplicate id: "' + p.id + '".';
+    ids[p.id] = true;
+  }
+  return null;
+}
+document.getElementById("btnExport").onclick = () => {
+  const bad = validate();
+  if (bad) { toast(bad, true); return; }
+  const blob = new Blob([buildJson()], { type:"application/json" });
+  const a = el("a", { href: URL.createObjectURL(blob), download:"content.json" });
+  document.body.appendChild(a); a.click(); a.remove();
+  toast("Exported content.json — replace docs/content.json with it");
+};
+document.getElementById("btnView").onclick = () => {
+  document.getElementById("jsonView").value = buildJson();
+  document.getElementById("jsonModal").classList.add("show");
+};
+document.getElementById("btnAdd").onclick = addPage;
+function closeModal(id){ document.getElementById(id).classList.remove("show"); }
+function copyJson(){
+  navigator.clipboard.writeText(document.getElementById("jsonView").value)
+    .then(() => toast("Copied to clipboard")).catch(() => toast("Copy failed", true));
+}
+window.closeModal = closeModal; window.copyJson = copyJson; window.addPage = addPage;
+
+/* ----------------------------- Theme ----------------------------- */
+function applyTheme(light){
+  document.body.classList.toggle("light", light);
+  document.getElementById("themeLabel").textContent = light ? "Dark" : "Light";
+}
+(function initTheme(){
+  let saved = null; try { saved = localStorage.getItem("cde-theme"); } catch(e){}
+  applyTheme(saved === "light");
+})();
+document.getElementById("btnTheme").onclick = () => {
+  const light = !document.body.classList.contains("light");
+  applyTheme(light);
+  try { localStorage.setItem("cde-theme", light ? "light" : "dark"); } catch(e){}
+};
+
+/* warn before leaving */
+window.addEventListener("beforeunload", (e) => { if (data.pages.length){ e.preventDefault(); e.returnValue = ""; } });
+
+/* ----------------------------- Boot: auto-load content.json ----------------------------- */
+renderSidebar(); renderEditor();
+fetch("content.json", { cache:"no-store" })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(obj => { loadData(obj); toast("Loaded content.json (" + data.pages.length + " pages)"); })
+  .catch(() => { /* served from file:// or missing — start empty, user can Load JSON */ });
+</script>
+</body>
+</html>
