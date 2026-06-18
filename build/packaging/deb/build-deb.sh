@@ -11,9 +11,9 @@ set -euo pipefail
 
 APP_ID="io.github.Sagiv440.Carnelian"
 PKG="carnelian"
-VERSION="1.0.3"
+VERSION="1.0.4"
 ARCH="amd64"
-MAINT="Sagiv Reuben <moshe@kiro-inc.com>"
+MAINT="Sagiv Reuben <sagiv440@gmail.com>"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 PKGDIR="$ROOT/build/packaging"

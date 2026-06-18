@@ -3,6 +3,28 @@
 All notable user-facing changes to **Carnelian** (formerly "AI Interface").
 Versioning is informal; entries are grouped as Added / Changed / Fixed.
 
+## [1.0.4] — 2026-06-18 — "Chat that does things"
+
+Headline: local Chat can now reach the web and create documents on its own, a new
+`/saveToDoc` command, and a tidier composer.
+
+### Added
+- **Web search in Chat.** A composer **🌐** toggle (local Chat only) lets the model decide
+  when it needs current or unknown information, search the web on its own, and answer from the
+  results — with the sources listed under the reply. Off by default, so plain chat stays fast.
+  (Web Search mode is unchanged.)
+- **The AI can create documents.** A composer **📄** toggle (local Chat only) lets you ask for a
+  file in plain language — *"summarize this in a PDF"*, *"write a resume into a docx"* — and the
+  model writes the content; the app shows a **Save dialog** (defaults to your Documents folder)
+  and opens the finished PDF/Word file. Renders headings, lists, tables, links and RTL just like
+  the export elsewhere.
+- **`/saveToDoc` command.** A new slash-command that saves the **last reply** to a document: pick
+  **PDF** or **Word** in a popup, then choose where to save it.
+
+### Changed
+- **Tidier composer toggles.** The **Thinking 🧠** and **Web 🌐** controls are now compact sliding
+  switches (icon only, no text), so the composer toolbar is cleaner.
+
 ## [1.0.3] — 2026-06-16 — "Deep Search & Save"
 
 Headline: richer document export (tables, hyperlinks, RTL/non-English), a one-click

@@ -21,3 +21,4 @@ build/flatpak/build-dir/
 *.DotSettings.user
 .DS_Store
 Thumbs.db
+CHANGELOG.md
