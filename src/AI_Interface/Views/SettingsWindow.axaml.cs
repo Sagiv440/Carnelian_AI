@@ -29,6 +29,8 @@ public partial class SettingsWindow : Window
             _vm.VoiceBrowserRequested -= OnVoiceBrowserRequested;
             _vm.InstallPiperConfirmationRequested -= OnInstallPiperConfirmationRequested;
             _vm.InstallOllamaConfirmationRequested -= OnInstallOllamaConfirmationRequested;
+            _vm.InstallSearxngConfirmationRequested -= OnInstallSearxngConfirmationRequested;
+            _vm.RemoveSearxngConfirmationRequested -= OnRemoveSearxngConfirmationRequested;
         }
 
         _vm = DataContext as SettingsViewModel;
@@ -39,6 +41,8 @@ public partial class SettingsWindow : Window
             _vm.VoiceBrowserRequested += OnVoiceBrowserRequested;
             _vm.InstallPiperConfirmationRequested += OnInstallPiperConfirmationRequested;
             _vm.InstallOllamaConfirmationRequested += OnInstallOllamaConfirmationRequested;
+            _vm.InstallSearxngConfirmationRequested += OnInstallSearxngConfirmationRequested;
+            _vm.RemoveSearxngConfirmationRequested += OnRemoveSearxngConfirmationRequested;
         }
     }
 
@@ -94,6 +98,24 @@ public partial class SettingsWindow : Window
             "Install additional software?",
             "Additional software (the Ollama runtime) will be downloaded and " +
             "installed on your computer. Click Accept to continue, or Exit to cancel.");
+        completion.TrySetResult(await dialog.ShowDialog<bool>(this));
+    }
+
+    private async void OnInstallSearxngConfirmationRequested(object? sender, TaskCompletionSource<bool> completion)
+    {
+        var dialog = new ConfirmWindow(
+            "Install SearXNG locally?",
+            "A local SearXNG search instance will be downloaded and started using Docker " +
+            "(Docker must be installed). Click Accept to continue, or Exit to cancel.");
+        completion.TrySetResult(await dialog.ShowDialog<bool>(this));
+    }
+
+    private async void OnRemoveSearxngConfirmationRequested(object? sender, TaskCompletionSource<bool> completion)
+    {
+        var dialog = new ConfirmWindow(
+            "Remove local SearXNG?",
+            "The local SearXNG container, image, and generated config will be removed from your computer. " +
+            "Click Accept to continue, or Exit to cancel.");
         completion.TrySetResult(await dialog.ShowDialog<bool>(this));
     }
 

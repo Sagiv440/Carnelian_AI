@@ -149,6 +149,14 @@ internal sealed class DesignOllamaInstaller : IOllamaInstaller
     public Task InstallAsync(IProgress<string>? progress, CancellationToken ct) => Task.CompletedTask;
 }
 
+internal sealed class DesignSearxngInstaller : ISearxngInstaller
+{
+    public string LocalUrl => "http://localhost:8888";
+    public Task<bool> IsRunningAsync(CancellationToken ct = default) => Task.FromResult(false);
+    public Task InstallAsync(IProgress<string>? progress, CancellationToken ct) => Task.CompletedTask;
+    public Task RemoveAsync(IProgress<string>? progress, CancellationToken ct) => Task.CompletedTask;
+}
+
 internal sealed class DesignUsageTracker : IUsageTracker
 {
     public void RecordEstimatedUsage(AiProvider provider, string modelId, string? inputText, string? outputText) { }

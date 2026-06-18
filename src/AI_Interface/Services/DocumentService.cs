@@ -20,11 +20,53 @@ namespace AI_Interface.Services;
 /// </summary>
 public sealed class DocumentService : IDocumentService
 {
+    // QuestPDF's default font (Latin-only) renders non-Latin scripts (Hebrew, Cyrillic, …) as tofu boxes.
+    // We register a bundled broad-coverage font and use it as a per-glyph fallback so those scripts render.
+    private const string FallbackFontFamily = "DejaVu Sans";
+
     static DocumentService()
     {
         // QuestPDF requires a license to be declared before first use; Community is free for individuals
         // and small businesses (https://www.questpdf.com/license/).
         QuestPDF.Settings.License = LicenseType.Community;
+        TryRegisterFallbackFont();
+    }
+
+    private static void TryRegisterFallbackFont()
+    {
+        try
+        {
+            var asm = typeof(DocumentService).Assembly;
+            var name = asm.GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith("DejaVuSans.ttf", StringComparison.OrdinalIgnoreCase));
+            if (name is null) return;
+            using var stream = asm.GetManifestResourceStream(name);
+            if (stream is not null)
+                QuestPDF.Drawing.FontManager.RegisterFont(stream);
+        }
+        catch
+        {
+            // Best-effort: without the fallback, Latin PDFs still work; non-Latin may show tofu.
+        }
+    }
+
+    /// <summary>True when the text's first strong directional character is RTL (Hebrew/Arabic/…). A small
+    /// local copy (the view layer's RtlHelper lives in ViewModels; Services must not depend on it).</summary>
+    private static bool IsRtl(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        foreach (var ch in text)
+        {
+            if (!char.IsLetter(ch)) continue;
+            int c = ch;
+            return (c >= 0x0590 && c <= 0x05FF)   // Hebrew
+                || (c >= 0x0600 && c <= 0x06FF)   // Arabic
+                || (c >= 0x0700 && c <= 0x074F)   // Syriac
+                || (c >= 0x0750 && c <= 0x077F)   // Arabic Supplement
+                || (c >= 0x0780 && c <= 0x07BF)   // Thaana
+                || (c >= 0x08A0 && c <= 0x08FF);  // Arabic Extended-A
+        }
+        return false;
     }
 
     private enum Block { Heading1, Heading2, Heading3, Bullet, Paragraph, Blank, Table }
@@ -225,15 +267,20 @@ public sealed class DocumentService : IDocumentService
         var cols = header.Count;
         foreach (var r in rows) cols = Math.Max(cols, r.Count);
 
+        // A Hebrew/Arabic header means the whole table reads right-to-left (columns mirrored).
+        var rtlTable = header.Any(IsRtl) || rows.Any(r => r.Any(IsRtl));
+
         var table = new W.Table();
-        var borders = new W.TableBorders(
+        var tableProps = new W.TableProperties(new W.TableBorders(
             new W.TopBorder { Val = W.BorderValues.Single, Size = 4 },
             new W.BottomBorder { Val = W.BorderValues.Single, Size = 4 },
             new W.LeftBorder { Val = W.BorderValues.Single, Size = 4 },
             new W.RightBorder { Val = W.BorderValues.Single, Size = 4 },
             new W.InsideHorizontalBorder { Val = W.BorderValues.Single, Size = 4 },
-            new W.InsideVerticalBorder { Val = W.BorderValues.Single, Size = 4 });
-        table.AppendChild(new W.TableProperties(borders));
+            new W.InsideVerticalBorder { Val = W.BorderValues.Single, Size = 4 }));
+        if (rtlTable)
+            tableProps.AppendChild(new W.BiDiVisual()); // mirror column order for RTL
+        table.AppendChild(tableProps);
 
         table.AppendChild(WordRow(header, cols, bold: true));
         foreach (var r in rows)
@@ -246,30 +293,50 @@ public sealed class DocumentService : IDocumentService
         var row = new W.TableRow();
         for (var c = 0; c < cols; c++)
         {
-            var runProps = new W.RunProperties();
-            if (bold) runProps.Append(new W.Bold());
             var plain = StripInline(c < cells.Count ? cells[c] : "");
+            var rtl = IsRtl(plain);
+
+            var runProps = new W.RunProperties();
+            if (bold) AddBold(runProps);
+            if (rtl) runProps.Append(new W.RightToLeftText());
+
             var run = new W.Run(runProps, new W.Text(plain) { Space = SpaceProcessingModeValues.Preserve });
-            row.AppendChild(new W.TableCell(new W.Paragraph(run)));
+            var para = new W.Paragraph(RtlParagraphProperties(rtl), run);
+            row.AppendChild(new W.TableCell(para));
         }
         return row;
     }
 
     private static W.Paragraph WordParagraph(Block kind, string text)
     {
+        var plain = StripInline(text);
+        var rtl = IsRtl(plain);
+
         var runProps = new W.RunProperties();
         switch (kind)
         {
-            case Block.Heading1: runProps.Append(new W.Bold(), new W.FontSize { Val = "36" }); break; // 18pt
-            case Block.Heading2: runProps.Append(new W.Bold(), new W.FontSize { Val = "30" }); break; // 15pt
-            case Block.Heading3: runProps.Append(new W.Bold(), new W.FontSize { Val = "26" }); break; // 13pt
+            case Block.Heading1: AddBold(runProps); AddSize(runProps, "36"); break; // 18pt
+            case Block.Heading2: AddBold(runProps); AddSize(runProps, "30"); break; // 15pt
+            case Block.Heading3: AddBold(runProps); AddSize(runProps, "26"); break; // 13pt
         }
+        if (rtl) runProps.Append(new W.RightToLeftText());
 
-        var plain = StripInline(text);
         var display = kind == Block.Bullet ? "•  " + plain : plain;
         var run = new W.Run(runProps, new W.Text(display) { Space = SpaceProcessingModeValues.Preserve });
-        return new W.Paragraph(run);
+        return new W.Paragraph(RtlParagraphProperties(rtl), run);
     }
+
+    // Bold/size must be set with their complex-script twins (bCs/szCs) too, or Word/LibreOffice won't
+    // apply them to Hebrew/Arabic (complex-script) text — only to Latin runs.
+    private static void AddBold(W.RunProperties rp) => rp.Append(new W.Bold(), new W.BoldComplexScript());
+    private static void AddSize(W.RunProperties rp, string halfPoints) =>
+        rp.Append(new W.FontSize { Val = halfPoints }, new W.FontSizeComplexScript { Val = halfPoints });
+
+    /// <summary>Paragraph properties for an RTL paragraph: <c>bidi</c> alone (its default "start" alignment is
+    /// the right edge for RTL — adding <c>jc=right</c> would flip it back to the left under bidi). LTR gets an
+    /// empty set.</summary>
+    private static W.ParagraphProperties RtlParagraphProperties(bool rtl) =>
+        rtl ? new W.ParagraphProperties(new W.BiDi()) : new W.ParagraphProperties();
 
     // ---- PDF -------------------------------------------------------------------------------
 
@@ -283,21 +350,25 @@ public sealed class DocumentService : IDocumentService
             {
                 page.Size(PageSizes.A4);
                 page.Margin(40);
-                page.DefaultTextStyle(t => t.FontSize(11));
+                // Fallback → the bundled Unicode font so Hebrew/Cyrillic/… render (not tofu).
+                page.DefaultTextStyle(t => t.FontSize(11).Fallback(f => f.FontFamily(FallbackFontFamily)));
                 page.Content().Column(col =>
                 {
                     col.Spacing(5);
                     foreach (var (kind, text) in blocks)
                     {
+                        if (kind == Block.Blank) { col.Item().Height(6); continue; }
+                        if (kind == Block.Table) { col.Item().PaddingVertical(4).Element(e => RenderTable(e, text)); continue; }
+
+                        // RTL blocks flow right-to-left (right-aligned + correct marker/punctuation side).
+                        var item = IsRtl(text) ? col.Item().ContentFromRightToLeft() : col.Item();
                         switch (kind)
                         {
-                            case Block.Blank: col.Item().Height(6); break;
-                            case Block.Heading1: col.Item().Text(StripInline(text)).FontSize(20).Bold(); break;
-                            case Block.Heading2: col.Item().Text(StripInline(text)).FontSize(16).Bold(); break;
-                            case Block.Heading3: col.Item().Text(StripInline(text)).FontSize(13).Bold(); break;
-                            case Block.Bullet: col.Item().Text(t => { t.Span("•  "); RenderInline(t, text); }); break;
-                            case Block.Table: col.Item().PaddingVertical(4).Element(e => RenderTable(e, text)); break;
-                            default: col.Item().Text(t => RenderInline(t, text)); break;
+                            case Block.Heading1: item.Text(StripInline(text)).FontSize(20).Bold(); break;
+                            case Block.Heading2: item.Text(StripInline(text)).FontSize(16).Bold(); break;
+                            case Block.Heading3: item.Text(StripInline(text)).FontSize(13).Bold(); break;
+                            case Block.Bullet: item.Text(t => { t.Span("•  "); RenderInline(t, text); }); break;
+                            default: item.Text(t => RenderInline(t, text)); break;
                         }
                     }
                 });
@@ -359,6 +430,10 @@ public sealed class DocumentService : IDocumentService
         var cols = header.Count;
         foreach (var r in rows) cols = Math.Max(cols, r.Count);
         if (cols == 0) return;
+
+        // RTL tables flow right-to-left: columns mirror and cell text right-aligns (matches the DOCX bidiVisual).
+        if (header.Any(IsRtl) || rows.Any(r => r.Any(IsRtl)))
+            container = container.ContentFromRightToLeft();
 
         container.Table(table =>
         {

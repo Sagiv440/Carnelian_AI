@@ -86,6 +86,15 @@
                 </StackPanel>
             </Panel>
         </DataTemplate>
+
+        <!-- ToggleSwitch "on" state uses the app accent (red-orange) instead of the default Fluent accent.
+             Applies to the composer's 🧠 / 🌐 switches (and any future ToggleSwitch in this window). -->
+        <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#F2542D"/>
+        <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#F2542D"/>
+        <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#F2542D"/>
+        <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#F2542D"/>
+        <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#F2542D"/>
+        <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#F2542D"/>
     </Window.Resources>
 
     <Window.Styles>
@@ -503,6 +512,11 @@
         <Style Selector="ToggleButton.toolToggle:checked /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#33F2542D"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- Sliding toggle-switch in the composer (label + pill). -->
+        <Style Selector="ToggleSwitch.composerSwitch">
+            <Setter Property="MinWidth" Value="0"/>
         </Style>
 
         <!-- Draggable divider that resizes the sidebar: invisible at rest, a thin accent line on hover/drag -->
@@ -1315,8 +1329,8 @@
                              MaxHeight="160"
                              PlaceholderText="Type a message…  (Enter to send, Shift+Enter for a new line)"/>
 
-                    <!-- Toolbar: attach + search-scope dropdown + thinking toggle (left), auto-read + send/stop (right) -->
-                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                    <!-- Toolbar: attach + search-scope dropdown + thinking + web toggle (left), auto-read + send/stop (right) -->
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto">
                         <Button Grid.Column="0" Classes="ghost" Content="📎" FontSize="15"
                                 ToolTip.Tip="Attach files">
                             <Button.Flyout>
@@ -1341,24 +1355,54 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <ToggleButton Grid.Column="2" Classes="toolToggle" Margin="8,0,0,0"
-                                      IsChecked="{Binding ThinkingEnabled}"
-                                      Content="🧠 Thinking"
-                                      ToolTip.Tip="Make the AI plan what it needs to do before answering (effort set in Settings)"/>
+                        <!-- Thinking: plan-before-answer. Icon + sliding switch (no text label). -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0,0,0" Spacing="6"
+                                    VerticalAlignment="Center"
+                                    ToolTip.Tip="Thinking: make the AI plan what it needs to do before answering (effort set in Settings)">
+                            <TextBlock Text="🧠" FontSize="15" VerticalAlignment="Center"/>
+                            <ToggleSwitch Classes="composerSwitch" VerticalAlignment="Center"
+                                          IsChecked="{Binding ThinkingEnabled}"
+                                          OnContent="" OffContent=""/>
+                        </StackPanel>
+
+                        <!-- Web: let the local-chat model search the web on its own when it needs to. Icon +
+                             sliding switch (no text); shown only in Chat mode (Web Search / Deep Research /
+                             Project have their own web behaviour). -->
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="10,0,0,0" Spacing="6"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowChatWebToggle}"
+                                    ToolTip.Tip="Web: let the model search the web on its own when it needs current or unknown info (needs a tool-calling model)">
+                            <TextBlock Text="🌐" FontSize="15" VerticalAlignment="Center"/>
+                            <ToggleSwitch Classes="composerSwitch" VerticalAlignment="Center"
+                                          IsChecked="{Binding ChatWebSearchEnabled}"
+                                          OnContent="" OffContent=""/>
+                        </StackPanel>
+
+                        <!-- Docs: let the local-chat model create a PDF/Word document on request. Icon +
+                             sliding switch (no text); shown only in Chat mode. -->
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="10,0,0,0" Spacing="6"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowChatDocToggle}"
+                                    ToolTip.Tip="Documents: let the model create a PDF or Word file when you ask it to (e.g. “summarize this in a PDF”). Needs a tool-calling model.">
+                            <TextBlock Text="📄" FontSize="15" VerticalAlignment="Center"/>
+                            <ToggleSwitch Classes="composerSwitch" VerticalAlignment="Center"
+                                          IsChecked="{Binding ChatDocCreationEnabled}"
+                                          OnContent="" OffContent=""/>
+                        </StackPanel>
 
                         <!-- Auto-read: speak every reply aloud (icon-only toggle; accent when on).
                              Shown only when a voice is set up. -->
-                        <ToggleButton Grid.Column="3" Classes="toolToggle" HorizontalAlignment="Right"
+                        <ToggleButton Grid.Column="5" Classes="toolToggle" HorizontalAlignment="Right"
                                       Margin="8,0,8,0" FontSize="15"
                                       IsChecked="{Binding AutoSpeakEnabled}"
                                       IsVisible="{Binding IsVoiceConfigured}"
                                       Content="🔊"
                                       ToolTip.Tip="Auto-read: read each reply aloud automatically, in the voice that matches its language"/>
 
-                        <Button Grid.Column="4" Classes="cta" Content="Send" MinWidth="96" Margin="8,0,0,0"
+                        <Button Grid.Column="6" Classes="cta" Content="Send" MinWidth="96" Margin="8,0,0,0"
                                 Command="{Binding SendCommand}"
                                 IsVisible="{Binding !IsBusy}"/>
-                        <Button Grid.Column="5" Content="Stop" MinWidth="96" Margin="8,0,0,0"
+                        <Button Grid.Column="7" Content="Stop" MinWidth="96" Margin="8,0,0,0"
                                 Command="{Binding StopCommand}"
                                 IsVisible="{Binding IsBusy}"/>
                     </Grid>

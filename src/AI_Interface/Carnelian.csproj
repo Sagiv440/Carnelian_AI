@@ -18,7 +18,7 @@
     <AssemblyName>Carnelian</AssemblyName>
     <RootNamespace>AI_Interface</RootNamespace>
     <!-- App version: stamps the assembly + published binary and is shown in the UI (sidebar + launcher). -->
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <Product>Carnelian</Product>
     <AssemblyTitle>Carnelian</AssemblyTitle>
     <!-- Trimming is disabled: it breaks reflection-based XAML/JSON. Enable selectively if needed. -->
@@ -27,6 +27,9 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- Broad-coverage Unicode font (Latin/Hebrew/Cyrillic/Greek/…) registered with QuestPDF so PDF export
+         renders non-Latin scripts instead of tofu boxes. -->
+    <EmbeddedResource Include="Resources\DejaVuSans.ttf" />
   </ItemGroup>
 
   <ItemGroup>
