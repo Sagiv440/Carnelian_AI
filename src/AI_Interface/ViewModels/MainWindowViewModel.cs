@@ -97,6 +97,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>Raised before installing Piper so the view can confirm; the decision returns via the TCS.</summary>
     public event EventHandler<TaskCompletionSource<bool>>? InstallPiperConfirmationRequested;
 
+    /// <summary>Raised by /saveToDoc to pick a document format ("pdf"/"docx", or null when cancelled).</summary>
+    public event EventHandler<TaskCompletionSource<string?>>? SaveDocFormatRequested;
+
+    /// <summary>Raised by /saveToDoc to choose where to save (native Save dialog); the chosen full path
+    /// (or null when cancelled) returns via the request's TCS.</summary>
+    public event EventHandler<SaveDocPathRequest>? SaveDocPathRequested;
+
     /// <summary>App version label (e.g. "v1.0.2"), from the assembly version — shown by the app name and in the launcher.</summary>
     public string AppVersion { get; } =
         "v" + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0");
@@ -154,6 +161,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>The composer 🌐 toggle shows only in local Chat (not Web/Deep/Project — those have their own
     /// web behaviour).</summary>
     public bool ShowChatWebToggle => !HasActiveProject && SelectedMode.Mode == AppMode.Chat;
+
+    /// <summary>When on (composer 📄 toggle, Chat mode only), the model may create a PDF/Word document on
+    /// request. Persisted to <see cref="AppSettings.ChatDocCreationEnabled"/>.</summary>
+    [ObservableProperty]
+    private bool _chatDocCreationEnabled;
+
+    /// <summary>The composer 📄 toggle shows only in local Chat (same scope as the 🌐 toggle).</summary>
+    public bool ShowChatDocToggle => !HasActiveProject && SelectedMode.Mode == AppMode.Chat;
 
     /// <summary>True when a voice is set up — gates the composer's Auto-read toggle's visibility.</summary>
     public bool IsVoiceConfigured => _speech.IsConfigured;
@@ -356,6 +371,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(ActiveProjectName))]
     [NotifyPropertyChangedFor(nameof(ActiveProjectDirectory))]
     [NotifyPropertyChangedFor(nameof(ShowChatWebToggle))]
+    [NotifyPropertyChangedFor(nameof(ShowChatDocToggle))]
     private Project? _activeProject;
 
     public bool HasActiveProject => ActiveProject is not null;
@@ -470,6 +486,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _docs = docs;
         _autoSpeakEnabled = settings.Current.AutoSpeakReplies;
         _chatWebSearchEnabled = settings.Current.ChatWebSearchEnabled;
+        _chatDocCreationEnabled = settings.Current.ChatDocCreationEnabled;
 
         Modes = new[]
         {
@@ -725,6 +742,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(SelectedSearchMode));
         OnPropertyChanged(nameof(ShowChatWebToggle));
+        OnPropertyChanged(nameof(ShowChatDocToggle));
     }
 
     partial void OnAutoSpeakEnabledChanged(bool value)
@@ -736,6 +754,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     partial void OnChatWebSearchEnabledChanged(bool value)
     {
         _settings.Current.ChatWebSearchEnabled = value;
+        _settings.Save();
+    }
+
+    partial void OnChatDocCreationEnabledChanged(bool value)
+    {
+        _settings.Current.ChatDocCreationEnabled = value;
         _settings.Save();
     }
 
@@ -969,12 +993,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         var history = BuildChatHistory(assistant);
 
-        // Web toggle on (local Chat only): let the model autonomously search the web before answering.
-        // First resolve any searches it requests via a tool-calling loop (results appended to the
-        // conversation), then stream the final answer over that augmented history.
+        // Web / document toggles on (local Chat only): let the model autonomously call tools before
+        // answering — search the web and/or create a PDF/Word document. Resolve any tool calls via a
+        // tool-calling loop (results appended to the conversation), then stream the final answer over
+        // that augmented history.
         List<SearchResult>? sources = null;
-        if (ChatWebSearchEnabled)
-            sources = await ResolveChatWebSearchesAsync(client, model, history, ct);
+        if (ChatWebSearchEnabled || ChatDocCreationEnabled)
+            sources = await ResolveChatToolsAsync(client, model, history, ct);
 
         var raw = new StringBuilder();
         // No ConfigureAwait(false): stream deltas must apply on the UI thread.
@@ -989,16 +1014,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Lets the model decide whether to web-search before answering a local-chat prompt: a tool-calling loop
-    /// that runs each requested <c>web_search</c>, appends the results to <paramref name="history"/>, and
-    /// repeats (capped). Returns the unique sources gathered (for the message's Sources list). A model that
-    /// can't call tools just returns no tool calls — the loop ends and the normal answer streams.
+    /// Lets the model decide whether to call tools before answering a local-chat prompt: a tool-calling loop
+    /// that advertises the enabled chat tools (<c>web_search</c> when the 🌐 toggle is on, <c>create_document</c>
+    /// when the 📄 toggle is on), runs each requested call, appends the result to <paramref name="history"/>,
+    /// and repeats (capped). Returns the unique web sources gathered (for the message's Sources list). A model
+    /// that can't call tools just returns no tool calls — the loop ends and the normal answer streams.
     /// </summary>
-    private async Task<List<SearchResult>> ResolveChatWebSearchesAsync(
+    private async Task<List<SearchResult>> ResolveChatToolsAsync(
         IChatClient client, string model, List<ChatMessage> history, CancellationToken ct)
     {
         const int maxRounds = 3;
-        var tools = new[] { ProjectAgentService.WebSearchTool() };
+        var tools = new List<AgentTool>();
+        if (ChatWebSearchEnabled) tools.Add(ProjectAgentService.WebSearchTool());
+        if (ChatDocCreationEnabled) tools.Add(CreateDocumentTool());
+        var toolArray = tools.ToArray();
+
         var byUrl = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
 
         for (var round = 0; round < maxRounds; round++)
@@ -1006,34 +1036,125 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             ct.ThrowIfCancellationRequested();
 
             AgentTurn turn;
-            try { turn = await client.ChatWithToolsAsync(model, history, tools, ct); }
+            try { turn = await client.ChatWithToolsAsync(model, history, toolArray, ct); }
             catch (OperationCanceledException) { throw; }
             catch { break; } // tool-calling unsupported/failed → fall through and just answer normally
 
             if (turn.ToolCalls.Count == 0)
-                break; // nothing to search (or done searching) — ready to answer
+                break; // nothing to do (or done) — ready to answer
 
             history.Add(new ChatMessage(ChatRole.Assistant, turn.Content) { ToolCalls = turn.ToolCalls });
 
             foreach (var call in turn.ToolCalls)
             {
                 ct.ThrowIfCancellationRequested();
-                if (!string.Equals(call.Name, "web_search", StringComparison.Ordinal))
+
+                if (ChatWebSearchEnabled && string.Equals(call.Name, "web_search", StringComparison.Ordinal))
+                {
+                    var query = ReadStringArg(call.Arguments, "query");
+                    StatusText = string.IsNullOrWhiteSpace(query) ? "Searching the web…" : $"Searching the web: {query}";
+                    var (text, results) = await ChatWebSearchAsync(query, ct);
+                    foreach (var r in results)
+                        byUrl[r.Url] = r;
+                    history.Add(new ChatMessage(ChatRole.Tool, text) { ToolName = "web_search" });
+                }
+                else if (ChatDocCreationEnabled && string.Equals(call.Name, "create_document", StringComparison.Ordinal))
+                {
+                    var result = await ChatCreateDocumentAsync(call.Arguments, ct);
+                    history.Add(new ChatMessage(ChatRole.Tool, result) { ToolName = "create_document" });
+                }
+                else
                 {
                     history.Add(new ChatMessage(ChatRole.Tool, $"Unknown tool '{call.Name}'.") { ToolName = call.Name });
-                    continue;
                 }
-
-                var query = ReadStringArg(call.Arguments, "query");
-                StatusText = string.IsNullOrWhiteSpace(query) ? "Searching the web…" : $"Searching the web: {query}";
-                var (text, results) = await ChatWebSearchAsync(query, ct);
-                foreach (var r in results)
-                    byUrl[r.Url] = r;
-                history.Add(new ChatMessage(ChatRole.Tool, text) { ToolName = "web_search" });
             }
         }
 
         return byUrl.Values.ToList();
+    }
+
+    /// <summary>The <c>create_document</c> tool offered in Chat when the 📄 toggle is on: the model supplies a
+    /// format, a title, and the full document content (Markdown), and the app saves it via a Save dialog.</summary>
+    internal static AgentTool CreateDocumentTool() => new(
+        "create_document",
+        "Create a PDF or Word (.docx) document for the user and save it to their computer. Use this when the " +
+        "user asks you to put content into a document/PDF/Word file (e.g. \"summarize this in a PDF\", " +
+        "\"write a resume into a docx\"). Provide the COMPLETE document content as Markdown in 'content' " +
+        "(headings with #, bullet lists, **bold**, tables, [links](url) are all supported). The app shows a " +
+        "Save dialog so the user chooses where to save.",
+        System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                format = new { type = "string", @enum = new[] { "pdf", "docx" }, description = "The file format: \"pdf\" or \"docx\"." },
+                title = new { type = "string", description = "A short title used as the suggested file name." },
+                content = new { type = "string", description = "The full document content as Markdown." }
+            },
+            required = new[] { "format", "title", "content" }
+        }));
+
+    /// <summary>Runs a <c>create_document</c> tool call: prompts the user for a save location and writes the
+    /// model-supplied content, returning a short model-facing status string.</summary>
+    private async Task<string> ChatCreateDocumentAsync(System.Text.Json.JsonElement args, CancellationToken ct)
+    {
+        if (SaveDocPathRequested is null)
+            return "Error: document creation isn't available right now.";
+
+        var format = ReadStringArg(args, "format").Trim().ToLowerInvariant();
+        if (format is not "pdf" and not "docx")
+            format = "pdf";
+        var title = ReadStringArg(args, "title").Trim();
+        var content = ReadStringArg(args, "content");
+
+        if (string.IsNullOrWhiteSpace(content))
+            return "Error: no 'content' was provided for the document.";
+
+        var baseName = SanitizeFileBase(title);
+        if (baseName.Length == 0) baseName = "document";
+        var suggested = $"{baseName}.{format}";
+
+        StatusText = "Waiting for a save location…";
+        var pathTcs = new TaskCompletionSource<string?>();
+        SaveDocPathRequested.Invoke(this, new SaveDocPathRequest(suggested, format, pathTcs));
+        var filePath = await pathTcs.Task;
+        if (string.IsNullOrWhiteSpace(filePath))
+            return "The user cancelled the save dialog; no document was created.";
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                if (format == "docx")
+                    _docs.CreateWord(filePath, content);
+                else
+                    _docs.CreatePdf(filePath, content);
+            }, ct);
+
+            StatusText = $"Saved → {filePath}";
+            ShellOpenFile(filePath);
+            return $"Document saved successfully to: {filePath}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Document save failed: {ex.Message}";
+            return $"Error: failed to save the document — {ex.Message}";
+        }
+    }
+
+    // File-name characters that are unsafe on at least one OS (Windows is the strictest), plus '.' so a title
+    // can't smuggle an extension. Fixed set ⇒ the suggested name is the same on every platform.
+    private const string UnsafeFileNameChars = "/\\:*?\"<>|.";
+
+    /// <summary>Reduces a title to a safe file-name base (no path/extension), capped in length.</summary>
+    internal static string SanitizeFileBase(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return "";
+        var chars = title.Trim()
+            .Select(c => char.IsControl(c) || UnsafeFileNameChars.IndexOf(c) >= 0 ? '-' : c)
+            .ToArray();
+        var name = new string(chars).Trim('-', ' ');
+        return name.Length > 80 ? name[..80].TrimEnd('-', ' ') : name;
     }
 
     /// <summary>One web search for the chat tool loop: returns (model-facing text, raw results for Sources).</summary>
@@ -1537,6 +1658,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         new() { Name = "new",       Description = "Start a new chat",                      Run = () => NewChatCommand.Execute(null),          IsAvailable = () => !IsBusy },
         new() { Name = "compact",   Description = "Summarise & compact this conversation", Run = () => CompactCommand.Execute(null),          IsAvailable = () => !IsBusy },
         new() { Name = "clear",     Description = "Discard the current conversation",      Run = () => ClearCurrentChatCommand.Execute(null), IsAvailable = () => !IsBusy },
+        new() { Name = "saveToDoc", Description = "Save the last reply to a PDF or Word document", Run = () => _ = SaveLastReplyToDocumentAsync(), IsAvailable = () => ActiveProject is null && !IsBusy && LastReplyMessage is not null },
         // Project-mode agent kick-offs: send a preset prompt; the agent does the work with its tools.
         new() { Name = "init",        Description = "Set up AI_DOCS.md + memory for this project", Run = () => SendAgentPreset(InitPrompt),      IsAvailable = () => ActiveProject is not null && !IsBusy },
         new() { Name = "update-docs", Description = "Update the project handbook (AI_DOCS.md)",     Run = () => SendAgentPreset(UpdateDocsPrompt), IsAvailable = () => ActiveProject is not null && !IsBusy },
@@ -2307,33 +2429,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (msg is null) return;
         try
         {
-            var sb = new StringBuilder();
-            sb.AppendLine(msg.Text);
-
-            if (msg.Sources.Count > 0)
-            {
-                sb.AppendLine();
-                sb.AppendLine("## Sources");
-                sb.AppendLine();
-                foreach (var s in msg.Sources)
-                    sb.AppendLine($"- [{s.Title}]({s.Url})");
-            }
-
             var docsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             var researchFolder = Path.Combine(docsFolder, "research");
             Directory.CreateDirectory(researchFolder);
 
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss");
             var filePath = Path.Combine(researchFolder, $"research-{timestamp}.{format}");
-            var content = sb.ToString();
 
-            await Task.Run(() =>
-            {
-                if (format == "docx")
-                    _docs.CreateWord(filePath, content);
-                else
-                    _docs.CreatePdf(filePath, content);
-            });
+            await WriteReplyDocumentAsync(msg, format, filePath);
 
             StatusText = $"Saved → {filePath}";
             ShellOpenFile(filePath); // open in the OS default app
@@ -2342,6 +2445,78 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             StatusText = $"Document save failed: {ex.Message}";
         }
+    }
+
+    /// <summary>The most recent assistant reply with text — what <c>/saveToDoc</c> saves.</summary>
+    private MessageViewModel? LastReplyMessage =>
+        Messages.LastOrDefault(m => !m.IsUser && !string.IsNullOrWhiteSpace(m.Text));
+
+    /// <summary>
+    /// <c>/saveToDoc</c>: asks for a format (PDF/Word) via a popup, then a native Save dialog (defaulting to
+    /// Documents), and writes the last reply to the chosen path before opening it.
+    /// </summary>
+    private async Task SaveLastReplyToDocumentAsync()
+    {
+        var msg = LastReplyMessage;
+        if (msg is null)
+        {
+            StatusText = "Nothing to save yet.";
+            return;
+        }
+        if (SaveDocFormatRequested is null || SaveDocPathRequested is null)
+            return;
+
+        // 1. Pick the format (popup, like Deep Research's Save document menu).
+        var formatTcs = new TaskCompletionSource<string?>();
+        SaveDocFormatRequested.Invoke(this, formatTcs);
+        var format = await formatTcs.Task;
+        if (format is not "pdf" and not "docx")
+            return; // cancelled
+
+        // 2. Pick where to save (native Save dialog, defaults to Documents).
+        var suggested = $"reply-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.{format}";
+        var pathTcs = new TaskCompletionSource<string?>();
+        SaveDocPathRequested.Invoke(this, new SaveDocPathRequest(suggested, format, pathTcs));
+        var filePath = await pathTcs.Task;
+        if (string.IsNullOrWhiteSpace(filePath))
+            return; // cancelled
+
+        try
+        {
+            await WriteReplyDocumentAsync(msg, format, filePath);
+            StatusText = $"Saved → {filePath}";
+            ShellOpenFile(filePath);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Document save failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Renders a reply (plus any web Sources) to <paramref name="filePath"/> as PDF or Word, off the
+    /// UI thread. Shared by <c>/saveToDoc</c> and the Deep Research save buttons.</summary>
+    private Task WriteReplyDocumentAsync(MessageViewModel msg, string format, string filePath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(msg.Text);
+
+        if (msg.Sources.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Sources");
+            sb.AppendLine();
+            foreach (var s in msg.Sources)
+                sb.AppendLine($"- [{s.Title}]({s.Url})");
+        }
+
+        var content = sb.ToString();
+        return Task.Run(() =>
+        {
+            if (format == "docx")
+                _docs.CreateWord(filePath, content);
+            else
+                _docs.CreatePdf(filePath, content);
+        });
     }
 
     // --- Project file tree context actions (right-click / double-click) ----------------------------

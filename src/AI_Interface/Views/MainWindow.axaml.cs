@@ -76,6 +76,8 @@ public partial class MainWindow : Window
             _vm.VoiceBrowserRequested -= OnVoiceBrowserRequested;
             _vm.InstallOllamaConfirmationRequested -= OnInstallOllamaConfirmationRequested;
             _vm.InstallPiperConfirmationRequested -= OnInstallPiperConfirmationRequested;
+            _vm.SaveDocFormatRequested -= OnSaveDocFormatRequested;
+            _vm.SaveDocPathRequested -= OnSaveDocPathRequested;
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -95,7 +97,47 @@ public partial class MainWindow : Window
             _vm.VoiceBrowserRequested += OnVoiceBrowserRequested;
             _vm.InstallOllamaConfirmationRequested += OnInstallOllamaConfirmationRequested;
             _vm.InstallPiperConfirmationRequested += OnInstallPiperConfirmationRequested;
+            _vm.SaveDocFormatRequested += OnSaveDocFormatRequested;
+            _vm.SaveDocPathRequested += OnSaveDocPathRequested;
         }
+    }
+
+    /// <summary>/saveToDoc step 1: a small popup to pick PDF vs Word; result returns via the TCS.</summary>
+    private async void OnSaveDocFormatRequested(object? sender, TaskCompletionSource<string?> completion)
+    {
+        var format = await new DocFormatWindow().ShowDialog<string?>(this);
+        completion.TrySetResult(format);
+    }
+
+    /// <summary>/saveToDoc step 2: a native Save dialog (defaults to Documents); the chosen path returns
+    /// via the request's TCS (null when cancelled).</summary>
+    private async void OnSaveDocPathRequested(object? sender, SaveDocPathRequest request)
+    {
+        var ext = request.Format == "docx" ? "docx" : "pdf";
+        var typeName = request.Format == "docx" ? "Word document" : "PDF document";
+
+        IStorageFolder? start = null;
+        try
+        {
+            var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrEmpty(documents))
+                start = await StorageProvider.TryGetFolderFromPathAsync(documents);
+        }
+        catch { /* best-effort: fall back to the platform default location */ }
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save reply to document",
+            SuggestedFileName = request.SuggestedName,
+            DefaultExtension = ext,
+            SuggestedStartLocation = start,
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType(typeName) { Patterns = new[] { "*." + ext } }
+            }
+        });
+
+        request.Completion.TrySetResult(file?.TryGetLocalPath());
     }
 
     /// <summary>Tools button clicked: refresh which entries are available before the flyout shows them.</summary>

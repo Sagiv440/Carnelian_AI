@@ -174,6 +174,10 @@ public sealed class AppSettings
     /// tool when it needs current/unknown info, then answer from the results.</summary>
     public bool ChatWebSearchEnabled { get; set; } = false;
 
+    /// <summary>When on (composer 📄 toggle, Chat mode only), the model may create a PDF/Word document on
+    /// request via a tool; the app shows a Save dialog and writes the content the model supplies.</summary>
+    public bool ChatDocCreationEnabled { get; set; } = false;
+
     // --- Web search ---
 
     /// <summary>Which web search backend to use. Defaults to keyless DuckDuckGo.</summary>

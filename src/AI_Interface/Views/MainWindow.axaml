@@ -1328,7 +1328,7 @@
                              PlaceholderText="Type a message…  (Enter to send, Shift+Enter for a new line)"/>
 
                     <!-- Toolbar: attach + search-scope dropdown + thinking + web toggle (left), auto-read + send/stop (right) -->
-                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto">
                         <Button Grid.Column="0" Classes="ghost" Content="📎" FontSize="15"
                                 ToolTip.Tip="Attach files">
                             <Button.Flyout>
@@ -1376,19 +1376,31 @@
                                           OnContent="" OffContent=""/>
                         </StackPanel>
 
+                        <!-- Docs: let the local-chat model create a PDF/Word document on request. Icon +
+                             sliding switch (no text); shown only in Chat mode. -->
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="10,0,0,0" Spacing="6"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowChatDocToggle}"
+                                    ToolTip.Tip="Documents: let the model create a PDF or Word file when you ask it to (e.g. “summarize this in a PDF”). Needs a tool-calling model.">
+                            <TextBlock Text="📄" FontSize="15" VerticalAlignment="Center"/>
+                            <ToggleSwitch Classes="composerSwitch" VerticalAlignment="Center"
+                                          IsChecked="{Binding ChatDocCreationEnabled}"
+                                          OnContent="" OffContent=""/>
+                        </StackPanel>
+
                         <!-- Auto-read: speak every reply aloud (icon-only toggle; accent when on).
                              Shown only when a voice is set up. -->
-                        <ToggleButton Grid.Column="4" Classes="toolToggle" HorizontalAlignment="Right"
+                        <ToggleButton Grid.Column="5" Classes="toolToggle" HorizontalAlignment="Right"
                                       Margin="8,0,8,0" FontSize="15"
                                       IsChecked="{Binding AutoSpeakEnabled}"
                                       IsVisible="{Binding IsVoiceConfigured}"
                                       Content="🔊"
                                       ToolTip.Tip="Auto-read: read each reply aloud automatically, in the voice that matches its language"/>
 
-                        <Button Grid.Column="5" Classes="cta" Content="Send" MinWidth="96" Margin="8,0,0,0"
+                        <Button Grid.Column="6" Classes="cta" Content="Send" MinWidth="96" Margin="8,0,0,0"
                                 Command="{Binding SendCommand}"
                                 IsVisible="{Binding !IsBusy}"/>
-                        <Button Grid.Column="6" Content="Stop" MinWidth="96" Margin="8,0,0,0"
+                        <Button Grid.Column="7" Content="Stop" MinWidth="96" Margin="8,0,0,0"
                                 Command="{Binding StopCommand}"
                                 IsVisible="{Binding IsBusy}"/>
                     </Grid>
