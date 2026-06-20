@@ -6,73 +6,208 @@
   },
   "pages": [
     {
-      "id": "getting-started",
-      "group": "Overview",
-      "title": "Getting Started",
-      "summary": "Install Carnelian and run your first local chat.",
+      "id": "about",
+      "group": "About",
+      "title": "What is Carnelian",
+      "summary": "A local-first AI workspace for Windows & Linux.",
       "sections": [
-        { "type": "p", "text": "Carnelian is a cross-platform desktop app that runs AI **locally** through [Ollama](https://ollama.com), and optionally through cloud providers you configure. This page gets you from zero to your first reply." },
-        { "type": "h2", "text": "1. Install Ollama" },
-        { "type": "p", "text": "Carnelian needs a local Ollama server with at least one model pulled. You can install Ollama in one click from inside the app (Settings → Models → Local AI), or set it up yourself:" },
-        { "type": "code", "lang": "bash", "text": "ollama serve\nollama pull llama3.1" },
-        { "type": "note", "text": "The Project agent needs a tool-calling-capable model, e.g. `llama3.1`, `qwen2.5`, or `mistral-nemo`." },
-        { "type": "h2", "text": "2. Get Carnelian" },
-        { "type": "p", "text": "Download a self-contained build for Windows or Linux from the [releases page](https://github.com/Sagiv440/Carnelian_AI/releases), or build from source:" },
-        { "type": "code", "lang": "bash", "text": "git clone https://github.com/Sagiv440/Carnelian_AI\ndotnet run --project src/AI_Interface" },
-        { "type": "h2", "text": "3. Pick a model and chat" },
-        { "type": "p", "text": "TODO: walk through the model picker, the connection indicator, and sending a first message." }
+        { "type": "p", "text": "Carnelian is a cross-platform (Windows + Linux) desktop app that runs AI **locally** through a local [Ollama](https://ollama.com) server, and optionally through cloud providers you choose (OpenAI/ChatGPT, Google Gemini, Anthropic/Claude, DeepSeek, Nvidia). It is built on .NET 10 and Avalonia." },
+        { "type": "h2", "text": "The goal: private by default" },
+        { "type": "p", "text": "When you select a local Ollama model, your prompts, files, and replies stay entirely **on your machine** — nothing is sent anywhere. Cloud providers are completely **off until you hand over an API key**, and there is **no telemetry**: the only network calls Carnelian makes are the web searches and page fetches you explicitly trigger." },
+        { "type": "p", "text": "Your data is portable, too. Agents, memory, and chats are plain Markdown and JSON in your own folders — yours to read, edit, or delete." },
+        { "type": "h2", "text": "Four ways to work" },
+        { "type": "p", "text": "One window, four modes — switched from the sidebar and composer. Every mode is provider-agnostic, so any model you pick just works." },
+        { "type": "ul", "items": [
+          "**Chat** — talk to the model directly, streamed token-by-token.",
+          "**Web Search** — a per-prompt search injected as context, then a cited answer.",
+          "**Deep Research** — plan queries, read pages, and synthesize a cited report.",
+          "**Project** — a sandboxed, tool-using agent that builds inside a project folder."
+        ] },
+        { "type": "h2", "text": "Woven through every mode" },
+        { "type": "ul", "items": [
+          "**Agents** — selectable personas with skills and tool permissions, including a Lead orchestrator.",
+          "**Memory** — persistent facts recalled across sessions.",
+          "**Thinking** — a per-prompt plan-before-answer reasoning toggle.",
+          "**Voice** — read replies aloud with a local Piper text-to-speech engine.",
+          "**MCP** — connect external Model Context Protocol tool servers."
+        ] },
+        { "type": "note", "text": "New here? Start with [Setup & Installing Ollama](#setup)." }
       ]
     },
     {
-      "id": "modes",
-      "group": "Overview",
-      "title": "The Four Modes",
-      "summary": "Chat, Web Search, Deep Research, and Project.",
+      "id": "setup",
+      "group": "Getting Started",
+      "title": "Setup & Installing Ollama",
+      "summary": "Install Carnelian, set up Ollama from inside the app, and run your first chat.",
       "sections": [
-        { "type": "p", "text": "Carnelian has four operating modes, chosen from the sidebar and composer rather than a single picker. Every mode is provider-agnostic — pick any model and it just works." },
-        { "type": "h2", "text": "Chat" },
-        { "type": "p", "text": "TODO: a normal streamed conversation with the model, fully local with Ollama." },
-        { "type": "h2", "text": "Web Search" },
-        { "type": "p", "text": "TODO: the per-prompt 🌐 toggle injects one live search as context, then answers with citations." },
-        { "type": "h2", "text": "Deep Research" },
-        { "type": "p", "text": "TODO: plan queries → read pages → synthesize a cited report. Optionally split planning and synthesis across models." },
-        { "type": "h2", "text": "Project" },
-        { "type": "p", "text": "TODO: a sandboxed, tool-using agent scoped to a project directory. See the [Project Agent](#project-agent) page." }
+        { "type": "p", "text": "Carnelian runs local AI through an **Ollama** server. This page takes you from a fresh install to your first reply — installing Ollama directly from inside the app." },
+        { "type": "h2", "text": "1. Get Carnelian" },
+        { "type": "p", "text": "Download a self-contained build for Windows or Linux from the [releases page](https://github.com/Sagiv440/Carnelian_AI/releases) — no .NET install is needed on the target machine. Linux also ships as a `.deb` and a Flatpak. Or build from source:" },
+        { "type": "code", "lang": "bash", "text": "git clone https://github.com/Sagiv440/Carnelian_AI\ndotnet run --project src/AI_Interface" },
+        { "type": "h2", "text": "2. Install Ollama from the app" },
+        { "type": "p", "text": "You don't need to install Ollama yourself — Carnelian can do it in one click:" },
+        { "type": "ol", "items": [
+          "Open **Settings → Models → Local AI**.",
+          "Click **Download & install Ollama**, and confirm the prompt.",
+          "Carnelian downloads and runs the official installer for your OS, then best-effort starts the server and reconnects automatically."
+        ] },
+        { "type": "p", "text": "The same one-click installer is also on the sidebar **🛠 Tools** menu: when the Ollama server isn't reachable yet, a **⬇ Download & Install** button appears there." },
+        { "type": "note", "text": "**Windows** runs the official `OllamaSetup.exe` silently (it may show a UAC prompt — that's expected). **Linux** runs the official `install.sh` script (needs `curl`, possibly sudo). **macOS** is not auto-installed — install it from [ollama.com](https://ollama.com) instead." },
+        { "type": "h2", "text": "3. Pull a model" },
+        { "type": "p", "text": "Ollama needs at least one model pulled before you can chat. The easiest way is the in-app [LLM Browser](#llm-browser), which recommends models that fit your hardware and downloads them for you. From a terminal it's:" },
+        { "type": "code", "lang": "bash", "text": "ollama pull llama3.1" },
+        { "type": "note", "text": "**Project mode** needs a tool-calling-capable model such as `llama3.1`, `qwen2.5`, or `mistral-nemo`." },
+        { "type": "h2", "text": "4. Connect and pick a model" },
+        { "type": "p", "text": "Carnelian reads the Ollama URL from **Settings → Models → Local AI** (use **Test connection** to verify the green status dot). Then choose your model from the picker in the top bar — and send your first message. To go beyond local models, see [Connect Web Models](#web-models)." }
+      ]
+    },
+    {
+      "id": "web-models",
+      "group": "Getting Started",
+      "title": "Connect Web Models",
+      "summary": "Add cloud providers (OpenAI, Gemini, Claude, DeepSeek, Nvidia) alongside local Ollama.",
+      "sections": [
+        { "type": "p", "text": "Beyond local Ollama, Carnelian can route any mode through a cloud provider: **OpenAI / ChatGPT**, **Google / Gemini**, **Anthropic / Claude**, **DeepSeek**, and **Nvidia**. Cloud is entirely optional and stays off until you add a key." },
+        { "type": "h2", "text": "Add a provider" },
+        { "type": "p", "text": "Open **Settings → AI Model → Web Models**, then use the **Add Provider** form:" },
+        { "type": "ol", "items": [
+          "Pick a provider from the dropdown.",
+          "Paste its **API key**.",
+          "Choose a **Billing** mode — *Budget ($)* to set a spending cap, or *Subscription*.",
+          "Click **Connect** — Carnelian probes the provider to confirm the key works.",
+          "Click **Add** to save it to your **Active Providers**."
+        ] },
+        { "type": "h2", "text": "Use a cloud model" },
+        { "type": "p", "text": "Once a provider is added, its models appear in the top-bar model picker right alongside your Ollama models (local models are listed first). Because every mode is provider-agnostic, picking a cloud model is all it takes — Chat, Web Search, Deep Research, and Project mode all work the same way." },
+        { "type": "h2", "text": "Budget tracking" },
+        { "type": "p", "text": "Each active provider shows a billing line — `$spent of $budget (est.)`, turning red when over budget, or `Subscription`. You can also browse a provider's available models from its row." },
+        { "type": "note", "text": "Budget tracking is a coarse **estimate** (roughly 4 characters per token against a per-model price table), not a bill. API keys are stored in the app's settings file in plaintext, like the search keys — use a provider's own dashboard to set hard spending limits." }
+      ]
+    },
+    {
+      "id": "llm-browser",
+      "group": "Getting Started",
+      "title": "LLM Browser",
+      "summary": "A hardware-aware recommender that picks and downloads Ollama models that fit your machine.",
+      "sections": [
+        { "type": "p", "text": "The **LLM Browser** is a hardware-aware model recommender. It scans your CPU/RAM and GPU/VRAM, then ranks a curated list of Ollama models by how well they fit your memory budget — so you can download a model you can actually run, without guessing." },
+        { "type": "h2", "text": "Opening it" },
+        { "type": "p", "text": "Open it from **Settings → AI Model → Local AI → LLM Browser**, or from the sidebar **🛠 Tools → LLM Browser**. It is enabled once the Ollama server is connected." },
+        { "type": "h2", "text": "Choosing a model" },
+        { "type": "p", "text": "Models are ranked by fit to your hardware, and you can tune the recommendation by **use case**, **quantization**, and **context length**. Each row has inline **Download** / **Remove** buttons, plus a **Downloaded** filter to see only what you already have." },
+        { "type": "note", "text": "The LLM Browser manages **local Ollama models**. It needs the Ollama server running — if it's greyed out, install/start Ollama first (see [Setup](#setup))." }
+      ]
+    },
+    {
+      "id": "chat",
+      "group": "Work Modes",
+      "title": "Chat",
+      "summary": "A normal, streamed conversation with the model — fully local with Ollama.",
+      "sections": [
+        { "type": "p", "text": "Chat is a normal conversation with the model, streamed token-by-token. With an Ollama model selected it runs entirely on your machine. Replies render Markdown — headings, lists, code blocks, **tables**, inline emphasis, and clickable links." },
+        { "type": "h2", "text": "Using it" },
+        { "type": "ul", "items": [
+          "Type in the composer and press **Enter** to send; **Shift+Enter** inserts a new line.",
+          "The full conversation history is sent each turn, so the model keeps context.",
+          "Use the 📎 menu to attach **images** (for vision models) or **documents** (PDF, DOCX, ODT, code) — their text is pulled into the prompt.",
+          "Toggle 🧠 **Thinking** to have the model plan before answering (see [Thinking](#thinking))."
+        ] },
+        { "type": "p", "text": "Each reply has per-message **📋 Copy** and **🔈 speak** buttons, and code blocks have their own copy button." }
+      ]
+    },
+    {
+      "id": "web-search",
+      "group": "Work Modes",
+      "title": "Web Search",
+      "summary": "One live web search injected as context, then a cited answer.",
+      "sections": [
+        { "type": "p", "text": "Web Search is a **per-prompt** mode: flip the 🌐 toggle in the composer and Carnelian runs one live web search for your question, injects the top results as context, and answers with inline, clickable **citations**." },
+        { "type": "h2", "text": "Search providers" },
+        { "type": "p", "text": "Out of the box it uses a keyless **DuckDuckGo** endpoint — no setup or API key. For a private, self-hosted option you can run a local **SearXNG** instance, installed in one click (via Docker) from **Settings → Web Search**." },
+        { "type": "note", "text": "The 🌐 toggle is per-prompt — it applies to the next message only, not the whole conversation." }
+      ]
+    },
+    {
+      "id": "deep-research",
+      "group": "Work Modes",
+      "title": "Deep Research",
+      "summary": "Plan queries, read pages, and synthesize a cited report.",
+      "sections": [
+        { "type": "p", "text": "Deep Research is a sidebar toggle. Instead of a single search, the model **plans several queries**, Carnelian **reads the top pages**, and the model then **synthesizes a cited report** from what it found. It's best-effort per source — a failed or slow page is skipped rather than aborting the run." },
+        { "type": "h2", "text": "Use multiple models (optional)" },
+        { "type": "p", "text": "You can split the work across models: enable **Use Multiple LLMs** in **Settings → Research & Thinking** to set a separate **Planning model** and **Synthesize model** (leave either blank to reuse your chat model)." },
+        { "type": "note", "text": "The synthesis step receives the **contents of the pages that were read**. For sensitive sources, point the Synthesize model at a local Ollama model so those contents never leave your machine." },
+        { "type": "h2", "text": "Save the report" },
+        { "type": "p", "text": "Use the composer's **Save document ▾** dropdown to export the report to **PDF** or **DOCX** — saved under `~/Documents/research/` and opened after saving." }
+      ]
+    },
+    {
+      "id": "project-mode",
+      "group": "Work Modes",
+      "title": "Project Mode",
+      "summary": "A sandboxed, tool-using agent that builds inside a project folder.",
+      "sections": [
+        { "type": "p", "text": "Project mode is a tool-using **agent** scoped to a project directory. Point it at a folder, give it a goal, and it plans the work and carries it out — reading and editing files, running commands, and more — all under approval rules you set." },
+        { "type": "h2", "text": "Entering a project" },
+        { "type": "p", "text": "Click the sidebar **📁 Project** button. The **New** tab creates a `<location>/<name>/` folder (with a `.AI` folder for its data); the **Open** tab uses an existing folder. While a project is active, a **Chat Log / Files** tab strip appears, and chats are saved inside the project." },
+        { "type": "h2", "text": "What the agent can do" },
+        { "type": "p", "text": "Depending on the active agent's permissions, it has tools to: list, read, search, and find files; write, edit, move, and copy files; run commands; install software (when allowed); search the web; keep a live plan; ask you clarifying questions; remember facts; and even author new skills and agents for the project. All file operations are confined to the project directory — it can't touch paths outside it." },
+        { "type": "h2", "text": "Approval & autonomy" },
+        { "type": "p", "text": "You stay in control via **Settings → Autonomy & Memory**. The approval mode decides how much the agent confirms first:" },
+        { "type": "ul", "items": [
+          "**Confirm everything** — approve each tool action.",
+          "**Confirm destructive** — auto-run reads, confirm writes/commands/deletes.",
+          "**Auto-run** — let the agent work, then review the result."
+        ] },
+        { "type": "p", "text": "An independent **software-install permission** (`Never` / `Ask` / `Allow`) gates package installs separately, so the agent can build a project without being able to install machine-wide software unless you allow it." },
+        { "type": "h2", "text": "The Lead — a team that delegates" },
+        { "type": "p", "text": "Pick the built-in **Lead** agent (the 🧭 \"team\" persona) and it won't do everything itself — it **delegates** subtasks to specialist agents and reviews their work. You watch it all happen live: a **plan card**, a per-tool **activity feed**, and a collapsible card for every delegated subagent." },
+        { "type": "h2", "text": "The project handbook (AI_DOCS.md)" },
+        { "type": "p", "text": "Carnelian reads a `.AI/AI_DOCS.md` handbook from your project — the app's equivalent of how Claude Code reads `CLAUDE.md`. It's an authoritative, hand-authored set of rules the agent follows on every turn, and the agent can help maintain it." }
+      ]
+    },
+    {
+      "id": "actions",
+      "group": "Features",
+      "title": "Actions & Commands",
+      "summary": "Conversation actions and the slash-command palette.",
+      "sections": [
+        { "type": "p", "text": "Two quick ways to drive Carnelian from the composer: the conversation action buttons, and a slash-command palette." },
+        { "type": "h2", "text": "Conversation actions" },
+        { "type": "p", "text": "Sitting next to Send/Stop, available in any mode:" },
+        { "type": "ul", "items": [
+          "**🗜 Compact** — summarizes the current transcript into a single message to free up context tokens (like Claude Code's `/compact`). It updates the same chat in place.",
+          "**🧹 Clear** — discards the current conversation and resets the transcript."
+        ] },
+        { "type": "h2", "text": "Slash commands" },
+        { "type": "p", "text": "Type `/` in the composer to open a filterable command palette. Commands are context-aware (mode switches hide inside a project, project actions only show inside one). Navigate with ↑/↓, run with Enter/Tab, dismiss with Esc." },
+        { "type": "ul", "items": [
+          "`/new` `/compact` `/clear` — conversation actions",
+          "`/chat` `/web` `/research` — switch modes",
+          "`/project` `/settings` `/thinking` `/auto-read` — open or toggle features",
+          "**Project-only:** `/init` (analyze the project and write its handbook + memory), `/update-docs` (refresh the handbook), `/run-app` (build & run)"
+        ] },
+        { "type": "note", "text": "MCP server **prompts** also appear here as extra slash-commands when a server provides them — see [MCP Servers](#mcp)." }
       ]
     },
     {
       "id": "agents",
       "group": "Features",
-      "title": "Agents & Personas",
-      "summary": "Selectable personas with skills and tool allow-lists.",
+      "title": "Agents",
+      "summary": "Selectable personas with skills and tool permissions.",
       "sections": [
-        { "type": "p", "text": "An agent is a selectable persona whose voice is layered into every mode's system prompt. Carnelian ships five built-ins and lets you author your own, globally or per-project." },
+        { "type": "p", "text": "An **agent** is a selectable persona whose voice is layered into every mode's system prompt. Pick one from the top-bar agent picker (it's independent of the model picker). Carnelian ships five built-ins and lets you author your own." },
         { "type": "ul", "items": [
-          "**Assistant** — TODO",
-          "**Researcher** — TODO",
-          "**Code Buddy** — TODO",
-          "**Autopilot** — TODO",
+          "**Assistant** — a general-purpose, read-only helper.",
+          "**Researcher** — tuned for cited research, read-only.",
+          "**Code Buddy** — file + command tools for hands-on coding.",
+          "**Autopilot** — the most autonomous (adds install + proactive next-step suggestions).",
           "**Lead** — the orchestrator that delegates subtasks to specialists in Project mode."
         ] },
-        { "type": "h2", "text": "Creating an agent" },
-        { "type": "p", "text": "TODO: Settings → AI Features → Agents. Name, glyph, persona, default model, tool permissions, skills." }
-      ]
-    },
-    {
-      "id": "project-agent",
-      "group": "Features",
-      "title": "Project Agent",
-      "summary": "A tool-using agent that builds inside your projects.",
-      "sections": [
-        { "type": "p", "text": "Point the Project agent at a folder and give it a goal. It plans, reads, edits files, runs commands, and (when allowed) installs — all confined to the project directory, under approval rules you set." },
-        { "type": "h2", "text": "Approval modes" },
-        { "type": "ul", "items": [
-          "**Confirm everything** — TODO",
-          "**Confirm destructive** — TODO",
-          "**Auto-run** — TODO"
-        ] },
-        { "type": "h2", "text": "The Lead orchestrator" },
-        { "type": "p", "text": "TODO: how the Lead breaks a goal into subtasks and delegates each to a specialist agent." }
+        { "type": "h2", "text": "Create or customize an agent" },
+        { "type": "p", "text": "Open **Settings → AI Features → Agents** — a list with **＋ New**, **Duplicate**, and **Delete**. For each agent you can edit its Name, Glyph, **Persona**, default model, **Tool permissions** (which tool groups it may use), **Skills**, a **Proactive** toggle (next-step suggestion chips), and a **Lead / orchestrator** toggle." },
+        { "type": "h2", "text": "Per-project agents" },
+        { "type": "p", "text": "Agents can be **global** or saved **per-project** under `.AI/agents/` as portable Markdown — so a project can ship its own team. In Project mode the agent can even create new agents for you (\"create an agent for writing tests\"), which then become delegation targets for the Lead." }
       ]
     },
     {
@@ -81,34 +216,66 @@
       "title": "Memory",
       "summary": "Persistent facts recalled across sessions.",
       "sections": [
-        { "type": "p", "text": "TODO: global and per-project memory, stored as portable Markdown and injected into every mode." }
+        { "type": "p", "text": "Memory lets Carnelian recall facts across sessions, in two scopes: **global** (about you) and **project** (about the active project). Facts are stored as portable Markdown — global in the app-data folder, project memory in `.AI/memory.md` — and injected into every mode when enabled." },
+        { "type": "h2", "text": "Adding facts" },
+        { "type": "ul", "items": [
+          "In any chat, start a message with **\"remember …\"** and Carnelian stores it (project scope when a project is active, otherwise global).",
+          "In Project mode, the agent has a **remember** tool it uses on its own when memory is enabled."
+        ] },
+        { "type": "h2", "text": "Managing it" },
+        { "type": "p", "text": "**Settings → Autonomy & Memory** has an *Enable persistent memory* master toggle, per-scope lists of stored facts with a per-item ✕, and *Clear all*. Memory can also be turned off per-agent." }
       ]
     },
     {
-      "id": "mcp",
+      "id": "thinking",
       "group": "Features",
-      "title": "MCP Servers",
-      "summary": "Extend the agent with Model Context Protocol tools.",
+      "title": "Thinking",
+      "summary": "A per-prompt plan-before-answer reasoning toggle.",
       "sections": [
-        { "type": "p", "text": "TODO: connect MCP servers (stdio or HTTP) to give the Project agent external tools, resources, and prompts. Global or saved with the project in `.AI/mcp.json`." }
+        { "type": "p", "text": "**Thinking** is a per-prompt 🧠 toggle in the composer that tells the model to plan before it answers. Its chain-of-thought is shown in a collapsible block above the reply, so you can see the reasoning without it cluttering the answer." },
+        { "type": "h2", "text": "Effort" },
+        { "type": "p", "text": "How deeply the model thinks is set by an **Effort** slider in **Settings → Research & Thinking**." },
+        { "type": "note", "text": "Thinking is honored by **Ollama** models; cloud clients currently ignore the think directive." }
       ]
     },
     {
       "id": "voice",
       "group": "Features",
       "title": "Voice",
-      "summary": "Read replies aloud with offline Piper TTS.",
+      "summary": "Read replies aloud with a local Piper text-to-speech engine.",
       "sections": [
-        { "type": "p", "text": "TODO: one-click Piper install, the voice-catalog browser, language-matched voices, and the composer 🔊 Auto-read toggle." }
+        { "type": "p", "text": "Voice reads replies aloud using **Piper**, a local text-to-speech engine — no cloud involved. It detects each reply's language and picks a matching downloaded voice automatically." },
+        { "type": "h2", "text": "Install & choose a voice" },
+        { "type": "p", "text": "Open **Settings → AI Features → Voice** and click **Download & install Piper** (a one-click, per-OS install), then **Browse voices** to download voices from the catalog (filterable by language). The voice browser is also on the sidebar **🛠 Tools** menu." },
+        { "type": "h2", "text": "Reading replies" },
+        { "type": "ul", "items": [
+          "Each reply has a per-message **🔈** button to speak it on demand.",
+          "Toggle the composer's **🔊 Auto-read** button to have every completed reply spoken automatically."
+        ] }
       ]
     },
     {
-      "id": "privacy",
-      "group": "Reference",
-      "title": "Privacy",
-      "summary": "What stays on your machine, and what doesn't.",
+      "id": "mcp",
+      "group": "Features",
+      "title": "MCP Servers",
+      "summary": "Connect external Model Context Protocol tools, resources, and prompts.",
       "sections": [
-        { "type": "p", "text": "TODO: local models never leave your machine; cloud is off until you provide a key; no telemetry." }
+        { "type": "p", "text": "**MCP (Model Context Protocol)** lets the Project-mode agent call tools from external servers — for GitHub, databases, the filesystem, and more — and lets you pull in MCP **resources** and **prompts**. MCP tools are just more tools the agent can use." },
+        { "type": "h2", "text": "Add a server" },
+        { "type": "p", "text": "Open **Settings → MCP Servers → Add**. Each server has a Name, a **Scope** (Global, or Local to the current project), and a **Transport**:" },
+        { "type": "ul", "items": [
+          "**stdio** — launches a command (e.g. `npx`/`uvx`) and speaks to it over standard I/O. You provide Command, Args, and Env.",
+          "**HTTP** — connects to a URL with optional Headers."
+        ] },
+        { "type": "p", "text": "Mark a server **Enabled** (and optionally **Trusted** to skip per-call approval), then use **Test connection** to confirm it launches and to preview its tools." },
+        { "type": "h2", "text": "Per-project servers" },
+        { "type": "p", "text": "A **Local** server is saved to `<project>/.AI/mcp.json` in Claude Code's format, so it travels with the repo and loads when the project is opened." },
+        { "type": "h2", "text": "Resources & prompts" },
+        { "type": "ul", "items": [
+          "**Resources** — attach a server's readable data as prompt context via the composer **📎 → From MCP server…** (works in any mode).",
+          "**Prompts** — a server's prompts become composer slash-commands; pick one to drop its expanded text into the composer."
+        ] },
+        { "type": "note", "text": "Don't commit secrets: a Local server's Env/Headers can carry tokens, and `.AI/mcp.json` lives in the repo." }
       ]
     }
   ]
