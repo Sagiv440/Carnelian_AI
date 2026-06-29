@@ -57,7 +57,7 @@
 
             <!-- Search box -->
             <Border Grid.Row="1" Classes="card" CornerRadius="4" Padding="10,8">
-                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                     <TextBox Grid.Column="0"
                              Text="{Binding SearchQuery}"
                              PlaceholderText="Search Ollama library  (e.g. llama, phi, gemma…)"
@@ -69,7 +69,11 @@
                     <Button Grid.Column="1" Classes="cta" Content="Search" MinWidth="90"
                             IsEnabled="{Binding !IsSearching}"
                             Command="{Binding SearchCommand}"/>
-                    <Button Grid.Column="2" Classes="ghost" Content="✕  Clear" MinWidth="80"
+                    <ToggleButton Grid.Column="2" Content="Details" MinWidth="80"
+                                  IsChecked="{Binding ShowDetails}"
+                                  IsVisible="{Binding IsSearchActive}"
+                                  ToolTip.Tip="Show full model details (description, sizes, pulls, etc.)"/>
+                    <Button Grid.Column="3" Classes="ghost" Content="✕  Clear" MinWidth="80"
                             IsVisible="{Binding IsSearchActive}"
                             Command="{Binding ClearSearchCommand}"/>
                 </Grid>
@@ -159,21 +163,68 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate x:CompileBindings="False">
                                 <Border Padding="14,8">
-                                    <Grid ColumnDefinitions="*,116" VerticalAlignment="Center">
-                                        <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,8,0">
+                                    <Grid ColumnDefinitions="*,130" ColumnSpacing="10">
+
+                                        <!-- Left column: name + optional details -->
+                                        <StackPanel Grid.Column="0" Spacing="3">
+
+                                            <!-- Row 1: Name (always) -->
                                             <TextBlock Text="{Binding Name}"
                                                        Foreground="{DynamicResource AppTextPrimary}"
                                                        FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"/>
+
+                                            <!-- Row 2: Description (details mode only) -->
                                             <TextBlock Text="{Binding Description}"
                                                        Classes="muted" TextWrapping="Wrap"
-                                                       MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding InstalledTag}"
-                                                       Classes="muted" FontSize="11" FontStyle="Italic"
+                                                       MaxLines="2" TextTrimming="CharacterEllipsis"
+                                                       IsVisible="{Binding DataContext.ShowDetails,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}"/>
+
+                                            <!-- Row 3: Sizes · Capabilities (details mode only) -->
+                                            <TextBlock Classes="muted" FontSize="12"
+                                                       IsVisible="{Binding DataContext.ShowDetails,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0}  {1}">
+                                                        <Binding Path="SizesDisplay"/>
+                                                        <Binding Path="CapabilitiesDisplay"/>
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+
+                                            <!-- Row 4: Pulls · Tags · Updated (details mode only) -->
+                                            <TextBlock Classes="muted" FontSize="11"
+                                                       IsVisible="{Binding DataContext.ShowDetails,
+                                                           RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0} pulls  ·  {1} tags  ·  {2}">
+                                                        <Binding Path="Pulls"/>
+                                                        <Binding Path="Tags"/>
+                                                        <Binding Path="Updated"/>
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+
+                                        </StackPanel>
+
+                                        <!-- Right column: size + action button -->
+                                        <StackPanel Grid.Column="1" HorizontalAlignment="Right"
+                                                    VerticalAlignment="Center" Spacing="4">
+
+                                            <!-- Installed: local size (details mode) + tag -->
+                                            <TextBlock Text="{Binding LocalSizeDisplay}"
+                                                       Classes="muted" FontSize="11"
+                                                       HorizontalAlignment="Right"
                                                        IsVisible="{Binding IsInstalled}"
                                                        TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                        <Panel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding InstalledTag}"
+                                                       Classes="muted" FontSize="11" FontStyle="Italic"
+                                                       HorizontalAlignment="Right"
+                                                       IsVisible="{Binding IsInstalled}"
+                                                       TextTrimming="CharacterEllipsis"/>
+
+                                            <!-- Action buttons -->
                                             <Button Classes="ghost rowaction" Content="Remove"
                                                     IsVisible="{Binding IsInstalled}"
                                                     Command="{Binding DataContext.RemoveSearchResultCommand,
@@ -184,7 +235,8 @@
                                                     Command="{Binding DataContext.DownloadSearchResultCommand,
                                                                RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding}"/>
-                                        </Panel>
+                                        </StackPanel>
+
                                     </Grid>
                                 </Border>
                             </DataTemplate>

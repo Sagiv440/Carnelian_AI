@@ -68,13 +68,19 @@ public sealed class OllamaClient : IOllamaClient
 
     public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct = default)
     {
+        var infos = await ListModelsWithInfoAsync(ct).ConfigureAwait(false);
+        return infos.Select(m => m.Name).ToList();
+    }
+
+    public async Task<IReadOnlyList<OllamaModelInfo>> ListModelsWithInfoAsync(CancellationToken ct = default)
+    {
         using var resp = await _http.GetAsync($"{BaseUrl}/api/tags", ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         var tags = await JsonSerializer.DeserializeAsync<OllamaTagsResponse>(stream, JsonOptions, ct)
             .ConfigureAwait(false);
-        return tags?.Models.Select(m => m.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList()
-               ?? new List<string>();
+        return tags?.Models.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList()
+               ?? new List<OllamaModelInfo>();
     }
 
     public async Task PullModelAsync(string name, IProgress<string>? progress, CancellationToken ct = default)
@@ -192,10 +198,35 @@ public sealed class OllamaClient : IOllamaClient
                 ? System.Net.WebUtility.HtmlDecode(descMatch.Groups[1].Value.Trim())
                 : "";
 
-            results.Add(new OllamaSearchResult(name, desc));
+            // Stats
+            var pulls = Extract(card, @"x-test-pull-count[^>]*>([^<]+)</span>");
+            var tags  = Extract(card, @"x-test-tag-count[^>]*>([^<]+)</span>");
+            var updated = Extract(card, @"x-test-updated[^>]*>([^<]+)</span>");
+
+            // Parameter sizes (multiple spans): <span x-test-size …>8b</span>
+            var sizes = System.Text.RegularExpressions.Regex
+                .Matches(card, @"x-test-size[^>]*>([^<]+)</span>")
+                .Select(m => m.Groups[1].Value.Trim().ToUpperInvariant())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToList();
+
+            // Capabilities (multiple spans): <span x-test-capability …>tools</span>
+            var caps = System.Text.RegularExpressions.Regex
+                .Matches(card, @"x-test-capability[^>]*>([^<]+)</span>")
+                .Select(m => m.Groups[1].Value.Trim())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToList();
+
+            results.Add(new OllamaSearchResult(name, desc, pulls, tags, updated, sizes, caps));
         }
 
         return results;
+    }
+
+    private static string Extract(string text, string pattern)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, pattern);
+        return m.Success ? m.Groups[1].Value.Trim() : "";
     }
 
     public async Task DeleteModelAsync(string name, CancellationToken ct = default)

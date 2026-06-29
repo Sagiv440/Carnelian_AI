@@ -30,6 +30,13 @@ internal sealed class DesignOllamaClient : IOllamaClient
     public Task<IReadOnlyList<OllamaSearchResult>> SearchAsync(string query, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<OllamaSearchResult>>(Array.Empty<OllamaSearchResult>());
 
+    public Task<IReadOnlyList<OllamaModelInfo>> ListModelsWithInfoAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<OllamaModelInfo>>(new[]
+        {
+            new OllamaModelInfo { Name = "llama3:latest",   Size = 4_661_224_448L },
+            new OllamaModelInfo { Name = "mistral:latest",  Size = 3_825_819_648L }
+        });
+
     public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<string>>(new[] { "llama3:latest", "mistral:latest" });
 

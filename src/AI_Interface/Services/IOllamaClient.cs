@@ -28,4 +28,7 @@ public interface IOllamaClient : IChatClient
     /// <summary>Searches the Ollama library for models matching <paramref name="query"/>.
     /// Returns an empty list (never throws) when the search endpoint is unreachable.</summary>
     Task<IReadOnlyList<OllamaSearchResult>> SearchAsync(string query, CancellationToken ct = default);
+
+    /// <summary>Lists all locally installed models with their disk sizes.</summary>
+    Task<IReadOnlyList<OllamaModelInfo>> ListModelsWithInfoAsync(CancellationToken ct = default);
 }

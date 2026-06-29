@@ -11,14 +11,24 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AI_Interface.ViewModels;
 
-/// <summary>A single result from the Ollama library search, with a resolved installed state.</summary>
+/// <summary>A single result from the Ollama library search, with all metadata and resolved installed state.</summary>
 public sealed partial class SearchResultEntry : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
 {
+    // Metadata from ollama.com
     public string Name { get; init; } = "";
     public string Description { get; init; } = "";
+    public string Pulls { get; init; } = "";
+    public string Tags { get; init; } = "";
+    public string Updated { get; init; } = "";
+    public string SizesDisplay { get; init; } = "";         // e.g. "8B · 70B · 405B"
+    public string CapabilitiesDisplay { get; init; } = "";  // e.g. "tools · vision"
+
+    // Installed state (changes after download / remove)
     [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty] private bool _isInstalled;
-    /// <summary>The full tag that is installed locally, e.g. "llama3:latest". Empty when not installed.</summary>
+    /// <summary>The exact installed tag, e.g. "llama3:latest". Empty when not installed.</summary>
     [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty] private string _installedTag = "";
+    /// <summary>Human-readable local disk size, e.g. "4.3 GB". Empty when not installed.</summary>
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty] private string _localSizeDisplay = "";
 }
 
 /// <summary>
@@ -34,6 +44,7 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
 
     private HardwareInfo? _hw;
     private ISet<string> _installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, long> _installedSizes = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<string> Quants { get; } = ModelCatalog.Quants;
     public IReadOnlyList<ContextOption> Contexts { get; } = ModelCatalog.Contexts;
@@ -75,6 +86,9 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
 
     /// <summary>When true the search-results list is shown instead of the curated recommendations.</summary>
     [ObservableProperty] private bool _isSearchActive;
+
+    /// <summary>When true, search result rows show full details (description, sizes, pulls, etc.).</summary>
+    [ObservableProperty] private bool _showDetails = true;
 
     [ObservableProperty]
     private string _hardwareSummary = "Click “Scan hardware” to detect your CPU, RAM and GPU.";
@@ -215,12 +229,23 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
             foreach (var r in raw)
             {
                 var tag = FindInstalledTag(r.Name);
+                var sz  = tag is not null && _installedSizes.TryGetValue(tag, out var s) ? s : 0L;
                 SearchResults.Add(new SearchResultEntry
                 {
-                    Name = r.Name,
-                    Description = r.Description,
-                    IsInstalled = tag is not null,
-                    InstalledTag = tag ?? ""
+                    Name               = r.Name,
+                    Description        = r.Description,
+                    Pulls              = r.Pulls,
+                    Tags               = r.Tags,
+                    Updated            = r.Updated,
+                    SizesDisplay       = r.Sizes.Count > 0
+                        ? string.Join(" · ", r.Sizes)
+                        : "",
+                    CapabilitiesDisplay = r.Capabilities.Count > 0
+                        ? string.Join(" · ", r.Capabilities)
+                        : "",
+                    IsInstalled        = tag is not null,
+                    InstalledTag       = tag ?? "",
+                    LocalSizeDisplay   = sz > 0 ? FormatBytes(sz) : ""
                 });
             }
             StatusMessage = SearchResults.Count == 0 ? $"No results for \"{q}\"." : "";
@@ -311,8 +336,10 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
         foreach (var r in SearchResults)
         {
             var tag = FindInstalledTag(r.Name);
-            r.IsInstalled = tag is not null;
-            r.InstalledTag = tag ?? "";
+            r.IsInstalled        = tag is not null;
+            r.InstalledTag       = tag ?? "";
+            r.LocalSizeDisplay   = tag is not null && _installedSizes.TryGetValue(tag, out var sz)
+                ? FormatBytes(sz) : "";
         }
     }
 
@@ -320,15 +347,22 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
     {
         try
         {
-            var models = await _ollama.ListModelsAsync();
-            _installed = new HashSet<string>(models, StringComparer.OrdinalIgnoreCase);
+            var infos = await _ollama.ListModelsWithInfoAsync();
+            _installed      = new HashSet<string>(infos.Select(m => m.Name), StringComparer.OrdinalIgnoreCase);
+            _installedSizes = infos.ToDictionary(m => m.Name, m => m.Size, StringComparer.OrdinalIgnoreCase);
         }
         catch
         {
-            _installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _installed      = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _installedSizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         }
         Recompute();
     }
+
+    private static string FormatBytes(long bytes) =>
+        bytes >= 1_073_741_824
+            ? $"{bytes / 1_073_741_824.0:0.0} GB"
+            : $"{bytes / 1_048_576.0:0} MB";
 
     private void Recompute()
     {
@@ -352,10 +386,43 @@ public sealed partial class ModelConfigViewModel : ViewModelBase
                         tag.StartsWith(cn, StringComparison.OrdinalIgnoreCase)))
                     continue;
 
+                var sizeGb = _installedSizes.TryGetValue(tag, out var bytes)
+                    ? bytes / 1_073_741_824.0
+                    : 0.0;
+
+                string symbol, note;
+                if (_hw is not null && sizeGb > 0)
+                {
+                    var budget = _hw.BudgetGb;
+                    var ratio  = (sizeGb + 0.8) / budget;
+                    if (ratio <= 0.75)
+                    {
+                        symbol = "✅";
+                        note   = $"Runs comfortably — needs ~{sizeGb:0.0} GB of your ~{budget:0.0} GB.";
+                    }
+                    else if (ratio <= 1.0)
+                    {
+                        symbol = "🟡";
+                        note   = $"Tight fit — needs ~{sizeGb:0.0} GB of your ~{budget:0.0} GB.";
+                    }
+                    else
+                    {
+                        symbol = "🔴";
+                        note   = $"Likely too large — needs ~{sizeGb:0.0} GB but you have ~{budget:0.0} GB.";
+                    }
+                }
+                else
+                {
+                    symbol = "•";
+                    note   = sizeGb > 0
+                        ? $"Not in catalog — actual size {sizeGb:0.0} GB. Scan hardware to check fit."
+                        : "Not in catalog — scan hardware to check fit.";
+                }
+
                 recs.Add(new ModelRecommendation(
-                    "•", tag, tag, "", 0, ModelUseCase.Standard,
-                    "Not in catalog — hardware fit unknown.", Score: -1,
-                    IsInstalled: true, MaxContextK: 0, Capabilities: ModelCapabilities.Text));
+                    symbol, tag, tag, "", Math.Round(sizeGb, 1), ModelUseCase.Standard,
+                    note, Score: -1, IsInstalled: true, MaxContextK: 0,
+                    Capabilities: ModelCapabilities.Text));
             }
         }
 
