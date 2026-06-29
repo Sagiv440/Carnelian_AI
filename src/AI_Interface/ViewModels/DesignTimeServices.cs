@@ -27,6 +27,9 @@ internal sealed class DesignOllamaClient : IOllamaClient
 
     public Task DeleteModelAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
 
+    public Task<IReadOnlyList<OllamaSearchResult>> SearchAsync(string query, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<OllamaSearchResult>>(Array.Empty<OllamaSearchResult>());
+
     public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<string>>(new[] { "llama3:latest", "mistral:latest" });
 

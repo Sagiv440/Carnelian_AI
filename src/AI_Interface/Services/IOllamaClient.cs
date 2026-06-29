@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using AI_Interface.Models;
 
 namespace AI_Interface.Services;
 
@@ -22,4 +24,8 @@ public interface IOllamaClient : IChatClient
 
     /// <summary>Deletes a locally installed model.</summary>
     Task DeleteModelAsync(string name, CancellationToken ct = default);
+
+    /// <summary>Searches the Ollama library for models matching <paramref name="query"/>.
+    /// Returns an empty list (never throws) when the search endpoint is unreachable.</summary>
+    Task<IReadOnlyList<OllamaSearchResult>> SearchAsync(string query, CancellationToken ct = default);
 }

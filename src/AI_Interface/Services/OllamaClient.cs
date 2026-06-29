@@ -138,6 +138,66 @@ public sealed class OllamaClient : IOllamaClient
         return status;
     }
 
+    public async Task<IReadOnlyList<OllamaSearchResult>> SearchAsync(string query, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return Array.Empty<OllamaSearchResult>();
+
+        // The Ollama website uses HTMX: GET /search?q=<query> with HX-Request returns an HTML fragment
+        // containing model cards. Each card has a <span x-test-search-response-title> for the name and
+        // a <p class="max-w-lg break-words …"> for the description.
+        var url = $"https://ollama.com/search?q={Uri.EscapeDataString(query.Trim())}";
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            http.DefaultRequestHeaders.Add("HX-Request", "true");
+            using var resp = await http.GetAsync(url, ct).ConfigureAwait(false);
+            resp.EnsureSuccessStatusCode();
+
+            var html = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            return ParseSearchHtml(html);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return Array.Empty<OllamaSearchResult>();
+        }
+    }
+
+    // Visible for testing.
+    internal static IReadOnlyList<OllamaSearchResult> ParseSearchHtml(string html)
+    {
+        var results = new List<OllamaSearchResult>();
+
+        // Split on model card boundaries (each <li x-test-model …>)
+        var cards = html.Split(new[] { "x-test-model" }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var card in cards)
+        {
+            // Name: <span x-test-search-response-title>llama3.1</span>
+            var nameMatch = System.Text.RegularExpressions.Regex.Match(
+                card, @"x-test-search-response-title[^>]*>([^<]+)</span>");
+            if (!nameMatch.Success)
+                continue;
+            var name = nameMatch.Groups[1].Value.Trim();
+            if (string.IsNullOrEmpty(name))
+                continue;
+
+            // Description: <p class="max-w-lg break-words …">…</p>
+            var descMatch = System.Text.RegularExpressions.Regex.Match(
+                card, @"max-w-lg break-words[^""]*""[^>]*>([^<]*)</p>");
+            var desc = descMatch.Success
+                ? System.Net.WebUtility.HtmlDecode(descMatch.Groups[1].Value.Trim())
+                : "";
+
+            results.Add(new OllamaSearchResult(name, desc));
+        }
+
+        return results;
+    }
+
     public async Task DeleteModelAsync(string name, CancellationToken ct = default)
     {
         using var httpReq = new HttpRequestMessage(HttpMethod.Delete, $"{BaseUrl}/api/delete")

@@ -46,7 +46,7 @@
     </Window.Styles>
 
     <Border Classes="card" CornerRadius="4" Margin="14" Padding="18">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" RowSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto" RowSpacing="10">
 
             <!-- Header -->
             <StackPanel Grid.Row="0">
@@ -55,8 +55,29 @@
                            Text="Scan your machine, then pick what you need — the list ranks Ollama models from the best match for your hardware to the worst. Select a model to download or remove it."/>
             </StackPanel>
 
+            <!-- Search box -->
+            <Border Grid.Row="1" Classes="card" CornerRadius="4" Padding="10,8">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding SearchQuery}"
+                             PlaceholderText="Search Ollama library  (e.g. llama, phi, gemma…)"
+                             IsEnabled="{Binding !IsSearching}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Return" Command="{Binding SearchCommand}"/>
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Grid.Column="1" Classes="cta" Content="Search" MinWidth="90"
+                            IsEnabled="{Binding !IsSearching}"
+                            Command="{Binding SearchCommand}"/>
+                    <Button Grid.Column="2" Classes="ghost" Content="✕  Clear" MinWidth="80"
+                            IsVisible="{Binding IsSearchActive}"
+                            Command="{Binding ClearSearchCommand}"/>
+                </Grid>
+            </Border>
+
             <!-- Scan + hardware summary -->
-            <Border Grid.Row="1" Classes="card" CornerRadius="4" Padding="14,12">
+            <Border Grid.Row="2" Classes="card" CornerRadius="4" Padding="14,12"
+                    IsVisible="{Binding !IsSearchActive}">
                 <Grid ColumnDefinitions="Auto,*">
                     <Button Grid.Column="0" Classes="cta" Content="🔍  Scan hardware" MinWidth="150"
                             VerticalAlignment="Top"
@@ -70,7 +91,7 @@
             </Border>
 
             <!-- Icon legend: what the Fit + API icons in the list mean -->
-            <StackPanel Grid.Row="2" Spacing="2">
+            <StackPanel Grid.Row="3" Spacing="2" IsVisible="{Binding !IsSearchActive}">
                 <TextBlock Classes="muted" FontSize="12"
                            Text="Fit:   ✅ comfortable      🟡 tight      🔴 too large for your memory"/>
                 <TextBlock Classes="muted" FontSize="12"
@@ -78,7 +99,7 @@
             </StackPanel>
 
             <!-- Filters: use case + API + quant + context + downloaded-only toggle (wraps if narrow) -->
-            <WrapPanel Grid.Row="3">
+            <WrapPanel Grid.Row="4" IsVisible="{Binding !IsSearchActive}">
                 <StackPanel Margin="0,0,22,6">
                     <TextBlock Classes="label" Text="Use case"/>
                     <ComboBox Width="150" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}">
@@ -122,8 +143,62 @@
                 </StackPanel>
             </WrapPanel>
 
-            <!-- Ranked model list -->
-            <Border Grid.Row="4" Classes="card" CornerRadius="4" Padding="0" ClipToBounds="True">
+            <!-- Ranked model list (curated) + Search results — toggled by IsSearchActive -->
+            <Panel Grid.Row="5">
+
+            <!-- Search results -->
+            <Border Classes="card" CornerRadius="4" Padding="0" ClipToBounds="True"
+                    IsVisible="{Binding IsSearchActive}">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,116" Margin="14,10,14,8">
+                        <TextBlock Grid.Column="0" Classes="colhead" Text="Model"/>
+                    </Grid>
+                    <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom"
+                            Background="{DynamicResource AppSurfaceBorderBrush}"/>
+                    <ListBox Grid.Row="1" Classes="models" ItemsSource="{Binding SearchResults}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:CompileBindings="False">
+                                <Border Padding="14,8">
+                                    <Grid ColumnDefinitions="*,116" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,8,0">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="{DynamicResource AppTextPrimary}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Description}"
+                                                       Classes="muted" TextWrapping="Wrap"
+                                                       MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding InstalledTag}"
+                                                       Classes="muted" FontSize="11" FontStyle="Italic"
+                                                       IsVisible="{Binding IsInstalled}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <Panel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <Button Classes="ghost rowaction" Content="Remove"
+                                                    IsVisible="{Binding IsInstalled}"
+                                                    Command="{Binding DataContext.RemoveSearchResultCommand,
+                                                               RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Classes="cta rowaction" Content="Pull latest"
+                                                    IsVisible="{Binding !IsInstalled}"
+                                                    Command="{Binding DataContext.DownloadSearchResultCommand,
+                                                               RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Panel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Grid.Row="1" Classes="muted" IsVisible="{Binding IsEmpty}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Text="No results found."/>
+                </Grid>
+            </Border>
+
+            <!-- Curated / ranked list -->
+            <Border Classes="card" CornerRadius="4" Padding="0" ClipToBounds="True"
+                    IsVisible="{Binding !IsSearchActive}">
                 <Grid RowDefinitions="Auto,*">
                     <!-- column header -->
                     <Grid Grid.Row="0" ColumnDefinitions="36,*,70,96,72,64,116" Margin="14,10,14,8">
@@ -197,8 +272,10 @@
                 </Grid>
             </Border>
 
+            </Panel> <!-- end curated/search Panel -->
+
             <!-- Status line (download / remove progress) -->
-            <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="10"
+            <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="10"
                         IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
                              IsVisible="{Binding IsBusy}"/>
@@ -206,7 +283,7 @@
                            TextWrapping="Wrap"/>
             </StackPanel>
 
-            <Button Grid.Row="6" Classes="cta" Content="Close" Click="OnClose"
+            <Button Grid.Row="7" Classes="cta" Content="Close" Click="OnClose"
                     HorizontalAlignment="Right" MinWidth="100"/>
         </Grid>
     </Border>

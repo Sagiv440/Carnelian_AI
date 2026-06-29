@@ -13,5 +13,8 @@ public enum ModelUseCase
     Chat,
 
     /// <summary>Multimodal models that can see images.</summary>
-    Vision
+    Vision,
+
+    /// <summary>Models with native chain-of-thought / step-by-step reasoning.</summary>
+    Reasoning
 }

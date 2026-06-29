@@ -100,45 +100,79 @@ public static class ModelCatalog
         ModelUseCase.Coding => "💻",
         ModelUseCase.Chat => "💬",
         ModelUseCase.Vision => "👁",
-        _ => "🧠"
+        ModelUseCase.Reasoning => "🧠",
+        _ => "⚡"
     };
 
-    // Capability shorthands (every chat model handles text; the differentiators are tools / vision).
+    // Capability shorthands.
     private const ModelCapabilities TextOnly = ModelCapabilities.Text;
     private const ModelCapabilities TextTools = ModelCapabilities.Text | ModelCapabilities.Tools;
     private const ModelCapabilities TextVision = ModelCapabilities.Text | ModelCapabilities.Vision;
+    private const ModelCapabilities TextReasoning = ModelCapabilities.Text | ModelCapabilities.Reasoning;
+    private const ModelCapabilities TextToolsReasoning = ModelCapabilities.Text | ModelCapabilities.Tools | ModelCapabilities.Reasoning;
 
     private static readonly ModelCatalogEntry[] Entries =
     {
-        // General / standard
-        new("llama3.2:1b", 1.2, ModelUseCase.Chat, 0.8, 128, TextTools),
-        new("llama3.2:3b", 3.2, ModelUseCase.Chat, 2.0, 128, TextTools),
-        new("llama3.1:8b", 8, ModelUseCase.Standard, 4.7, 128, TextTools),
-        new("llama3.3:70b", 70, ModelUseCase.Standard, 40, 128, TextTools),
-        new("qwen2.5:7b", 7, ModelUseCase.Standard, 4.7, 128, TextTools),
-        new("qwen2.5:14b", 14, ModelUseCase.Standard, 9.0, 128, TextTools),
-        new("qwen2.5:32b", 32, ModelUseCase.Standard, 20, 128, TextTools),
-        new("qwen2.5:72b", 72, ModelUseCase.Standard, 47, 128, TextTools),
-        new("mistral:7b", 7, ModelUseCase.Chat, 4.4, 32, TextTools),
-        new("gemma2:2b", 2.6, ModelUseCase.Chat, 1.6, 8, TextOnly),
-        new("gemma2:9b", 9, ModelUseCase.Standard, 5.4, 8, TextOnly),
-        new("gemma2:27b", 27, ModelUseCase.Standard, 16, 8, TextOnly),
-        new("phi3:mini", 3.8, ModelUseCase.Chat, 2.2, 128, TextOnly),
+        // ── General / standard ──────────────────────────────────────────────
+        new("llama3.2:1b",        1.2,  ModelUseCase.Chat,     0.8,  128, TextTools),
+        new("llama3.2:3b",        3.2,  ModelUseCase.Chat,     2.0,  128, TextTools),
+        new("llama3.1:8b",        8,    ModelUseCase.Standard,  4.7, 128, TextTools),
+        new("llama3.1:70b",       70,   ModelUseCase.Standard, 40.0, 128, TextTools),
+        new("llama3.3:70b",       70,   ModelUseCase.Standard, 40.0, 128, TextTools),
+        new("qwen2.5:7b",         7,    ModelUseCase.Standard,  4.7, 128, TextTools),
+        new("qwen2.5:14b",        14,   ModelUseCase.Standard,  9.0, 128, TextTools),
+        new("qwen2.5:32b",        32,   ModelUseCase.Standard, 20.0, 128, TextTools),
+        new("qwen2.5:72b",        72,   ModelUseCase.Standard, 47.0, 128, TextTools),
+        new("mistral:7b",         7,    ModelUseCase.Chat,      4.4,  32, TextTools),
+        new("mistral-nemo:12b",   12,   ModelUseCase.Standard,  7.1, 128, TextTools),
+        new("mistral-small:22b",  22,   ModelUseCase.Standard, 12.4,  32, TextTools),
+        new("gemma2:2b",          2.6,  ModelUseCase.Chat,      1.6,   8, TextOnly),
+        new("gemma2:9b",          9,    ModelUseCase.Standard,  5.4,   8, TextOnly),
+        new("gemma2:27b",         27,   ModelUseCase.Standard, 16.0,   8, TextOnly),
+        new("gemma3:1b",          1,    ModelUseCase.Chat,      0.8, 128, TextTools),
+        new("gemma3:4b",          4,    ModelUseCase.Chat,      2.5, 128, TextTools),
+        new("gemma3:12b",         12,   ModelUseCase.Standard,  7.7, 128, TextTools),
+        new("gemma3:27b",         27,   ModelUseCase.Standard, 17.0, 128, TextTools),
+        new("phi3:mini",          3.8,  ModelUseCase.Chat,      2.2, 128, TextOnly),
+        new("phi3.5:3.8b",        3.8,  ModelUseCase.Chat,      2.2, 128, TextOnly),
+        new("phi4:14b",           14,   ModelUseCase.Standard,  8.9,  16, TextTools),
+        new("command-r:35b",      35,   ModelUseCase.Standard, 20.0, 128, TextTools),
+        new("smollm2:1.7b",       1.7,  ModelUseCase.Chat,      1.0,   8, TextOnly),
 
-        // Coding
-        new("qwen2.5-coder:1.5b", 1.5, ModelUseCase.Coding, 1.0, 32, TextTools),
-        new("qwen2.5-coder:7b", 7, ModelUseCase.Coding, 4.7, 32, TextTools),
-        new("qwen2.5-coder:14b", 14, ModelUseCase.Coding, 9.0, 32, TextTools),
-        new("qwen2.5-coder:32b", 32, ModelUseCase.Coding, 20, 32, TextTools),
-        new("codellama:7b", 7, ModelUseCase.Coding, 3.8, 16, TextOnly),
-        new("codellama:13b", 13, ModelUseCase.Coding, 7.4, 16, TextOnly),
+        // ── Reasoning ───────────────────────────────────────────────────────
+        new("deepseek-r1:1.5b",   1.5,  ModelUseCase.Reasoning,  1.1, 128, TextReasoning),
+        new("deepseek-r1:7b",     7,    ModelUseCase.Reasoning,  4.7, 128, TextToolsReasoning),
+        new("deepseek-r1:8b",     8,    ModelUseCase.Reasoning,  4.9, 128, TextToolsReasoning),
+        new("deepseek-r1:14b",    14,   ModelUseCase.Reasoning,  9.0, 128, TextToolsReasoning),
+        new("deepseek-r1:32b",    32,   ModelUseCase.Reasoning, 19.8, 128, TextToolsReasoning),
+        new("deepseek-r1:70b",    70,   ModelUseCase.Reasoning, 42.5, 128, TextToolsReasoning),
+        new("qwq:32b",            32,   ModelUseCase.Reasoning, 19.8, 128, TextToolsReasoning),
+        new("phi4-reasoning:14b", 14,   ModelUseCase.Reasoning,  9.2,  16, TextToolsReasoning),
+
+        // ── Coding ──────────────────────────────────────────────────────────
+        new("qwen2.5-coder:1.5b", 1.5,  ModelUseCase.Coding,  1.0,  32, TextTools),
+        new("qwen2.5-coder:7b",   7,    ModelUseCase.Coding,  4.7,  32, TextTools),
+        new("qwen2.5-coder:14b",  14,   ModelUseCase.Coding,  9.0,  32, TextTools),
+        new("qwen2.5-coder:32b",  32,   ModelUseCase.Coding, 20.0,  32, TextTools),
+        new("devstral:24b",       24,   ModelUseCase.Coding, 15.0, 128, TextTools),
+        new("codellama:7b",       7,    ModelUseCase.Coding,  3.8,  16, TextOnly),
+        new("codellama:13b",      13,   ModelUseCase.Coding,  7.4,  16, TextOnly),
+        new("codegemma:7b",       7,    ModelUseCase.Coding,  5.0,   8, TextTools),
         new("deepseek-coder-v2:16b", 16, ModelUseCase.Coding, 8.9, 128, TextOnly),
+        new("starcoder2:7b",      7,    ModelUseCase.Coding,  4.3,  16, TextOnly),
+        new("starcoder2:15b",     15,   ModelUseCase.Coding,  9.1,  16, TextOnly),
+        new("granite-code:8b",    8,    ModelUseCase.Coding,  4.6, 128, TextOnly),
+        new("granite-code:20b",   20,   ModelUseCase.Coding, 12.1,   8, TextOnly),
 
-        // Vision
-        new("llava:7b", 7, ModelUseCase.Vision, 4.7, 4, TextVision),
-        new("llava:13b", 13, ModelUseCase.Vision, 8.0, 4, TextVision),
-        new("llama3.2-vision:11b", 11, ModelUseCase.Vision, 7.9, 128, TextVision),
-        new("minicpm-v:8b", 8, ModelUseCase.Vision, 5.5, 32, TextVision),
+        // ── Vision ──────────────────────────────────────────────────────────
+        new("llava:7b",               7,   ModelUseCase.Vision, 4.7,   4, TextVision),
+        new("llava:13b",              13,  ModelUseCase.Vision, 8.0,   4, TextVision),
+        new("llava-phi3:3.8b",        3.8, ModelUseCase.Vision, 2.9,   4, TextVision),
+        new("llama3.2-vision:11b",    11,  ModelUseCase.Vision, 7.9, 128, TextVision),
+        new("qwen2.5vl:7b",           7,   ModelUseCase.Vision, 5.0, 128, TextVision),
+        new("minicpm-v:8b",           8,   ModelUseCase.Vision, 5.5,  32, TextVision),
+        new("moondream:1.8b",         1.8, ModelUseCase.Vision, 1.5,   2, TextVision),
+        new("granite3.2-vision:2b",   2,   ModelUseCase.Vision, 1.5,  16, TextVision),
     };
 
     /// <summary>Ranks every catalog model for the given hardware/preferences, best match first.</summary>
@@ -241,9 +275,10 @@ public static class ModelCatalog
 
     private static bool Matches(ModelUseCase category, ModelUseCase preference) => preference switch
     {
-        ModelUseCase.Vision => category == ModelUseCase.Vision,
-        ModelUseCase.Coding => category == ModelUseCase.Coding,
-        ModelUseCase.Chat => category is ModelUseCase.Chat or ModelUseCase.Standard,
-        _ => category is ModelUseCase.Standard or ModelUseCase.Chat // Standard
+        ModelUseCase.Vision    => category == ModelUseCase.Vision,
+        ModelUseCase.Coding    => category == ModelUseCase.Coding,
+        ModelUseCase.Reasoning => category == ModelUseCase.Reasoning,
+        ModelUseCase.Chat      => category is ModelUseCase.Chat or ModelUseCase.Standard,
+        _                      => category is ModelUseCase.Standard or ModelUseCase.Chat // Standard
     };
 }
