@@ -3,6 +3,24 @@
 All notable user-facing changes to **Carnelian** (formerly "AI Interface").
 Versioning is informal; entries are grouped as Added / Changed / Fixed.
 
+## [Unreleased]
+
+### Added
+- **Save a reply to a file.** A per-message **💾** button (any non-user message) opens a menu to save
+  it as **PDF**, **Word (.docx)**, or a plain **Text File** — alongside the existing `/saveToDoc` command.
+- **Test connection for Web Search.** Settings → Web Search gets a *Test connection* button that probes
+  the selected provider and shows a clear ok/error status, mirroring the existing Local AI test.
+- **Search the Ollama model library.** The LLM Browser (Model Config) gets a **Search** box to query
+  Ollama's online library directly (name, description, pulls, tags, last-updated, sizes, capabilities),
+  not just the curated hardware-fit list.
+- **Line spacing.** Settings → Appearance → Typography gets a line-spacing slider (tight to spacious).
+
+### Fixed
+- **Voice no longer reads Markdown symbols aloud.** Read Aloud (🔈 / Auto-read) previously spoke raw
+  `**bold**`/`#`/`` ` `` characters; replies are now stripped to clean text first. Bold text also gets a
+  brief comma pause around it (`Hello **world** there` → "Hello, world, there") so emphasis sounds
+  natural instead of running straight through.
+
 ## [1.0.4] — 2026-06-18 — "Chat that does things"
 
 Headline: local Chat can now reach the web and create documents on its own, a new

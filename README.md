@@ -63,8 +63,8 @@ agent scoped to a project directory.
   Memory; see below), with a three-way **software-install** permission (no permission / ask every time /
   allow) kept as an independent gate. File operations are sandboxed to the project directory.
 - **Settings** (⚙, top-right) has a grouped left rail under two headers:
-  - **Editor Features** — *Appearance* (light/dark + accent/bubble colors), *Typography* (font + size),
-    *Layout*.
+  - **Editor Features** — *Appearance* (light/dark + accent/bubble colors), *Typography* (font, size, and
+    line spacing), *Layout*.
   - **AI Features** — *Models* (Local AI + Web Models, plus Model Config), *Agents* (the agent roster),
     *Autonomy & Memory*, *Web Search*, *Voice*, *Research & Thinking* (research depth, the **Use Multiple
     LLMs** planning/synthesis model pickers, and Thinking effort).

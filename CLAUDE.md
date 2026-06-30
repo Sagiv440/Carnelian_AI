@@ -612,6 +612,13 @@ the chosen `ITtsEngine`, and plays through one shared `IAudioPlayer` (so a singl
   shown only when `IsVoiceConfigured`) that speaks each completed reply. Settings → AI Features → **Voice**
   has the *Download & install Piper* + *Browse voices* buttons and a manual-paths Advanced expander.
   `HttpDownloads` is the shared streamed-download-with-progress helper for the installer + catalog.
+- *Speech text rendering* — `SpeakMessage` never feeds the raw Markdown `message.Text` to Piper (it would
+  read `**`/`#`/`` ` `` symbols aloud). It renders through `ViewModels/MarkdownToSpeech.cs` first — a
+  TTS-only sibling of `MarkdownPlainText` (which still backs the 📋 copy button) that strips formatting
+  the same way **and** inserts comma pauses around `**bold**`/`***bold-italic***` spans (e.g.
+  `Hello **world** there` → `Hello, world, there`) so espeak-ng/Piper gives emphasized text a natural
+  breath, skipping the comma when the span already ends in sentence punctuation. Pure, unit-tested
+  (`MarkdownToSpeechTests.cs`).
 
 **Settings** (`SettingsService`): JSON under the per-user app-data folder; all reads/writes best-effort.
 `SettingsWindow` is a **grouped left nav + content host** (not a flat `TabControl` — a flat one can't show
@@ -762,7 +769,8 @@ pattern (VM event → code-behind opens window) for any new dialog rather than n
   per-block 📋 copy (`OnCopyCode`). The code body is a wrapping `SelectableTextBlock` that **sizes to its
   content** — no inner `ScrollViewer` (one under-measured the text height and clipped the last lines); long
   code just makes a taller message and the transcript scrolls. The raw `Text` is still the source of truth
-  for persist/speak.
+  for persistence; speak renders it through `MarkdownToSpeech` first (see *Voice* below) rather than reading
+  it raw.
 - **Markdown tables** (`SegmentKind.Table`). The segmenter detects a `| … |` header row followed by a
   `|---|---|` separator and consumes the whole block; `MessageSegment.Table` parses it to a `TableData`
   (header + padded rows, via `MarkdownSegmenter.ParseTable`/`SplitCells`/`IsTableSeparator`, unit-tested).
