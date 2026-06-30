@@ -231,6 +231,17 @@
                                     <Run Text="×"/>
                                 </TextBlock>
                             </StackPanel>
+
+                            <TextBlock Classes="label" Text="Paragraph spacing" Margin="0,8,0,0"/>
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Slider Width="220" Minimum="0" Maximum="40" TickFrequency="2"
+                                        IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                        Value="{Binding ParagraphSpacing}"/>
+                                <TextBlock Classes="muted" VerticalAlignment="Center">
+                                    <Run Text="{Binding ParagraphSpacing, StringFormat={}{0:F0}}"/>
+                                    <Run Text="px"/>
+                                </TextBlock>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
 

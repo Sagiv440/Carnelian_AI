@@ -24,6 +24,8 @@
             <sys:Double x:Key="AppFontSize">13</sys:Double>
             <!-- Line height in px (fontSize × lineSpacing); overridden at runtime by ThemeService. -->
             <sys:Double x:Key="AppLineHeight">16.9</sys:Double>
+            <!-- Bottom margin after each prose paragraph; overridden at runtime by ThemeService. -->
+            <Thickness x:Key="AppParagraphSpacing">0,0,0,10</Thickness>
 
             <!-- Accent (variant-independent; AppAccentBrush is user-themeable) — red-orange -->
             <SolidColorBrush x:Key="AppAccentBrush" Color="#F2542D"/>

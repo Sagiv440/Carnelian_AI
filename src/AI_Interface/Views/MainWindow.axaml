@@ -1022,7 +1022,7 @@
                                         <ItemsControl ItemsSource="{Binding Segments}"
                                                       HorizontalAlignment="Stretch">
                                             <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate>
+                                                <ItemsPanelTemplate><StackPanel Spacing="0"/></ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:MessageSegment">
@@ -1033,14 +1033,18 @@
                                                         <SelectableTextBlock IsVisible="{Binding IsParagraph}"
                                                                              beh:MarkdownText.Text="{Binding Text}"
                                                                              TextWrapping="Wrap"
+                                                                             Margin="{DynamicResource AppParagraphSpacing}"
                                                                              Foreground="{DynamicResource AppTextPrimary}"/>
 
-                                                        <!-- Heading: larger + bold, inline Markdown still applies -->
+                                                        <!-- Heading: larger + bold, inline Markdown still applies.
+                                                             LineHeight="NaN" opts out of the global SelectableTextBlock
+                                                             style so the prose AppLineHeight can't clip H1/H2 ascenders. -->
                                                         <SelectableTextBlock IsVisible="{Binding IsHeading}"
                                                                              beh:MarkdownText.Text="{Binding Text}"
                                                                              TextWrapping="Wrap" Margin="0,8,0,2"
                                                                              FontWeight="Bold"
                                                                              FontSize="{Binding HeadingFontSize}"
+                                                                             LineHeight="NaN"
                                                                              Foreground="{DynamicResource AppTextPrimary}"/>
 
                                                         <!-- List item: a gutter marker (• / 1.) + wrapping content -->

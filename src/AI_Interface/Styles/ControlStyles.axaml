@@ -15,11 +15,9 @@
     </Style>
 
     <!-- Line height driven by the AppLineHeight token (fontSize × lineSpacing multiplier).
-         Applied to both TextBlock and SelectableTextBlock so chat transcript prose spacing
-         responds to the Typography → Line spacing slider. -->
-    <Style Selector="TextBlock">
-        <Setter Property="LineHeight" Value="{DynamicResource AppLineHeight}"/>
-    </Style>
+         Scoped to SelectableTextBlock only (used exclusively in the chat transcript for prose,
+         list items, and code). Plain TextBlock is left at the default NaN so labels, nav
+         buttons, and fixed-size UI text are never clipped by a smaller computed line height. -->
     <Style Selector="SelectableTextBlock">
         <Setter Property="LineHeight" Value="{DynamicResource AppLineHeight}"/>
     </Style>

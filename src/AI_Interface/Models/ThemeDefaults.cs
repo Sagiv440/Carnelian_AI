@@ -24,6 +24,9 @@ public static class ThemeDefaults
     /// <summary>Default line-spacing multiplier (relative to font size). 1.0 = tight, 1.5 = spacious.</summary>
     public const double LineSpacing = 1.3;
 
+    /// <summary>Default bottom margin (px) added after each prose paragraph in the chat transcript.</summary>
+    public const double ParagraphSpacing = 10;
+
     /// <summary>Selectable font families for the Theme tab. "Poppins" maps to the embedded font.</summary>
     public static readonly string[] Fonts =
     {

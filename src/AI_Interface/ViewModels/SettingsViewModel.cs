@@ -175,6 +175,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _fontFamily;
     [ObservableProperty] private double _fontSize;
     [ObservableProperty] private double _lineSpacing;
+    [ObservableProperty] private double _paragraphSpacing;
 
     /// <summary>Selectable font families for the Theme tab.</summary>
     public IReadOnlyList<string> Fonts { get; } = ThemeDefaults.Fonts;
@@ -471,6 +472,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _fontFamily = s.FontFamily;
         _fontSize = s.FontSize;
         _lineSpacing = s.LineSpacing;
+        _paragraphSpacing = s.ParagraphSpacing;
         _ollamaBaseUrl = s.OllamaBaseUrl;
         _resultsPerQuery = s.SearchResultsPerQuery;
         _maxPagesToRead = s.MaxPagesToRead;
@@ -517,6 +519,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnFontFamilyChanged(string value) => ApplyTheme();
     partial void OnFontSizeChanged(double value) => ApplyTheme();
     partial void OnLineSpacingChanged(double value) => ApplyTheme();
+    partial void OnParagraphSpacingChanged(double value) => ApplyTheme();
 
     partial void OnOllamaBaseUrlChanged(string value) => SaveGeneral();
     partial void OnResultsPerQueryChanged(decimal value) => SaveGeneral();
@@ -597,6 +600,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsTavilySelected));
         OnPropertyChanged(nameof(IsGoogleSelected));
         OnPropertyChanged(nameof(SelectedSearchProvider));
+        WebSearchTestMessage = "";
+        IsWebSearchTestError = false;
         SaveWebSearch();
     }
 
@@ -781,6 +786,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         FontFamily = ThemeDefaults.FontFamily;
         FontSize = ThemeDefaults.FontSize;
         LineSpacing = ThemeDefaults.LineSpacing;
+        ParagraphSpacing = ThemeDefaults.ParagraphSpacing;
     }
 
     /// <summary>Scan localhost:11434 and, if Ollama answers, fill in the server URL.</summary>
@@ -995,6 +1001,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.FontFamily = FontFamily;
         s.FontSize = FontSize;
         s.LineSpacing = LineSpacing;
+        s.ParagraphSpacing = ParagraphSpacing;
 
         _theme.Apply(s);
         _settings.Save();

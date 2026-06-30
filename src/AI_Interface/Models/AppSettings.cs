@@ -59,6 +59,9 @@ public sealed class AppSettings
     /// <summary>Line-spacing multiplier (relative to font size). 1.0 = tight, 1.5 = spacious.</summary>
     public double LineSpacing { get; set; } = ThemeDefaults.LineSpacing;
 
+    /// <summary>Bottom margin (px) added after each prose paragraph in the chat transcript.</summary>
+    public double ParagraphSpacing { get; set; } = ThemeDefaults.ParagraphSpacing;
+
     /// <summary>Model selected last time, restored on startup if still installed.</summary>
     public string? DefaultModel { get; set; }
 

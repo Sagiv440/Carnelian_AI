@@ -365,7 +365,9 @@ public sealed class WebSearchService : IWebSearchService
         var payload = new TavilyRequest { ApiKey = apiKey.Trim(), Query = "test", MaxResults = 1 };
         try
         {
-            using var resp = await _http.PostAsJsonAsync(TavilyEndpoint, payload, JsonOptions, ct).ConfigureAwait(false);
+            using var req = new HttpRequestMessage(HttpMethod.Post, TavilyEndpoint)
+                { Content = JsonContent.Create(payload, options: JsonOptions) };
+            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             return resp.StatusCode switch
             {
                 System.Net.HttpStatusCode.OK          => null,

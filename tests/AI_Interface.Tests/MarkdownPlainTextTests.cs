@@ -72,4 +72,84 @@ public sealed class MarkdownPlainTextTests
         Assert.Contains("sudo apt remove gimp", outp);
         Assert.Contains("1. Check the menu.", outp);
     }
+
+    // -------------------------------------------------------------------------
+    // TTS-specific coverage: verifies that SpeakMessage produces text that Piper
+    // can read aloud without any raw markdown symbols being spoken.
+    // Each test maps to one token type so a regression is easy to pinpoint.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Tts_BoldMarkers_AreStripped()
+    {
+        Assert.Equal("hello", MarkdownPlainText.Render("**hello**"));
+    }
+
+    [Fact]
+    public void Tts_ItalicMarkers_AreStripped()
+    {
+        Assert.Equal("world", MarkdownPlainText.Render("*world*"));
+    }
+
+    [Fact]
+    public void Tts_InlineCode_StripsBackticks()
+    {
+        Assert.Equal("code", MarkdownPlainText.Render("`code`"));
+    }
+
+    /// <summary>All six ATX heading levels should have their leading '#' characters removed.</summary>
+    [Theory]
+    [InlineData("# Title",        "Title")]
+    [InlineData("## Title",       "Title")]
+    [InlineData("### Title",      "Title")]
+    [InlineData("#### Title",     "Title")]
+    [InlineData("##### Title",    "Title")]
+    [InlineData("###### Title",   "Title")]
+    public void Tts_AtxHeading_HashesDropped(string input, string expected)
+    {
+        Assert.Equal(expected, MarkdownPlainText.Render(input));
+    }
+
+    [Fact]
+    public void Tts_Link_CollapsesToLabel()
+    {
+        Assert.Equal("click here", MarkdownPlainText.Render("[click here](https://example.com)"));
+    }
+
+    [Fact]
+    public void Tts_Strikethrough_IsStripped()
+    {
+        Assert.Equal("deleted", MarkdownPlainText.Render("~~deleted~~"));
+    }
+
+    /// <summary>Null and empty strings must both return "" so the Piper call is safe (no NRE, no crash).</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Tts_NullOrEmpty_ReturnsSafeEmptyString(string? input)
+    {
+        Assert.Equal("", MarkdownPlainText.Render(input));
+    }
+
+    [Fact]
+    public void Tts_RealisticReply_ProducesCleanSpeechText()
+    {
+        // Matches the exact example from the SpeakMessage fix description.
+        const string md = "## Summary\n\n**Key point:** use *this* approach.";
+
+        var result = MarkdownPlainText.Render(md);
+
+        // No raw markdown symbols left that Piper would read aloud.
+        Assert.DoesNotContain("#",  result);
+        Assert.DoesNotContain("**", result);
+        Assert.DoesNotContain("*",  result);
+        Assert.DoesNotContain("`",  result);
+
+        // The meaningful words survive.
+        Assert.Contains("Summary",    result);
+        Assert.Contains("Key point:", result);
+        Assert.Contains("use",        result);
+        Assert.Contains("this",       result);
+        Assert.Contains("approach",   result);
+    }
 }

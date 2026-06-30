@@ -18,6 +18,7 @@ public sealed class ThemeService : IThemeService
     public const string FontKey = "AppFont";
     public const string FontSizeKey = "AppFontSize";
     public const string LineHeightKey = "AppLineHeight";
+    public const string ParagraphSpacingKey = "AppParagraphSpacing";
 
     /// <summary>avares URI of the embedded Poppins font (selectable, but no longer the default).</summary>
     private const string PoppinsUri = "avares://Carnelian/Assets/Fonts#Poppins";
@@ -44,6 +45,8 @@ public sealed class ThemeService : IThemeService
         app.Resources[FontSizeKey] = fontSize;
         var spacing = settings.LineSpacing >= 1.0 ? settings.LineSpacing : ThemeDefaults.LineSpacing;
         app.Resources[LineHeightKey] = fontSize * spacing;
+        var paraSpacing = settings.ParagraphSpacing >= 0 ? settings.ParagraphSpacing : ThemeDefaults.ParagraphSpacing;
+        app.Resources[ParagraphSpacingKey] = new Thickness(0, 0, 0, paraSpacing);
     }
 
     /// <summary>

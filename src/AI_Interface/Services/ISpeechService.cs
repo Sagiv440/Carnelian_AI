@@ -14,6 +14,7 @@ public interface ISpeechService
     bool IsConfigured { get; }
 
     /// <summary>Synthesize <paramref name="text"/> and play it. Any current playback is stopped first.</summary>
+    /// <param name="text">Plain text; callers are responsible for stripping markdown before calling.</param>
     Task SpeakAsync(string text, CancellationToken ct = default);
 
     /// <summary>Stop any current playback.</summary>

@@ -2339,7 +2339,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         message.IsSpeaking = true;
         try
         {
-            await _speech.SpeakAsync(message.Text);
+            await _speech.SpeakAsync(MarkdownToSpeech.Render(message.Text));
         }
         catch (Exception ex)
         {
