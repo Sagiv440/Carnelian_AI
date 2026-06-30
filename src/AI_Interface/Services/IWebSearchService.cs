@@ -15,4 +15,10 @@ public interface IWebSearchService
     /// <summary>Downloads a page and extracts its readable text, truncated to <paramref name="maxChars"/>.</summary>
     Task<string> FetchReadableTextAsync(
         string url, int maxChars, CancellationToken ct = default);
+
+    /// <summary>
+    /// Probes the currently configured provider. Returns <c>null</c> on success or a human-readable
+    /// error message that explains why the provider could not be reached or authenticated.
+    /// </summary>
+    Task<string?> TestAsync(CancellationToken ct = default);
 }

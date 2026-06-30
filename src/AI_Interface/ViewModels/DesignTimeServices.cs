@@ -116,6 +116,8 @@ internal sealed class DesignWebSearchService : IWebSearchService
 
     public Task<string> FetchReadableTextAsync(string url, int maxChars, CancellationToken ct = default) =>
         Task.FromResult("Sample page text.");
+
+    public Task<string?> TestAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
 }
 
 internal sealed class DesignDeepResearchService : IDeepResearchService

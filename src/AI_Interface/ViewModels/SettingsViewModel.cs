@@ -24,6 +24,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IPiperInstaller _piperInstaller;
     private readonly IOllamaInstaller _ollamaInstaller;
     private readonly ISearxngInstaller _searxngInstaller;
+    private readonly IWebSearchService _webSearch;
     private readonly IMemoryService _memory;
     private readonly bool _loading;
 
@@ -386,6 +387,19 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _googleApiKey;
     [ObservableProperty] private string _googleSearchEngineId;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TestWebSearchCommand))]
+    private bool _isTestingWebSearch;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasWebSearchTestMessage))]
+    private string _webSearchTestMessage = "";
+
+    [ObservableProperty] private string _webSearchTestColor = OkColor;
+    [ObservableProperty] private bool _isWebSearchTestError;
+
+    public bool HasWebSearchTestMessage => !string.IsNullOrEmpty(WebSearchTestMessage);
+
     // --- Voice (text-to-speech) ---
 
     [ObservableProperty] private SpeechProvider _speechProvider;
@@ -429,7 +443,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         ISettingsService settings, IThemeService theme, IModelRouter router, IOllamaClient ollama,
         ISpeechService speech, AgentsViewModel agentsPanel, McpViewModel mcpPanel, IMemoryService memory,
         IPiperInstaller piperInstaller, IOllamaInstaller ollamaInstaller, ISearxngInstaller searxngInstaller,
-        WebModelsViewModel webModelsPanel)
+        IWebSearchService webSearch, WebModelsViewModel webModelsPanel)
     {
         _settings = settings;
         _theme = theme;
@@ -440,6 +454,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _piperInstaller = piperInstaller;
         _ollamaInstaller = ollamaInstaller;
         _searxngInstaller = searxngInstaller;
+        _webSearch = webSearch;
         AgentsPanel = agentsPanel;
         McpPanel = mcpPanel;
         WebModelsPanel = webModelsPanel;
@@ -482,7 +497,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         new DesignSettingsService(), new ThemeService(), new DesignModelRouter(), new DesignOllamaClient(),
         new DesignSpeechService(), new AgentsViewModel(),
         new McpViewModel(), new DesignMemoryService(), new DesignPiperInstaller(), new DesignOllamaInstaller(),
-        new DesignSearxngInstaller(), new WebModelsViewModel())
+        new DesignSearxngInstaller(), new DesignWebSearchService(), new WebModelsViewModel())
     {
     }
 
@@ -612,6 +627,44 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnTavilyApiKeyChanged(string value) => SaveWebSearch();
     partial void OnGoogleApiKeyChanged(string value) => SaveWebSearch();
     partial void OnGoogleSearchEngineIdChanged(string value) => SaveWebSearch();
+
+    private bool CanTestWebSearch => !IsTestingWebSearch;
+
+    /// <summary>Probe the currently configured web-search provider and report success or a specific error.</summary>
+    [RelayCommand(CanExecute = nameof(CanTestWebSearch))]
+    private async Task TestWebSearch()
+    {
+        IsTestingWebSearch = true;
+        IsWebSearchTestError = false;
+        WebSearchTestColor = BusyColor;
+        WebSearchTestMessage = "Testing…";
+        try
+        {
+            var error = await _webSearch.TestAsync();
+            if (error is null)
+            {
+                WebSearchTestColor = OkColor;
+                WebSearchTestMessage = "Connected";
+                IsWebSearchTestError = false;
+            }
+            else
+            {
+                WebSearchTestColor = ErrColor;
+                WebSearchTestMessage = error;
+                IsWebSearchTestError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            WebSearchTestColor = ErrColor;
+            WebSearchTestMessage = $"Error: {ex.Message}";
+            IsWebSearchTestError = true;
+        }
+        finally
+        {
+            IsTestingWebSearch = false;
+        }
+    }
 
     partial void OnSpeechProviderChanged(SpeechProvider value)
     {

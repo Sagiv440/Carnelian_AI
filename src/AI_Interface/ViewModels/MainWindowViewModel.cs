@@ -2422,6 +2422,52 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private Task SaveResearchToDocx(MessageViewModel? msg) => SaveResearchDocument(msg, "docx");
 
+    [RelayCommand]
+    private Task SaveMessageToPdf(MessageViewModel? msg) => SaveMessageDocument(msg, "pdf");
+
+    [RelayCommand]
+    private Task SaveMessageToDocx(MessageViewModel? msg) => SaveMessageDocument(msg, "docx");
+
+    [RelayCommand]
+    private Task SaveMessageToText(MessageViewModel? msg) => SaveMessageDocument(msg, "txt");
+
+    private async Task SaveMessageDocument(MessageViewModel? msg, string format)
+    {
+        if (msg is null) return;
+        try
+        {
+            var docsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            Directory.CreateDirectory(docsFolder);
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss");
+            var filePath = Path.Combine(docsFolder, $"reply-{timestamp}.{format}");
+
+            if (format == "txt")
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine(MarkdownPlainText.Render(msg.Text));
+                if (msg.Sources.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Sources:");
+                    foreach (var s in msg.Sources)
+                        sb.AppendLine($"- {s.Title}: {s.Url}");
+                }
+                await File.WriteAllTextAsync(filePath, sb.ToString());
+            }
+            else
+            {
+                await WriteReplyDocumentAsync(msg, format, filePath);
+            }
+
+            StatusText = $"Saved → {filePath}";
+            ShellOpenFile(filePath);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Document save failed: {ex.Message}";
+        }
+    }
+
     /// <summary>Renders a (research) reply + its Sources to <c>~/Documents/research/</c> as a PDF or Word
     /// document, then opens it in the OS default app.</summary>
     private async Task SaveResearchDocument(MessageViewModel? msg, string format)

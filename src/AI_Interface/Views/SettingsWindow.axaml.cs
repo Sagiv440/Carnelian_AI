@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using AI_Interface.ViewModels;
@@ -143,6 +144,12 @@ public partial class SettingsWindow : Window
 
         var files = await StorageProvider.OpenFilePickerAsync(options);
         return files.FirstOrDefault()?.TryGetLocalPath();
+    }
+
+    private async void OnCopyWebSearchTestMessage(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null || Clipboard is null) return;
+        await Clipboard.SetTextAsync(_vm.WebSearchTestMessage);
     }
 
     private void OnClose(object? sender, RoutedEventArgs e) => Close();

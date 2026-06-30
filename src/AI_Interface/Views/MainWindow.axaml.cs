@@ -400,6 +400,25 @@ public partial class MainWindow : Window
             _vm?.SaveResearchToDocxCommand.Execute(message);
     }
 
+    // "Save to Document" per-message dropdown (hover button on assistant bubbles).
+    private void OnSaveMessageToPdf(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is MessageViewModel message)
+            _vm?.SaveMessageToPdfCommand.Execute(message);
+    }
+
+    private void OnSaveMessageToDocx(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is MessageViewModel message)
+            _vm?.SaveMessageToDocxCommand.Execute(message);
+    }
+
+    private void OnSaveMessageToText(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is MessageViewModel message)
+            _vm?.SaveMessageToTextCommand.Execute(message);
+    }
+
     private void OnSpeakMessage(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: MessageViewModel message } && _vm is not null)

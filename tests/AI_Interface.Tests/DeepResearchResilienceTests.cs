@@ -61,6 +61,8 @@ public sealed class DeepResearchResilienceTests
 
         public Task<string> FetchReadableTextAsync(string url, int maxChars, CancellationToken ct = default) =>
             throw new HttpRequestException("page boom");
+
+        public Task<string?> TestAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
     }
 
     private sealed class AlwaysFailSearch : IWebSearchService
@@ -70,6 +72,8 @@ public sealed class DeepResearchResilienceTests
 
         public Task<string> FetchReadableTextAsync(string url, int maxChars, CancellationToken ct = default) =>
             Task.FromResult("");
+
+        public Task<string?> TestAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
     }
 
     private sealed class FakeSettings : ISettingsService

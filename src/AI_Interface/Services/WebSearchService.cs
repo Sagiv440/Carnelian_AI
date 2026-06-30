@@ -283,6 +283,130 @@ public sealed class WebSearchService : IWebSearchService
         return results;
     }
 
+    public async Task<string?> TestAsync(CancellationToken ct = default)
+    {
+        var s = _settings.Current;
+        return s.SearchProvider switch
+        {
+            SearchProvider.SearXNG    => await TestSearxngAsync(s.SearxngUrl, ct).ConfigureAwait(false),
+            SearchProvider.Brave      => await TestBraveAsync(s.BraveApiKey, ct).ConfigureAwait(false),
+            SearchProvider.Tavily     => await TestTavilyAsync(s.TavilyApiKey, ct).ConfigureAwait(false),
+            SearchProvider.Google     => await TestGoogleAsync(s.GoogleApiKey, s.GoogleSearchEngineId, ct).ConfigureAwait(false),
+            _                         => await TestDuckDuckGoAsync(ct).ConfigureAwait(false),
+        };
+    }
+
+    private async Task<string?> TestDuckDuckGoAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync(
+                $"{DuckDuckGoEndpoint}?q=test", HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            return resp.IsSuccessStatusCode ? null : $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return $"Could not reach DuckDuckGo: {ex.Message}";
+        }
+    }
+
+    private async Task<string?> TestSearxngAsync(string instanceUrl, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(instanceUrl))
+            return "No instance URL configured — enter the URL of your SearXNG instance.";
+
+        var url = $"{instanceUrl.Trim().TrimEnd('/')}/search?q=test&format=json";
+        try
+        {
+            using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            if (resp.IsSuccessStatusCode)
+                return null;
+            return resp.StatusCode == System.Net.HttpStatusCode.Forbidden
+                ? "HTTP 403 — enable the JSON format in your SearXNG settings.yml (search.formats: [json])."
+                : $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return $"Could not reach {instanceUrl}: {ex.Message}";
+        }
+    }
+
+    private async Task<string?> TestBraveAsync(string apiKey, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return "No API key configured — enter your Brave Search API key.";
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, $"{BraveEndpoint}?q=test&count=1");
+        req.Headers.TryAddWithoutValidation("X-Subscription-Token", apiKey.Trim());
+        req.Headers.TryAddWithoutValidation("Accept", "application/json");
+        try
+        {
+            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            return resp.StatusCode switch
+            {
+                System.Net.HttpStatusCode.OK          => null,
+                System.Net.HttpStatusCode.Unauthorized => "API key rejected (401) — check your Brave Search API key.",
+                System.Net.HttpStatusCode.Forbidden    => "Access denied (403) — the key may lack the required plan or quota.",
+                System.Net.HttpStatusCode.TooManyRequests => "Rate-limited (429) — too many requests; try again shortly.",
+                _ => $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}"
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return $"Could not reach Brave Search API: {ex.Message}";
+        }
+    }
+
+    private async Task<string?> TestTavilyAsync(string apiKey, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return "No API key configured — enter your Tavily API key.";
+
+        var payload = new TavilyRequest { ApiKey = apiKey.Trim(), Query = "test", MaxResults = 1 };
+        try
+        {
+            using var resp = await _http.PostAsJsonAsync(TavilyEndpoint, payload, JsonOptions, ct).ConfigureAwait(false);
+            return resp.StatusCode switch
+            {
+                System.Net.HttpStatusCode.OK          => null,
+                System.Net.HttpStatusCode.Unauthorized => "API key rejected (401) — check your Tavily API key.",
+                System.Net.HttpStatusCode.Forbidden    => "Access denied (403) — the key may lack permissions.",
+                System.Net.HttpStatusCode.TooManyRequests => "Rate-limited (429) — too many requests; try again shortly.",
+                _ => $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}"
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return $"Could not reach Tavily: {ex.Message}";
+        }
+    }
+
+    private async Task<string?> TestGoogleAsync(string apiKey, string searchEngineId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return "No API key configured — enter your Google Custom Search JSON API key.";
+        if (string.IsNullOrWhiteSpace(searchEngineId))
+            return "No Search Engine ID (cx) configured — enter your Programmable Search engine ID.";
+
+        var url = $"{GoogleEndpoint}?key={Uri.EscapeDataString(apiKey.Trim())}" +
+                  $"&cx={Uri.EscapeDataString(searchEngineId.Trim())}&q=test&num=1";
+        try
+        {
+            using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            return resp.StatusCode switch
+            {
+                System.Net.HttpStatusCode.OK          => null,
+                System.Net.HttpStatusCode.Unauthorized => "API key rejected (401) — check your Google API key.",
+                System.Net.HttpStatusCode.Forbidden    => "Access denied (403) — the API key may not have Custom Search enabled, or the cx is wrong.",
+                _ => $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}"
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return $"Could not reach Google Custom Search: {ex.Message}";
+        }
+    }
+
     public async Task<string> FetchReadableTextAsync(
         string url, int maxChars, CancellationToken ct = default)
     {

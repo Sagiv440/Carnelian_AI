@@ -1195,6 +1195,17 @@
                                         <Button Classes="copy" Click="OnSpeakMessage" Content="{Binding SpeakGlyph}"
                                                 ToolTip.Tip="Read aloud"
                                                 IsVisible="{Binding !IsUser}"/>
+                                        <Button Classes="copy" Content="💾"
+                                                ToolTip.Tip="Save to document"
+                                                IsVisible="{Binding !IsUser}">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="Save to PDF"           Click="OnSaveMessageToPdf"/>
+                                                    <MenuItem Header="Save to Word (.docx)"  Click="OnSaveMessageToDocx"/>
+                                                    <MenuItem Header="Save to Text File"     Click="OnSaveMessageToText"/>
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
                                         <Button Classes="copy" Click="OnCopyMessage" Content="📋"
                                                 ToolTip.Tip="Copy message"/>
                                     </StackPanel>
