@@ -56,6 +56,9 @@ public sealed class AppSettings
     /// <summary>Base font size for the app.</summary>
     public double FontSize { get; set; } = ThemeDefaults.FontSize;
 
+    /// <summary>Line-spacing multiplier (relative to font size). 1.0 = tight, 1.5 = spacious.</summary>
+    public double LineSpacing { get; set; } = ThemeDefaults.LineSpacing;
+
     /// <summary>Model selected last time, restored on startup if still installed.</summary>
     public string? DefaultModel { get; set; }
 

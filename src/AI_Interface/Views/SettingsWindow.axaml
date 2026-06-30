@@ -220,6 +220,17 @@
                                         Value="{Binding FontSize}"/>
                                 <TextBlock Text="{Binding FontSize}" Classes="muted" VerticalAlignment="Center"/>
                             </StackPanel>
+
+                            <TextBlock Classes="label" Text="Line spacing" Margin="0,8,0,0"/>
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Slider Width="220" Minimum="1.0" Maximum="2.5" TickFrequency="0.1"
+                                        IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                        Value="{Binding LineSpacing}"/>
+                                <TextBlock Classes="muted" VerticalAlignment="Center">
+                                    <Run Text="{Binding LineSpacing, StringFormat={}{0:F1}}"/>
+                                    <Run Text="×"/>
+                                </TextBlock>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
 

@@ -22,6 +22,8 @@
             <FontFamily x:Key="AppFont">Segoe UI</FontFamily>
             <!-- Base font size; overridden at runtime by ThemeService from saved settings. -->
             <sys:Double x:Key="AppFontSize">13</sys:Double>
+            <!-- Line height in px (fontSize × lineSpacing); overridden at runtime by ThemeService. -->
+            <sys:Double x:Key="AppLineHeight">16.9</sys:Double>
 
             <!-- Accent (variant-independent; AppAccentBrush is user-themeable) — red-orange -->
             <SolidColorBrush x:Key="AppAccentBrush" Color="#F2542D"/>

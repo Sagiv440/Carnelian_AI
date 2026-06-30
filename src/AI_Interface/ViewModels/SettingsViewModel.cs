@@ -174,6 +174,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _assistantBubbleColor;
     [ObservableProperty] private string _fontFamily;
     [ObservableProperty] private double _fontSize;
+    [ObservableProperty] private double _lineSpacing;
 
     /// <summary>Selectable font families for the Theme tab.</summary>
     public IReadOnlyList<string> Fonts { get; } = ThemeDefaults.Fonts;
@@ -469,6 +470,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _assistantBubbleColor = s.AssistantBubbleColor;
         _fontFamily = s.FontFamily;
         _fontSize = s.FontSize;
+        _lineSpacing = s.LineSpacing;
         _ollamaBaseUrl = s.OllamaBaseUrl;
         _resultsPerQuery = s.SearchResultsPerQuery;
         _maxPagesToRead = s.MaxPagesToRead;
@@ -514,6 +516,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnAssistantBubbleColorChanged(string value) => ApplyTheme();
     partial void OnFontFamilyChanged(string value) => ApplyTheme();
     partial void OnFontSizeChanged(double value) => ApplyTheme();
+    partial void OnLineSpacingChanged(double value) => ApplyTheme();
 
     partial void OnOllamaBaseUrlChanged(string value) => SaveGeneral();
     partial void OnResultsPerQueryChanged(decimal value) => SaveGeneral();
@@ -777,6 +780,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         AssistantBubbleColor = ThemeDefaults.AssistantBubble;
         FontFamily = ThemeDefaults.FontFamily;
         FontSize = ThemeDefaults.FontSize;
+        LineSpacing = ThemeDefaults.LineSpacing;
     }
 
     /// <summary>Scan localhost:11434 and, if Ollama answers, fill in the server URL.</summary>
@@ -990,6 +994,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.AssistantBubbleColor = AssistantBubbleColor;
         s.FontFamily = FontFamily;
         s.FontSize = FontSize;
+        s.LineSpacing = LineSpacing;
 
         _theme.Apply(s);
         _settings.Save();

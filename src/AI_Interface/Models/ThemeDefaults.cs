@@ -21,6 +21,9 @@ public static class ThemeDefaults
     /// <summary>Default base font size (compact, IDE-style).</summary>
     public const double FontSize = 13;
 
+    /// <summary>Default line-spacing multiplier (relative to font size). 1.0 = tight, 1.5 = spacious.</summary>
+    public const double LineSpacing = 1.3;
+
     /// <summary>Selectable font families for the Theme tab. "Poppins" maps to the embedded font.</summary>
     public static readonly string[] Fonts =
     {
